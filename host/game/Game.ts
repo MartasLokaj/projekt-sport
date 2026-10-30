@@ -10,7 +10,7 @@ import { DistancePreview } from './preview.ts';
 // The phone's aim, live swing, practice swings and strokes come in through the onPhone… methods.
 // Every shot starts aimed straight ahead, where the camera looks (at the tee: down the lane).
 // The phone's aim angle turns it from there. A white line shows the aim; while the player swings,
-// the gauge on the left climbs and a marker on the course shows roughly how far the ball would roll.
+// the gauge on the left climbs and the white line stretches to show roughly how far the ball would roll.
 // Mac keyboard for testing: arrow keys aim, hold P for a practice swing, hold Space to hit, R resets the ball.
 
 type State = 'aiming' | 'rolling' | 'holed';
@@ -38,7 +38,7 @@ export class Game {
   private readonly ball: RAPIER.RigidBody;
   private readonly ballMesh: THREE.Mesh;
   private readonly aimLine = new THREE.Group();
-  private readonly marker = new THREE.Group();
+  private readonly aimStripe: THREE.Mesh;
   private readonly distancePreview: DistancePreview;
   private readonly clock = new THREE.Clock();
 
@@ -63,9 +63,9 @@ export class Game {
 
   /** Result of the last practice swing for this shot, shown until the next swing. */
   private practiceResult: { power: number; curve: number } | null = null;
-  /** Where the marker sits relative to the ball, in "aim space" (x = left, z = forward). */
-  private markerOffset: { x: number; z: number } | null = null;
-  private markerFor = { power: -1, curve: 0 };
+  /** Rough rolling distance of the current or practice swing, shown as the aim line's length (null = default length). */
+  private estimate: number | null = null;
+  private estimateCache = { power: -1, curve: 0, distance: 0 };
 
   /** Called at the start of every shot, so the phones can reset their aim. */
   onNewShot: (() => void) | null = null;
@@ -117,29 +117,14 @@ export class Game {
     this.ballMesh.add(dot);
     this.scene.add(this.ballMesh);
 
-    // White aim line: a flat stripe from the ball straight ahead.
-    const { length, width } = TUNING.aimLine;
-    const stripe = new THREE.Mesh(
-      new THREE.PlaneGeometry(width, length),
+    // White aim line: a flat stripe from the ball straight ahead. Its length is set every frame.
+    this.aimStripe = new THREE.Mesh(
+      new THREE.PlaneGeometry(TUNING.aimLine.width, 1),
       new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.9 }),
     );
-    stripe.rotation.x = -Math.PI / 2;
-    stripe.position.set(0, 0.012, b.radius * 1.6 + length / 2);
-    this.aimLine.add(stripe);
+    this.aimStripe.rotation.x = -Math.PI / 2;
+    this.aimLine.add(this.aimStripe);
     this.scene.add(this.aimLine);
-
-    // "About this far" marker: a ring on the ground with a short post, so it shows above walls.
-    const markerMaterial = new THREE.MeshBasicMaterial({ color: '#ffd23f', side: THREE.DoubleSide });
-    const ring = new THREE.Mesh(new THREE.RingGeometry(0.14, 0.22, 32), markerMaterial);
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.015;
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.5), markerMaterial);
-    post.position.y = 0.25;
-    const top = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 8), markerMaterial);
-    top.position.y = 0.52;
-    this.marker.add(ring, post, top);
-    this.marker.visible = false;
-    this.scene.add(this.marker);
 
     this.resetBall(new THREE.Vector3(this.hole.tee.x, 0, this.hole.tee.z));
     this.beginShot(true);
@@ -166,7 +151,7 @@ export class Game {
     this.phoneAngle = angle;
   }
 
-  /** The phone is in the middle of a swing: move the gauge and the distance marker live. */
+  /** The phone is in the middle of a swing: move the gauge and the line's length live. */
   onPhoneSwingProgress(progress: SwingProgress): void {
     if (this.state !== 'aiming') return;
     if (progress.phase === 'cancelled') {
@@ -175,7 +160,7 @@ export class Game {
     }
     const label = progress.practice ? 'Practice' : 'Swing';
     this.setGauge(progress.phase === 'ready' ? `${label}!` : label, progress.power);
-    this.showMarker(progress.power, 0);
+    this.showEstimate(progress.power, 0);
   }
 
   onPhonePractice(power: number, angle: number, twist: number | null): void {
@@ -199,7 +184,7 @@ export class Game {
     this.phoneAngle = 0;
     this.keyboardOffset = 0;
     this.practiceResult = null;
-    this.marker.visible = false;
+    this.estimate = null;
     this.hud.gauge.hidden = true;
     this.onNewShot?.();
     this.updateInfo();
@@ -213,10 +198,10 @@ export class Game {
   private showPracticeResult(): void {
     if (this.practiceResult) {
       this.setGauge('Practice', this.practiceResult.power);
-      this.showMarker(this.practiceResult.power, this.practiceResult.curve);
+      this.showEstimate(this.practiceResult.power, this.practiceResult.curve);
     } else {
       this.hud.gauge.hidden = true;
-      this.marker.visible = false;
+      this.estimate = null;
     }
   }
 
@@ -229,7 +214,7 @@ export class Game {
     this.strokes++;
     this.state = 'rolling';
     this.restTime = 0;
-    this.marker.visible = false;
+    this.estimate = null;
     this.setGauge('Hit', power);
     this.updateInfo();
   }
@@ -250,6 +235,17 @@ export class Game {
     }
 
     const v = this.ball.linvel();
+    const cup = this.hole.cup;
+    const toCupX = cup.x - p.x;
+    const toCupZ = cup.z - p.z;
+    const toCup = Math.hypot(toCupX, toCupZ);
+    if (p.y > 0 && toCup > 0.01 && toCup < TUNING.course.tapInRadius && Math.hypot(v.x, v.z) < TUNING.course.tapInSpeed) {
+      // Extremely close and slow: steer it into the cup instead of stopping right at the edge.
+      const speed = Math.max(0.5, Math.hypot(v.x, v.z));
+      this.ball.setLinvel({ x: (toCupX / toCup) * speed, y: v.y, z: (toCupZ / toCup) * speed }, true);
+      this.restTime = 0;
+      return;
+    }
     if (Math.hypot(v.x, v.y, v.z) < TUNING.ball.restSpeed) {
       this.restTime += dt * 1000;
       if (this.restTime >= TUNING.ball.restTimeMs) {
@@ -310,7 +306,7 @@ export class Game {
         this.charging.amount = Math.min(1, this.charging.amount + dt / TUNING.aimLine.keyboardChargeTime);
         const power = Math.round(this.charging.amount * 100);
         this.setGauge(this.charging.kind === 'hit' ? 'Swing' : 'Practice', power);
-        this.showMarker(power, 0);
+        this.showEstimate(power, 0);
       }
     }
 
@@ -340,24 +336,22 @@ export class Game {
     this.aimLine.visible = aiming;
     this.aimLine.position.set(this.ballMesh.position.x, 0, this.ballMesh.position.z);
     this.aimLine.rotation.y = yaw;
-    if (aiming && this.markerOffset && this.marker.visible) {
-      // Turn the marker with the aim (x = left, z = forward in aim space).
-      const { x, z } = this.markerOffset;
-      this.marker.position.set(
-        this.ballMesh.position.x + x * Math.cos(yaw) + z * Math.sin(yaw),
-        0,
-        this.ballMesh.position.z - x * Math.sin(yaw) + z * Math.cos(yaw),
-      );
-    }
+    // The line starts just in front of the ball and is as long as the rough rolling distance.
+    const start = TUNING.ball.radius * 1.6;
+    const length = Math.max(0.05, (this.estimate ?? TUNING.aimLine.length) - start);
+    this.aimStripe.scale.y = length;
+    this.aimStripe.position.set(0, 0.012, start + length / 2);
   }
 
-  /** Shows roughly where a shot with this power and curve would stop (on open ground, ignoring walls). */
-  private showMarker(power: number, curve: number): void {
-    if (Math.abs(power - this.markerFor.power) > 0.2 || curve !== this.markerFor.curve) {
-      this.markerOffset = this.distancePreview.predict(power, curve);
-      this.markerFor = { power, curve };
+  /** Sets the aim line to roughly how far a shot with this power and curve would roll (on open ground, ignoring walls). */
+  private showEstimate(power: number, curve: number): void {
+    const cache = this.estimateCache;
+    if (Math.abs(power - cache.power) > 0.2 || curve !== cache.curve) {
+      const end = this.distancePreview.predict(power, curve);
+      this.estimateCache = { power, curve, distance: Math.hypot(end.x, end.z) };
     }
-    this.marker.visible = power > 0;
+    // At the very start of a swing (no power yet) the line shrinks, then grows with the backswing.
+    this.estimate = power > 0 ? this.estimateCache.distance : 0;
   }
 
   private desiredCamera(): { position: THREE.Vector3; look: THREE.Vector3 } {

@@ -97,6 +97,10 @@ export const TUNING = {
     /** Size of the square opening of the cup. The ball is 0.2 wide. */
     cupGap: 0.3,
     cupDepth: 0.3,
+    /** A slow ball whose centre comes this close to the cup's centre just rolls in (no annoying near-misses). */
+    tapInRadius: 0.28,
+    /** ...if it is slower than this (units per second). */
+    tapInSpeed: 1,
   },
 
   physics: {
