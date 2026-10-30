@@ -136,7 +136,7 @@ export class Game {
 
     // Soft daylight: a sky-blue fill from above, warm sunshine with soft shadows, haze in the distance.
     this.scene.fog = new THREE.Fog(look.skyHorizon, look.fogNear, look.fogFar);
-    this.scene.add(new THREE.HemisphereLight('#d6ecff', '#7fbf6e', 1.35));
+    this.scene.add(new THREE.HemisphereLight('#d6ecff', '#9fd6e0', 1.1));
     const sun = new THREE.DirectionalLight('#fff0d4', 2.6);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
@@ -148,9 +148,9 @@ export class Game {
 
     this.world = new RAPIER.World({ x: 0, y: -TUNING.physics.gravity, z: 0 });
     this.world.timestep = 1 / TUNING.physics.stepsPerSecond;
-    // All holes exist at once, side by side; the game moves between them.
-    this.holes = HOLES.map((def, i) => {
-      const built = buildHole(def, kit, new THREE.Vector3(i * TUNING.course.holeSpacing, 0, 0), this.world, RAPIER);
+    // All holes exist at once, each on its own island; the game moves between them.
+    this.holes = HOLES.map((def) => {
+      const built = buildHole(def, kit, this.world, RAPIER);
       this.scene.add(built.group);
       return built;
     });
@@ -207,7 +207,9 @@ export class Game {
     const box = new THREE.Box3().setFromObject(this.hole.group);
     const centre = box.getCenter(new THREE.Vector3());
     this.sun.target.position.copy(centre);
-    this.sun.position.copy(centre).add(new THREE.Vector3(-8, 16, -6));
+    const elevation = THREE.MathUtils.degToRad(TUNING.scenery.lightElevation);
+    const lightDirection = Scenery.sunDirection().setY(0).normalize().multiplyScalar(Math.cos(elevation)).setY(Math.sin(elevation));
+    this.sun.position.copy(centre).addScaledVector(lightDirection, 30);
     this.resetBall(this.teePosition());
     this.baseYaw = this.hole.teeYaw;
     this.followDir.set(Math.sin(this.baseYaw), 0, Math.cos(this.baseYaw));
@@ -715,7 +717,7 @@ export class Game {
       if (this.active && this.players.get(this.active)?.handedness === 'left') golferSide.negate();
       return {
         position: ball.clone().addScaledVector(dir, -c.aimDistance).addScaledVector(UP, c.aimHeight),
-        look: ball.clone().addScaledVector(dir, 1.5).addScaledVector(golferSide, c.aimSideShift),
+        look: ball.clone().addScaledVector(dir, c.aimLookAhead).addScaledVector(golferSide, c.aimSideShift),
       };
     }
     // Follow the ball from behind its direction of travel, turning gently.

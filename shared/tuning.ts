@@ -111,10 +111,12 @@ export const TUNING = {
     bladeScale: 1.5,
     /** How fast the windmill turns (degrees per second). */
     windmillDegreesPerSecond: 50,
-    /** Grass colour of the plain lane drawn under the windmill (seen while it is faded out). */
-    laneColour: '#6db27a',
-    /** The holes are built side by side, this far apart. */
-    holeSpacing: 60,
+    /** One repeat of the grass and wood textures covers this many units. */
+    grassTextureSize: 1.6,
+    woodTextureSize: 1.2,
+    /** Colour boost on top of the photo textures (red, green, blue; 1 = as photographed). */
+    grassTint: [1.15, 1.45, 0.85],
+    woodTint: [1.9, 1.5, 1.15],
   },
 
   physics: {
@@ -128,7 +130,9 @@ export const TUNING = {
   camera: {
     /** While aiming: distance behind the ball and height above it. */
     aimDistance: 3.4,
-    aimHeight: 1.8,
+    aimHeight: 1.6,
+    /** While aiming the camera looks at a point this far ahead of the ball. */
+    aimLookAhead: 3,
     /** While aiming the camera looks a little towards the golfer's side, so the character is in view. */
     aimSideShift: 0.25,
     /** While the ball rolls: distance and height. */
@@ -138,30 +142,43 @@ export const TUNING = {
     smoothing: 3,
   },
 
-  // The world around the course and the overall look.
+  // The world around the course and the overall look: sea, islands, sky.
   scenery: {
-    /** Change this number for a different (but always repeatable) arrangement of trees and flowers. */
+    /** Change this number for a different (but always repeatable) island shape and rocks. */
     seed: 42,
-    skyTop: '#3f9de6',
-    skyHorizon: '#d9f1ff',
-    grass: '#6cc05c',
-    /** The meadow lies this far below the course floor (the thickness of the course tiles). */
+    skyTop: '#3d9be9',
+    skyHorizon: '#d8f0ff',
+    sunColour: '#fff3d1',
+    /** Where the sun disk shows in the sky (degrees): height above the horizon and direction (0 = +z). */
+    sunElevation: 14,
+    sunAzimuth: 25,
+    /** How high the sunlight that lights and shades everything comes from (degrees). */
+    lightElevation: 50,
+    sand: '#e3c88c',
+    wetSand: '#c4a46a',
+    seaDeep: '#1f7fc4',
+    seaShallow: '#4fe0d6',
+    /** Height of the sea surface (the course floor is at 0). */
+    seaLevel: -0.55,
+    /** Height of the waves. Small = calm and cute. */
+    waveHeight: 0.07,
+    /** Size of the sea and how finely it is divided (more = smoother waves, a little slower). */
+    seaSize: 420,
+    seaDetail: 220,
+    /** Island tops lie this far below the course floor (the thickness of the course tiles). */
     groundDepth: 0.21,
-    /** Decorations fill this much space around each hole. */
-    decorationMargin: 6,
-    treesPerHole: 14,
-    bushesPerHole: 12,
-    rocksPerHole: 10,
-    flowersPerHole: 80,
-    clouds: 18,
+    /** Sand around the course on each island. */
+    islandMargin: 2.2,
+    rocksPerIsland: 9,
+    clouds: 22,
     /** Haze in the distance: starts at fogNear, fully hazy at fogFar. */
-    fogNear: 40,
-    fogFar: 130,
+    fogNear: 55,
+    fogFar: 170,
     /** Overall brightness, and the soft glow on bright things (strength, spread, from which brightness). */
-    exposure: 1.0,
-    bloomStrength: 0.28,
-    bloomRadius: 0.55,
-    bloomThreshold: 0.88,
+    exposure: 0.95,
+    bloomStrength: 0.22,
+    bloomRadius: 0.5,
+    bloomThreshold: 0.96,
     /** Sharpness on retina screens. Lower = faster. */
     maxPixelRatio: 1.75,
   },

@@ -2,145 +2,181 @@ import * as THREE from 'three';
 import { TUNING } from '../../shared/tuning.ts';
 import type { BuiltHole } from './course.ts';
 
-// Everything around the course, all built in code (original look, nothing downloaded):
-// a sky with a soft gradient and drifting clouds, a grassy meadow, and around every hole
-// trees, bushes, rocks, flowers and a small pond. Repeated things use "instancing"
-// (one mesh drawn many times), so it all stays fast.
+// The world around the course, all built in code: a sunny sky with puffy clouds, a cute sea with
+// rolling waves, sparkles and foam, and a little sandy island under every hole, so from one hole
+// you can see the others across the water.
+
+export type IslandShape = { centre: THREE.Vector2; radius: THREE.Vector2 };
 
 export class Scenery {
   readonly group = new THREE.Group();
   private readonly sky: THREE.Mesh;
-  private readonly clouds: { cloud: THREE.Group; speed: number }[] = [];
-  private readonly water: THREE.MeshStandardMaterial[] = [];
-  private time = 0;
+  private readonly sea: THREE.Mesh;
+  private readonly seaMaterial: THREE.ShaderMaterial;
+  private readonly clouds: { cloud: THREE.Group; speed: number; minX: number; maxX: number }[] = [];
+
+  /** Direction towards the sun (unit vector). The game puts its sunlight here too. */
+  static sunDirection(): THREE.Vector3 {
+    const c = TUNING.scenery;
+    const elevation = THREE.MathUtils.degToRad(c.sunElevation);
+    const azimuth = THREE.MathUtils.degToRad(c.sunAzimuth);
+    return new THREE.Vector3(Math.sin(azimuth) * Math.cos(elevation), Math.sin(elevation), Math.cos(azimuth) * Math.cos(elevation));
+  }
 
   constructor(holes: BuiltHole[]) {
-    const c = TUNING.scenery;
+    const random = seededRandom(TUNING.scenery.seed);
+    const islands = holes.map((hole) => this.addIsland(hole, random));
     this.sky = makeSky();
-    this.group.add(this.sky);
-    this.group.add(makeMeadow(holes));
-
-    const random = seededRandom(c.seed);
-    for (const hole of holes) this.decorate(hole, random);
-    this.addClouds(holes, random);
+    this.seaMaterial = makeSeaMaterial(islands);
+    const centre = new THREE.Vector3();
+    holes.forEach((h) => centre.add(h.tee));
+    centre.divideScalar(holes.length);
+    const c = TUNING.scenery;
+    this.sea = new THREE.Mesh(new THREE.PlaneGeometry(c.seaSize, c.seaSize, c.seaDetail, c.seaDetail), this.seaMaterial);
+    this.sea.rotation.x = -Math.PI / 2;
+    this.sea.position.set(centre.x, c.seaLevel, centre.z);
+    this.group.add(this.sky, this.sea);
+    this.addClouds(centre, random);
   }
 
-  /** Call every frame: the sky follows the camera, clouds drift, water shimmers. */
+  /** Call every frame: the sky follows the camera, waves roll, clouds drift. */
   update(dt: number, camera: THREE.Camera): void {
-    this.time += dt;
     this.sky.position.copy(camera.position);
-    for (const { cloud, speed } of this.clouds) {
-      cloud.position.x += speed * dt;
-      if (cloud.position.x > cloud.userData.maxX) cloud.position.x = cloud.userData.minX;
+    this.seaMaterial.uniforms.time.value += dt;
+    for (const c of this.clouds) {
+      c.cloud.position.x += c.speed * dt;
+      if (c.cloud.position.x > c.maxX) c.cloud.position.x = c.minX;
     }
-    for (const material of this.water) material.emissiveIntensity = 0.12 + Math.sin(this.time * 1.5) * 0.04;
   }
 
-  private decorate(hole: BuiltHole, random: () => number): void {
+  /** A soft sandy island under a hole: flat on top, a gentle beach sloping into the sea. */
+  private addIsland(hole: BuiltHole, random: () => number): IslandShape {
     const c = TUNING.scenery;
     const S = TUNING.course.tileSize;
-    const box = new THREE.Box3().setFromPoints(hole.footprint).expandByScalar(S * 0.5 + c.decorationMargin);
-    const groundY = hole.tee.y - c.groundDepth;
-    const keepOff = S * 0.75 + 0.4; // distance from tile centres that is reserved for the course
-    const taken: { x: number; z: number; r: number }[] = [];
-
-    /** A random free spot around the hole, at least `radius` from the course and other things. */
-    const spot = (radius: number): THREE.Vector3 | null => {
-      for (let attempt = 0; attempt < 30; attempt++) {
-        const x = box.min.x + random() * (box.max.x - box.min.x);
-        const z = box.min.z + random() * (box.max.z - box.min.z);
-        const nearCourse = hole.footprint.some((t) => Math.max(Math.abs(t.x - x), Math.abs(t.z - z)) < keepOff + radius);
-        const nearOther = taken.some((t) => Math.hypot(t.x - x, t.z - z) < t.r + radius);
-        if (!nearCourse && !nearOther) {
-          taken.push({ x, z, r: radius });
-          return new THREE.Vector3(x, groundY, z);
-        }
+    const box = new THREE.Box3().setFromPoints(hole.footprint).expandByScalar(S * 0.5 + c.islandMargin);
+    const centre = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const radius = new THREE.Vector2(size.x / 2, size.z / 2).multiplyScalar(1.15);
+    const top = hole.tee.y - c.groundDepth;
+    const rings = 28;
+    const segments = 96;
+    const wobble = [random() * 6, random() * 6, random() * 6];
+    const positions: number[] = [];
+    const colours: number[] = [];
+    const uvs: number[] = [];
+    const sand = new THREE.Color(c.sand);
+    const wetSand = new THREE.Color(c.wetSand);
+    for (let ring = 0; ring <= rings; ring++) {
+      const r = (ring / rings) * 1.35; // 0..1 flat top, 1..1.35 the beach
+      for (let seg = 0; seg <= segments; seg++) {
+        const angle = (seg / segments) * Math.PI * 2;
+        const edge = 1 + 0.07 * Math.sin(angle * 3 + wobble[0]) + 0.05 * Math.sin(angle * 5 + wobble[1]) + 0.03 * Math.sin(angle * 9 + wobble[2]);
+        const x = centre.x + Math.cos(angle) * radius.x * r * edge;
+        const z = centre.z + Math.sin(angle) * radius.y * r * edge;
+        const beach = THREE.MathUtils.smoothstep(r, 0.92, 1.35);
+        const y = THREE.MathUtils.lerp(top, c.seaLevel - 0.9, beach);
+        positions.push(x, y, z);
+        uvs.push(x * 0.35, z * 0.35);
+        const colour = sand.clone().lerp(wetSand, THREE.MathUtils.smoothstep(r, 1.0, 1.2));
+        colours.push(colour.r, colour.g, colour.b);
       }
-      return null;
-    };
-
-    // A pond first, as it needs the most room.
-    const pondAt = spot(2.2);
-    if (pondAt) this.addPond(pondAt, random);
-
-    const trees: { at: THREE.Vector3; size: number; pine: boolean }[] = [];
-    for (let i = 0; i < c.treesPerHole; i++) {
-      const size = 0.8 + random() * 0.7;
-      const at = spot(0.9 * size);
-      if (at) trees.push({ at, size, pine: random() < 0.35 });
     }
-    this.group.add(makeTrees(trees, random));
-
-    const bushes: THREE.Vector3[] = [];
-    for (let i = 0; i < c.bushesPerHole; i++) {
-      const at = spot(0.5);
-      if (at) bushes.push(at);
+    const indices: number[] = [];
+    for (let ring = 0; ring < rings; ring++) {
+      for (let seg = 0; seg < segments; seg++) {
+        const a = ring * (segments + 1) + seg;
+        const b = a + segments + 1;
+        indices.push(a, a + 1, b, a + 1, b + 1, b); // counter-clockwise from above, so the surface faces up
+      }
     }
-    this.group.add(makeBushes(bushes, random));
-
-    const rocks: THREE.Vector3[] = [];
-    for (let i = 0; i < c.rocksPerHole; i++) {
-      const at = spot(0.4);
-      if (at) rocks.push(at);
-    }
-    this.group.add(makeRocks(rocks, random));
-
-    const flowers: THREE.Vector3[] = [];
-    for (let i = 0; i < c.flowersPerHole; i++) {
-      const at = spot(0.12);
-      if (at) flowers.push(at);
-    }
-    this.group.add(makeFlowers(flowers, random));
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colours, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    const island = new THREE.Mesh(
+      geometry,
+      new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, map: sandTexture() }),
+    );
+    island.receiveShadow = true;
+    this.group.add(island);
+    this.addRocks(hole, centre, radius, top, random);
+    return { centre: new THREE.Vector2(centre.x, centre.z), radius };
   }
 
-  private addPond(at: THREE.Vector3, random: () => number): void {
-    const material = new THREE.MeshStandardMaterial({
-      color: '#4fb6e6',
-      emissive: '#7fd4ff',
-      emissiveIntensity: 0.12,
-      roughness: 0.15,
-      metalness: 0.1,
-    });
-    this.water.push(material);
-    const water = new THREE.Mesh(new THREE.CircleGeometry(1, 40), material);
-    water.rotation.x = -Math.PI / 2;
-    water.scale.set(1.6 + random() * 0.6, 1.1 + random() * 0.4, 1);
-    water.position.set(at.x, at.y + 0.01, at.z);
-    water.receiveShadow = true;
-    // A sandy rim around it.
-    const rim = new THREE.Mesh(new THREE.CircleGeometry(1.15, 40), new THREE.MeshStandardMaterial({ color: '#e9d8a6', roughness: 1 }));
-    rim.rotation.x = -Math.PI / 2;
-    rim.scale.copy(water.scale);
-    rim.position.set(at.x, at.y + 0.005, at.z);
-    rim.receiveShadow = true;
-    this.group.add(rim, water);
+  /** A few smooth pebbles and rocks on the beach. */
+  private addRocks(hole: BuiltHole, centre: THREE.Vector3, radius: THREE.Vector2, top: number, random: () => number): void {
+    const count = TUNING.scenery.rocksPerIsland;
+    const rocks = new THREE.InstancedMesh(
+      new THREE.DodecahedronGeometry(1, 1),
+      new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.9, flatShading: true }),
+      count,
+    );
+    const keepOff = TUNING.course.tileSize * 0.75 + 0.5;
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    let placed = 0;
+    for (let attempt = 0; attempt < count * 20 && placed < count; attempt++) {
+      const angle = random() * Math.PI * 2;
+      const r = 0.55 + random() * 0.5;
+      const x = centre.x + Math.cos(angle) * radius.x * r;
+      const z = centre.z + Math.sin(angle) * radius.y * r;
+      if (hole.footprint.some((t) => Math.max(Math.abs(t.x - x), Math.abs(t.z - z)) < keepOff)) continue;
+      const size = 0.12 + random() * 0.3;
+      q.setFromEuler(new THREE.Euler(random(), random() * 3, random()));
+      m.compose(new THREE.Vector3(x, top + size * 0.3, z), q, new THREE.Vector3(size * 1.3, size * 0.8, size));
+      rocks.setMatrixAt(placed, m);
+      rocks.setColorAt(placed, new THREE.Color().setHSL(0.08, 0.12, 0.62 + random() * 0.15));
+      placed++;
+    }
+    rocks.count = placed;
+    rocks.castShadow = true;
+    rocks.receiveShadow = true;
+    this.group.add(rocks);
   }
 
-  private addClouds(holes: BuiltHole[], random: () => number): void {
+  /** Puffy cotton-ball clouds around the horizon, drifting slowly. */
+  private addClouds(centre: THREE.Vector3, random: () => number): void {
     const c = TUNING.scenery;
-    const minX = holes[0].tee.x - 40;
-    const maxX = holes[holes.length - 1].tee.x + 40;
-    const material = new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#ffffff', emissiveIntensity: 0.35, roughness: 1 });
-    const puff = new THREE.IcosahedronGeometry(1, 2);
+    const material = new THREE.MeshStandardMaterial({
+      color: '#ffffff',
+      emissive: '#eaf4ff',
+      emissiveIntensity: 0.45,
+      roughness: 1,
+      fog: false,
+    });
+    const puff = new THREE.IcosahedronGeometry(1, 3);
     for (let i = 0; i < c.clouds; i++) {
       const cloud = new THREE.Group();
-      const puffs = 4 + Math.floor(random() * 4);
-      for (let k = 0; k < puffs; k++) {
+      const width = 3 + Math.floor(random() * 3);
+      // A row of big puffs at the bottom (flattened underneath) and smaller ones heaped on top.
+      for (let k = 0; k < width; k++) {
+        const size = 2.2 + random() * 1.4;
         const mesh = new THREE.Mesh(puff, material);
-        const size = 1.2 + random() * 1.6;
-        mesh.scale.set(size * 1.3, size * 0.8, size);
-        mesh.position.set((k - puffs / 2) * 1.5 + random(), random() * 0.8, random() * 1.5);
+        mesh.scale.set(size, size * 0.75, size);
+        mesh.position.set((k - (width - 1) / 2) * 2.6, 0, random() * 1.2);
         cloud.add(mesh);
       }
-      cloud.position.set(minX + random() * (maxX - minX), 16 + random() * 10, -30 + random() * 70);
-      cloud.userData = { minX, maxX };
-      this.clouds.push({ cloud, speed: 0.3 + random() * 0.5 });
+      for (let k = 0; k < width - 1; k++) {
+        const size = 1.8 + random() * 1.4;
+        const mesh = new THREE.Mesh(puff, material);
+        mesh.scale.setScalar(size);
+        mesh.position.set((k - (width - 2) / 2) * 2.4 + random(), 1.8 + random() * 1.2, random());
+        cloud.add(mesh);
+      }
+      const angle = random() * Math.PI * 2;
+      const distance = 70 + random() * 55;
+      cloud.position.set(centre.x + Math.cos(angle) * distance, 14 + random() * 22, centre.z + Math.sin(angle) * distance);
+      cloud.lookAt(centre.x, cloud.position.y, centre.z);
+      cloud.scale.setScalar(0.9 + random() * 0.8);
+      this.clouds.push({ cloud, speed: 0.4 + random() * 0.6, minX: centre.x - 140, maxX: centre.x + 140 });
       this.group.add(cloud);
     }
   }
 }
 
-/** A big dome with a soft gradient from deep blue at the top to a pale horizon. */
+/** A dome with a soft gradient and a bright sun with a warm glow around it. */
 function makeSky(): THREE.Mesh {
   const c = TUNING.scenery;
   const material = new THREE.ShaderMaterial({
@@ -149,163 +185,159 @@ function makeSky(): THREE.Mesh {
     uniforms: {
       top: { value: new THREE.Color(c.skyTop) },
       horizon: { value: new THREE.Color(c.skyHorizon) },
+      sunColour: { value: new THREE.Color(c.sunColour) },
+      sunDirection: { value: Scenery.sunDirection() },
     },
-    vertexShader: `
+    vertexShader: /* glsl */ `
       varying vec3 vDirection;
       void main() {
         vDirection = normalize(position);
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }`,
-    fragmentShader: `
+    fragmentShader: /* glsl */ `
       uniform vec3 top;
       uniform vec3 horizon;
+      uniform vec3 sunColour;
+      uniform vec3 sunDirection;
       varying vec3 vDirection;
       void main() {
-        float t = pow(clamp(vDirection.y, 0.0, 1.0), 0.6);
-        gl_FragColor = vec4(mix(horizon, top, t), 1.0);
+        vec3 direction = normalize(vDirection);
+        float t = pow(clamp(direction.y, 0.0, 1.0), 0.5);
+        vec3 colour = mix(horizon, top, t);
+        float towardsSun = max(dot(direction, sunDirection), 0.0);
+        colour += sunColour * (smoothstep(0.9993, 0.9996, towardsSun) * 5.0 + pow(towardsSun, 60.0) * 0.35 + pow(towardsSun, 8.0) * 0.06);
+        gl_FragColor = vec4(colour, 1.0);
       }`,
   });
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(150, 32, 16), material);
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(150, 48, 24), material);
   sky.renderOrder = -1;
+  sky.frustumCulled = false;
   return sky;
 }
 
-/** One big grassy meadow under all the holes, with a hand-painted look from a small generated texture. */
-function makeMeadow(holes: BuiltHole[]): THREE.Mesh {
+/**
+ * The sea: a few overlapping rounded waves move the surface; the colour goes from turquoise
+ * near the islands to deep blue; the sun sparkles on the waves; white foam rings the beaches
+ * and tops the highest waves.
+ */
+function makeSeaMaterial(islands: IslandShape[]): THREE.ShaderMaterial {
   const c = TUNING.scenery;
+  const islandData = islands.slice(0, 4).map((i) => new THREE.Vector4(i.centre.x, i.centre.y, i.radius.x, i.radius.y));
+  while (islandData.length < 4) islandData.push(new THREE.Vector4(1e5, 1e5, 1, 1));
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      time: { value: 0 },
+      deep: { value: new THREE.Color(c.seaDeep) },
+      shallow: { value: new THREE.Color(c.seaShallow) },
+      foam: { value: new THREE.Color('#ffffff') },
+      sky: { value: new THREE.Color(c.skyHorizon) },
+      sunDirection: { value: Scenery.sunDirection() },
+      sunColour: { value: new THREE.Color(c.sunColour) },
+      islands: { value: islandData },
+      waveHeight: { value: c.waveHeight },
+      fogColour: { value: new THREE.Color(c.skyHorizon) },
+      fogNear: { value: c.fogNear },
+      fogFar: { value: c.fogFar },
+    },
+    vertexShader: /* glsl */ `
+      uniform float time;
+      uniform float waveHeight;
+      varying vec3 vWorld;
+      varying vec3 vNormal;
+      varying float vCrest;
+
+      // One rounded wave: height and its slope along x and z.
+      vec3 wave(vec2 p, vec2 direction, float length, float speed, float amount) {
+        float k = 6.2831 / length;
+        float phase = dot(direction, p) * k + time * speed;
+        float h = sin(phase) * amount;
+        float slope = cos(phase) * amount * k;
+        return vec3(h, direction * slope);
+      }
+
+      void main() {
+        vec4 world = modelMatrix * vec4(position, 1.0);
+        vec2 p = world.xz;
+        vec3 w = wave(p, normalize(vec2(1.0, 0.35)), 9.0, 1.1, 1.0)
+               + wave(p, normalize(vec2(-0.4, 1.0)), 6.0, 1.4, 0.6)
+               + wave(p, normalize(vec2(0.8, -0.7)), 3.7, 1.9, 0.35)
+               + wave(p, normalize(vec2(-1.0, -0.2)), 2.3, 2.4, 0.18);
+        w *= waveHeight;
+        world.y += w.x;
+        vWorld = world.xyz;
+        vNormal = normalize(vec3(-w.y, 1.0, -w.z));
+        vCrest = w.x / (waveHeight * 2.1);
+        gl_Position = projectionMatrix * viewMatrix * world;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform float time;
+      uniform vec3 deep;
+      uniform vec3 shallow;
+      uniform vec3 foam;
+      uniform vec3 sky;
+      uniform vec3 sunDirection;
+      uniform vec3 sunColour;
+      uniform vec4 islands[4];
+      uniform vec3 fogColour;
+      uniform float fogNear;
+      uniform float fogFar;
+      varying vec3 vWorld;
+      varying vec3 vNormal;
+      varying float vCrest;
+
+      void main() {
+        // How close we are to an island's shore (1 = at the beach edge), and the angle around it.
+        float shore = 10.0;
+        float around = 0.0;
+        for (int i = 0; i < 4; i++) {
+          vec2 d = (vWorld.xz - islands[i].xy) / islands[i].zw;
+          float distanceToShore = length(d);
+          if (distanceToShore < shore) { shore = distanceToShore; around = atan(d.y, d.x); }
+        }
+
+        vec3 normal = normalize(vNormal);
+        vec3 toCamera = normalize(cameraPosition - vWorld);
+        float near = smoothstep(1.9, 1.15, shore);
+        vec3 colour = mix(deep, shallow, near * 0.85);
+
+        // Sky reflected at grazing angles, and sparkles where the sun glints off the waves.
+        float fresnel = pow(1.0 - max(dot(normal, toCamera), 0.0), 4.0);
+        colour = mix(colour, sky, fresnel * 0.35);
+        float glint = pow(max(dot(reflect(-sunDirection, normal), toCamera), 0.0), 180.0);
+        colour += sunColour * glint * 1.6;
+
+        // Foam: a wobbly ring hugging each beach, and little white caps on the highest waves.
+        float ring = 1.17 + 0.035 * sin(around * 7.0 + time * 1.3) + 0.02 * sin(time * 2.1 + around * 3.0);
+        float beachFoam = smoothstep(0.06, 0.0, abs(shore - ring)) + smoothstep(1.24, 1.12, shore) * 0.6;
+        float caps = smoothstep(0.78, 0.95, vCrest) * 0.7;
+        colour = mix(colour, foam, clamp(beachFoam + caps, 0.0, 1.0) * 0.9);
+
+        float fog = smoothstep(fogNear, fogFar, distance(cameraPosition, vWorld));
+        gl_FragColor = vec4(mix(colour, fogColour, fog), 1.0);
+      }`,
+  });
+}
+
+/** A fine, sun-bleached sand texture (generated). */
+function sandTexture(): THREE.Texture {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 256;
   const ctx = canvas.getContext('2d')!;
-  ctx.fillStyle = c.grass;
+  ctx.fillStyle = '#d8d8d8';
   ctx.fillRect(0, 0, 256, 256);
-  const random = seededRandom(7);
-  for (let i = 0; i < 260; i++) {
-    // Soft lighter and darker patches, like mown stripes and clover.
-    ctx.fillStyle = random() < 0.5 ? 'rgba(255,255,255,0.05)' : 'rgba(20,60,20,0.06)';
-    ctx.beginPath();
-    ctx.ellipse(random() * 256, random() * 256, 6 + random() * 22, 4 + random() * 14, random() * Math.PI, 0, Math.PI * 2);
-    ctx.fill();
+  const random = seededRandom(11);
+  for (let i = 0; i < 9000; i++) {
+    const shade = 150 + Math.floor(random() * 105);
+    ctx.fillStyle = `rgba(${shade},${shade - 6},${shade - 18},0.45)`;
+    ctx.fillRect(random() * 256, random() * 256, 1 + random() * 1.5, 1 + random() * 1.5);
   }
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(60, 60);
   texture.colorSpace = THREE.SRGBColorSpace;
-  const meadow = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshStandardMaterial({ map: texture, roughness: 1 }));
-  meadow.rotation.x = -Math.PI / 2;
-  const middle = (holes[0].tee.x + holes[holes.length - 1].tee.x) / 2;
-  meadow.position.set(middle, holes[0].tee.y - c.groundDepth, 0);
-  meadow.receiveShadow = true;
-  return meadow;
+  return texture;
 }
 
-/** Round leafy trees and pointy pines: trunks and crowns, each kind drawn as one instanced mesh. */
-function makeTrees(trees: { at: THREE.Vector3; size: number; pine: boolean }[], random: () => number): THREE.Group {
-  const group = new THREE.Group();
-  const trunks = instanced(new THREE.CylinderGeometry(0.09, 0.13, 1, 7), '#8a5a3b', trees.length);
-  const leafy = trees.filter((t) => !t.pine);
-  const pines = trees.filter((t) => t.pine);
-  const crowns = instanced(new THREE.IcosahedronGeometry(1, 1), '#ffffff', leafy.length * 2, true);
-  const cones = instanced(new THREE.ConeGeometry(1, 1, 8), '#ffffff', pines.length * 2, true);
-  const m = new THREE.Matrix4();
-  const q = new THREE.Quaternion();
-  const leafColours = ['#5fb85a', '#6cc46a', '#4fa65a', '#86c95b'];
-  const pineColours = ['#3f8f5a', '#4a9c63', '#357f4e'];
-
-  trees.forEach((t, i) => {
-    const trunkHeight = (t.pine ? 0.5 : 0.8) * t.size;
-    m.compose(new THREE.Vector3(t.at.x, t.at.y + trunkHeight / 2, t.at.z), q, new THREE.Vector3(t.size, trunkHeight, t.size));
-    trunks.setMatrixAt(i, m);
-  });
-  leafy.forEach((t, i) => {
-    for (let k = 0; k < 2; k++) {
-      const r = (k === 0 ? 0.75 : 0.5) * t.size;
-      const y = t.at.y + 0.8 * t.size + (k === 0 ? r * 0.8 : r * 2.1);
-      q.setFromEuler(new THREE.Euler(random(), random(), random()));
-      m.compose(new THREE.Vector3(t.at.x + (k ? 0.15 : 0), y, t.at.z), q, new THREE.Vector3(r, r * 0.9, r));
-      crowns.setMatrixAt(i * 2 + k, m);
-      crowns.setColorAt(i * 2 + k, new THREE.Color(leafColours[Math.floor(random() * leafColours.length)]));
-    }
-  });
-  q.identity();
-  pines.forEach((t, i) => {
-    for (let k = 0; k < 2; k++) {
-      const r = (k === 0 ? 0.65 : 0.45) * t.size;
-      const h = (k === 0 ? 1.0 : 0.8) * t.size;
-      const y = t.at.y + 0.5 * t.size + (k === 0 ? h / 2 : h * 1.15);
-      m.compose(new THREE.Vector3(t.at.x, y, t.at.z), q, new THREE.Vector3(r, h, r));
-      cones.setMatrixAt(i * 2 + k, m);
-      cones.setColorAt(i * 2 + k, new THREE.Color(pineColours[Math.floor(random() * pineColours.length)]));
-    }
-  });
-  group.add(trunks, crowns, cones);
-  return group;
-}
-
-function makeBushes(spots: THREE.Vector3[], random: () => number): THREE.InstancedMesh {
-  const bushes = instanced(new THREE.IcosahedronGeometry(1, 1), '#ffffff', spots.length * 3, true);
-  const m = new THREE.Matrix4();
-  const q = new THREE.Quaternion();
-  const colours = ['#5bb35b', '#68bf5f', '#4ea85a'];
-  spots.forEach((at, i) => {
-    for (let k = 0; k < 3; k++) {
-      const r = 0.22 + random() * 0.16;
-      q.setFromEuler(new THREE.Euler(random(), random(), random()));
-      m.compose(new THREE.Vector3(at.x + (k - 1) * 0.22, at.y + r * 0.7, at.z + (random() - 0.5) * 0.2), q, new THREE.Vector3(r, r * 0.85, r));
-      bushes.setMatrixAt(i * 3 + k, m);
-      bushes.setColorAt(i * 3 + k, new THREE.Color(colours[Math.floor(random() * colours.length)]));
-    }
-  });
-  return bushes;
-}
-
-function makeRocks(spots: THREE.Vector3[], random: () => number): THREE.InstancedMesh {
-  const rocks = instanced(new THREE.DodecahedronGeometry(1, 0), '#ffffff', spots.length, true);
-  const m = new THREE.Matrix4();
-  const q = new THREE.Quaternion();
-  spots.forEach((at, i) => {
-    const r = 0.15 + random() * 0.25;
-    q.setFromEuler(new THREE.Euler(random(), random() * 3, random()));
-    m.compose(new THREE.Vector3(at.x, at.y + r * 0.35, at.z), q, new THREE.Vector3(r * 1.3, r * 0.75, r));
-    rocks.setMatrixAt(i, m);
-    rocks.setColorAt(i, new THREE.Color().setHSL(0.6, 0.06, 0.62 + random() * 0.12));
-  });
-  return rocks;
-}
-
-/** Little flowers: a bright blossom on a short green stem. */
-function makeFlowers(spots: THREE.Vector3[], random: () => number): THREE.Group {
-  const group = new THREE.Group();
-  const stems = instanced(new THREE.CylinderGeometry(0.008, 0.008, 1, 4), '#4f9b45', spots.length);
-  const blossoms = instanced(new THREE.IcosahedronGeometry(1, 0), '#ffffff', spots.length);
-  blossoms.castShadow = false;
-  const colours = ['#ff6b8a', '#ffd23f', '#ffffff', '#b98cff', '#ff9f43'];
-  const m = new THREE.Matrix4();
-  const q = new THREE.Quaternion();
-  spots.forEach((at, i) => {
-    const height = 0.1 + random() * 0.08;
-    m.compose(new THREE.Vector3(at.x, at.y + height / 2, at.z), q, new THREE.Vector3(1, height, 1));
-    stems.setMatrixAt(i, m);
-    m.compose(new THREE.Vector3(at.x, at.y + height, at.z), q, new THREE.Vector3(0.04, 0.03, 0.04));
-    blossoms.setMatrixAt(i, m);
-    blossoms.setColorAt(i, new THREE.Color(colours[Math.floor(random() * colours.length)]));
-  });
-  group.add(stems, blossoms);
-  return group;
-}
-
-function instanced(geometry: THREE.BufferGeometry, colour: string, count: number, flat = false): THREE.InstancedMesh {
-  const mesh = new THREE.InstancedMesh(
-    geometry,
-    new THREE.MeshStandardMaterial({ color: colour, roughness: 0.85, flatShading: flat }),
-    Math.max(1, count),
-  );
-  mesh.count = count;
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  return mesh;
-}
-
-/** The same "random" numbers every time, so the scenery always looks the same. */
+/** The same "random" numbers every time, so the world always looks the same. */
 function seededRandom(seed: number): () => number {
   let a = seed >>> 0;
   return () => {

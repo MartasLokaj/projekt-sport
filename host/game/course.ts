@@ -4,6 +4,8 @@ import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { TUNING } from '../../shared/tuning.ts';
 
 // Holes built from Kenney Minigolf Kit pieces (CC0, in host/assets/minigolf).
+// The kit gives the shapes; we re-skin them with real grass on the lanes and wooden planks on the
+// edges (CC0 textures from ambientCG, in host/assets/textures). Each hole stands on its own island.
 // In the kit every piece is a 1 × 1 tile; we scale them up by tileSize so the kit's ball matches ours.
 // Grid coordinates: x and z count tiles, z points down the first lane, "level" lifts a tile by one
 // low-ramp step. Turning a piece: rot = number of quarter turns (rot 1 = 90°).
@@ -24,6 +26,8 @@ export type Piece = { name: string; x: number; z: number; rot?: number; level?: 
 export type HoleDef = {
   number: number;
   par: number;
+  /** Where the hole sits in the world (its own island in the sea) and how it is turned (quarter turns). */
+  place: { x: number; z: number; turn: number };
   pieces: Piece[];
   /** Tee position in grid coordinates, and the direction down the lane in degrees (0 = +z, 90 = +x). */
   tee: { x: number; z: number };
@@ -35,6 +39,7 @@ export const HOLES: HoleDef[] = [
     // Hole 1: a simple bend to the right.
     number: 1,
     par: 3,
+    place: { x: 0, z: 0, turn: 0 },
     tee: { x: 0, z: -0.2 },
     teeYaw: 0,
     pieces: [
@@ -50,6 +55,7 @@ export const HOLES: HoleDef[] = [
     // Hole 2: up a ramp, across a raised bridge and down again.
     number: 2,
     par: 3,
+    place: { x: -34, z: 30, turn: 1 },
     tee: { x: 0, z: -0.2 },
     teeYaw: 0,
     pieces: [
@@ -64,6 +70,7 @@ export const HOLES: HoleDef[] = [
     // Hole 3: through the windmill while its blades sweep the lane.
     number: 3,
     par: 3,
+    place: { x: 26, z: 52, turn: 2 },
     tee: { x: 0, z: -0.2 },
     teeYaw: 0,
     pieces: [
@@ -114,12 +121,20 @@ export function isInCup(p: { x: number; y: number; z: number }, hole: BuiltHole)
   );
 }
 
-/** Builds a hole at `origin`: its meshes (returned in a group) and its colliders in the physics world. */
-export function buildHole(def: HoleDef, kit: Kit, origin: THREE.Vector3, world: RAPIER.World, R: typeof RAPIER): BuiltHole {
+/** Builds a hole at its place: its meshes (returned in a group) and its colliders in the physics world. */
+export function buildHole(def: HoleDef, kit: Kit, world: RAPIER.World, R: typeof RAPIER): BuiltHole {
   const S = TUNING.course.tileSize;
+  const origin = new THREE.Vector3(def.place.x, 0, def.place.z);
+  const turn = def.place.turn;
+  /** Grid position (in tiles) to world position, turned with the hole. */
+  const toWorld = (x: number, z: number, y = 0): THREE.Vector3 =>
+    new THREE.Vector3(x * S, y, z * S).applyAxisAngle(UP, (turn * Math.PI) / 2).add(origin);
   const group = new THREE.Group();
   const floor = new TriangleSoup();
   const walls = new TriangleSoup();
+  const grass = new SurfaceMesh();
+  const wood = new SurfaceMesh();
+  const colourAt = colourSampler(kit);
   let cup: THREE.Vector3 | null = null;
   const updates: ((dt: number) => void)[] = [];
   const occluders: THREE.Object3D[] = [];
@@ -129,12 +144,8 @@ export function buildHole(def: HoleDef, kit: Kit, origin: THREE.Vector3, world: 
     if (!source) throw new Error(`Missing kit piece ${piece.name}`);
     const model = source.scene.clone(true);
     model.scale.setScalar(S);
-    model.rotation.y = ((piece.rot ?? 0) * Math.PI) / 2;
-    model.position.set(
-      origin.x + piece.x * S,
-      origin.y + ((piece.level ?? 0) * KIT_RAMP_STEP - KIT_FLOOR) * S,
-      origin.z + piece.z * S,
-    );
+    model.rotation.y = (((piece.rot ?? 0) + turn) * Math.PI) / 2;
+    model.position.copy(toWorld(piece.x, piece.z, ((piece.level ?? 0) * KIT_RAMP_STEP - KIT_FLOOR) * S));
     model.traverse((o) => {
       o.castShadow = true;
       o.receiveShadow = true;
@@ -146,15 +157,20 @@ export function buildHole(def: HoleDef, kit: Kit, origin: THREE.Vector3, world: 
     if (pieceCup) cup = pieceCup;
 
     const blades = model.getObjectByName('blades');
-    collectTriangles(model, blades ?? null, (a, b, c, local) => {
-      if (isHiddenFace(local)) return;
+    const reskin = !blades; // the windmill keeps its own colours
+    if (reskin) model.visible = false; // drawn by the grass and wood meshes instead
+    collectTriangles(model, blades ?? null, (a, b, c, local, uv) => {
       // Leave out the shallow kit cup; the deeper pit below replaces it.
       if (pieceCup && [a, b, c].every((v) => v.y < pieceCup.y - 0.001 && horizontalDistance(v, pieceCup) < KIT_CUP_RADIUS * S * 1.05)) {
         return;
       }
       const normal = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a));
       if (normal.lengthSq() < 1e-10) return;
-      (normal.normalize().y > 0.5 ? floor : walls).add(a, b, c);
+      normal.normalize();
+      // Looks: the kit paints lanes green and edges orange, which tells grass from wood.
+      if (reskin) (colourAt(uv) === 'green' ? grass : wood).add(a, b, c, normal);
+      if (isHiddenFace(local)) return;
+      (normal.y > 0.5 ? floor : walls).add(a, b, c);
     });
 
     if (blades) {
@@ -165,10 +181,7 @@ export function buildHole(def: HoleDef, kit: Kit, origin: THREE.Vector3, world: 
       });
       occluders.push(model);
       // A plain lane underneath, so the grass stays visible while the windmill is faded out.
-      const lane = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.8 * S, S),
-        new THREE.MeshStandardMaterial({ color: TUNING.course.laneColour, roughness: 0.9 }),
-      );
+      const lane = new THREE.Mesh(new THREE.PlaneGeometry(0.8 * S, S), grassMaterial());
       lane.rotation.x = -Math.PI / 2;
       lane.rotation.z = model.rotation.y;
       lane.position.set(model.position.x, model.position.y + (KIT_FLOOR - 0.002) * S, model.position.z);
@@ -177,6 +190,7 @@ export function buildHole(def: HoleDef, kit: Kit, origin: THREE.Vector3, world: 
     }
   }
   if (!cup) throw new Error(`Hole ${def.number} has no cup`);
+  group.add(grass.build(grassMaterial(), TUNING.course.grassTextureSize), wood.build(woodMaterial(), TUNING.course.woodTextureSize));
 
   const cfg = TUNING.course;
   const fixed = world.createRigidBody(R.RigidBodyDesc.fixed());
@@ -203,18 +217,17 @@ export function buildHole(def: HoleDef, kit: Kit, origin: THREE.Vector3, world: 
   flag.traverse((o) => (o.castShadow = true));
   group.add(flag);
 
-  const yaw = THREE.MathUtils.degToRad(def.teeYaw);
   return {
     def,
     group,
-    tee: new THREE.Vector3(origin.x + def.tee.x * S, origin.y, origin.z + def.tee.z * S),
-    teeYaw: yaw,
+    tee: toWorld(def.tee.x, def.tee.z),
+    teeYaw: THREE.MathUtils.degToRad(def.teeYaw + turn * 90),
     cup,
     cupRadius,
     update: (dt) => updates.forEach((u) => u(dt)),
     floorCollider,
     occluders,
-    footprint: def.pieces.map((p) => new THREE.Vector3(origin.x + p.x * S, origin.y, origin.z + p.z * S)),
+    footprint: def.pieces.map((p) => toWorld(p.x, p.z)),
   };
 }
 
@@ -294,12 +307,13 @@ function isHiddenFace(local: THREE.Vector3[]): boolean {
 
 /**
  * Calls `visit` with every triangle of the model's meshes, skipping `skip` and its children:
- * the corners in world coordinates, and in the piece's own (kit) coordinates.
+ * the corners in world coordinates and in the piece's own (kit) coordinates, and the middle of its
+ * texture coordinates (where it takes its colour from the kit's colour map).
  */
 function collectTriangles(
   model: THREE.Object3D,
   skip: THREE.Object3D | null,
-  visit: (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, local: THREE.Vector3[]) => void,
+  visit: (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, local: THREE.Vector3[], uv: THREE.Vector2) => void,
 ): void {
   const skipped = new Set<THREE.Object3D>();
   skip?.traverse((o) => skipped.add(o));
@@ -307,16 +321,119 @@ function collectTriangles(
   model.traverse((o) => {
     if (!(o instanceof THREE.Mesh) || skipped.has(o)) return;
     const position = o.geometry.getAttribute('position');
+    const uvs = o.geometry.getAttribute('uv');
     const index = o.geometry.getIndex();
     const count = index ? index.count : position.count;
     const v = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+    const uv = new THREE.Vector2();
+    const corner = new THREE.Vector2();
     for (let i = 0; i < count; i += 3) {
+      uv.set(0, 0);
       for (let k = 0; k < 3; k++) {
-        v[k].fromBufferAttribute(position, index ? index.getX(i + k) : i + k).applyMatrix4(o.matrixWorld);
+        const vertex = index ? index.getX(i + k) : i + k;
+        v[k].fromBufferAttribute(position, vertex).applyMatrix4(o.matrixWorld);
+        if (uvs) uv.add(corner.fromBufferAttribute(uvs, vertex).multiplyScalar(1 / 3));
       }
-      visit(v[0], v[1], v[2], v.map((w) => w.clone().applyMatrix4(toPiece)));
+      visit(v[0], v[1], v[2], v.map((w) => w.clone().applyMatrix4(toPiece)), uv);
     }
   });
+}
+
+const UP = new THREE.Vector3(0, 1, 0);
+
+/** Reads the kit's colour map, to tell the green (lane) parts from the rest. */
+function colourSampler(kit: Kit): (uv: THREE.Vector2) => 'green' | 'other' {
+  let image: CanvasImageSource | null = null;
+  kit.get('straight')?.scene.traverse((o) => {
+    if (o instanceof THREE.Mesh && (o.material as THREE.MeshStandardMaterial).map?.image) {
+      image = (o.material as THREE.MeshStandardMaterial).map!.image as CanvasImageSource;
+    }
+  });
+  if (!image) return () => 'other';
+  const size = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+  ctx.drawImage(image, 0, 0, size, size);
+  const pixels = ctx.getImageData(0, 0, size, size).data;
+  return (uv) => {
+    const x = Math.min(size - 1, Math.max(0, Math.floor(uv.x * size)));
+    const y = Math.min(size - 1, Math.max(0, Math.floor(uv.y * size)));
+    const i = (y * size + x) * 4;
+    const [r, g, b] = [pixels[i], pixels[i + 1], pixels[i + 2]];
+    return g > r * 1.15 && g > b ? 'green' : 'other';
+  };
+}
+
+let grassCache: THREE.MeshStandardMaterial | null = null;
+let woodCache: THREE.MeshStandardMaterial | null = null;
+
+/** Real grass (CC0 photo texture), a little brighter and greener than the photo for a cheerful look. */
+function grassMaterial(): THREE.MeshStandardMaterial {
+  grassCache ??= texturedMaterial('grass', TUNING.course.grassTint);
+  return grassCache;
+}
+
+/** Wooden planks (CC0 photo texture), lightened to a warm, friendly wood. */
+function woodMaterial(): THREE.MeshStandardMaterial {
+  woodCache ??= texturedMaterial('planks', TUNING.course.woodTint);
+  return woodCache;
+}
+
+function texturedMaterial(name: string, tint: readonly number[]): THREE.MeshStandardMaterial {
+  const loader = new THREE.TextureLoader();
+  const load = (map: string, colour: boolean): THREE.Texture => {
+    const texture = loader.load(`/host/assets/textures/${name}_${map}.jpg`);
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    texture.anisotropy = 8;
+    if (colour) texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+  };
+  return new THREE.MeshStandardMaterial({
+    map: load('color', true),
+    normalMap: load('normalgl', false),
+    roughnessMap: load('roughness', false),
+    color: new THREE.Color(tint[0], tint[1], tint[2]),
+  });
+}
+
+/**
+ * Triangles for drawing a surface with a repeating texture. Each triangle gets texture coordinates
+ * from its position, projected along its main direction: lanes from above, edges from the side
+ * (so the planks run along the edges).
+ */
+class SurfaceMesh {
+  private readonly positions: number[] = [];
+  private readonly normals: number[] = [];
+  private readonly corners: { v: THREE.Vector3; n: THREE.Vector3 }[] = [];
+
+  add(a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, normal: THREE.Vector3): void {
+    for (const v of [a, b, c]) {
+      this.positions.push(v.x, v.y, v.z);
+      this.normals.push(normal.x, normal.y, normal.z);
+      this.corners.push({ v: v.clone(), n: normal });
+    }
+  }
+
+  build(material: THREE.Material, textureSize: number): THREE.Mesh {
+    const uvs: number[] = [];
+    for (const { v, n } of this.corners) {
+      const ax = Math.abs(n.x);
+      const ay = Math.abs(n.y);
+      const az = Math.abs(n.z);
+      if (ay >= ax && ay >= az) uvs.push(v.x / textureSize, v.z / textureSize);
+      else if (ax > az) uvs.push(v.z / textureSize, v.y / textureSize);
+      else uvs.push(v.x / textureSize, v.y / textureSize);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(this.positions, 3));
+    geometry.setAttribute('normal', new THREE.Float32BufferAttribute(this.normals, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
+  }
 }
 
 function horizontalDistance(a: THREE.Vector3, b: THREE.Vector3): number {
