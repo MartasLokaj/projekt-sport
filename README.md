@@ -47,5 +47,5 @@ npm run check    # TypeScript type check
 
 ## Credits
 
-- Course pieces: [Minigolf Kit](https://kenney.nl/assets/minigolf-kit) by Kenney (CC0), in `host/assets/minigolf/`.
-- Grass and wood textures: [Grass 004](https://ambientcg.com/view?id=Grass004) and [Planks 037 A](https://ambientcg.com/view?id=Planks037A) from ambientCG (CC0), in `host/assets/textures/`.
+- Windmill and flag: [Minigolf Kit](https://kenney.nl/assets/minigolf-kit) by Kenney (CC0), in `host/assets/minigolf/`.
+- Grass texture: [Grass 004](https://ambientcg.com/view?id=Grass004) from ambientCG (CC0), in `host/assets/textures/`.

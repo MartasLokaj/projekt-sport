@@ -1,6 +1,5 @@
 Textures from ambientCG (https://ambientcg.com), licensed CC0 1.0 Universal (public domain).
 
 grass_*.jpg   - Grass 004 (https://ambientcg.com/view?id=Grass004), 1K JPG
-planks_*.jpg  - Planks 037 A (https://ambientcg.com/view?id=Planks037A), 1K JPG
 
-Re-encoded at JPEG quality 80. Maps used: color, normal (OpenGL), roughness.
+Re-encoded at JPEG quality 80. Maps used: color, normal (OpenGL). (The roughness map is kept but not used.)

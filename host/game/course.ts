@@ -3,87 +3,83 @@ import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { TUNING } from '../../shared/tuning.ts';
 
-// Holes built from Kenney Minigolf Kit pieces (CC0, in host/assets/minigolf).
-// The kit gives the shapes; we re-skin them with real grass on the lanes and wooden planks on the
-// edges (CC0 textures from ambientCG, in host/assets/textures). Each hole stands on its own island.
-// In the kit every piece is a 1 × 1 tile; we scale them up by tileSize so the kit's ball matches ours.
-// Grid coordinates: x and z count tiles, z points down the first lane, "level" lifts a tile by one
-// low-ramp step. Turning a piece: rot = number of quarter turns (rot 1 = 90°).
+// Holes with smooth, rounded lanes, like a real outdoor minigolf course.
+// Each lane follows a curve through a few points; the lane is everything within its width of that
+// curve, so the ends come out round and there are no corners anywhere. Round "bumpers" covered in
+// dark green turf run all the way around the edge. The playing surface is bright artificial turf.
+// Both use a CC0 grass texture from ambientCG (host/assets/textures).
+// The windmill and the flag are Kenney Minigolf Kit models (CC0, host/assets/minigolf).
 //
-// Physics: all floor triangles of a hole become one connected surface and all wall triangles another,
-// so the ball rolls smoothly over the seams between tiles. Hidden faces (each tile's underside and its
-// edges, where it touches the next tile) are left out: the ball would catch on their edges. The kit's
-// cup is very shallow, so under it we add a deeper pit the ball really drops into.
+// Physics uses exactly the same shapes: the lane surface and the bumpers become two collision
+// meshes. Under the cup there is a pit the ball really drops into.
 
-/** Measurements of the kit pieces, in kit units. */
-const KIT_FLOOR = 0.063; // height of the floor surface
-const KIT_RAMP_STEP = 0.1; // how much a "ramp-low" piece climbs
-const KIT_CUP_RADIUS = 0.067; // radius of the cup in the "hole-…" pieces
-const KIT_BLADE_LENGTH = 0.6; // windmill blades reach this far from their hub
+/** Kenney kit measurements (kit units), for the windmill and the flag. */
+const KIT_FLOOR = 0.063;
+const KIT_BLADE_LENGTH = 0.6;
 
-export type Piece = { name: string; x: number; z: number; rot?: number; level?: number };
+/** A point the lane passes through (local coordinates, z = forward from the tee), its floor height and half-width. */
+export type PathPoint = { x: number; z: number; y?: number; w?: number };
 
 export type HoleDef = {
   number: number;
   par: number;
-  /** Where the hole sits in the world (its own island in the sea) and how it is turned (quarter turns). */
-  place: { x: number; z: number; turn: number };
-  pieces: Piece[];
-  /** Tee position in grid coordinates, and the direction down the lane in degrees (0 = +z, 90 = +x). */
-  tee: { x: number; z: number };
-  teeYaw: number;
+  /** Where the hole sits in the world (its own island in the sea) and which way it faces (degrees, 0 = +z). */
+  place: { x: number; z: number; yaw: number };
+  /** The lane goes from the tee (first point) to the cup (last point). */
+  path: PathPoint[];
+  /** A windmill over the lane, this far from the tee (in units along the lane). */
+  windmill?: number;
 };
 
 export const HOLES: HoleDef[] = [
   {
-    // Hole 1: a simple bend to the right.
+    // Hole 1: a gentle bend to the right, opening out around the cup.
     number: 1,
     par: 3,
-    place: { x: 0, z: 0, turn: 0 },
-    tee: { x: 0, z: -0.2 },
-    teeYaw: 0,
-    pieces: [
-      { name: 'end', x: 0, z: 0, rot: 2 },
-      { name: 'straight', x: 0, z: 1 },
-      { name: 'straight', x: 0, z: 2 },
-      { name: 'round-corner-a', x: 0, z: 3 },
-      { name: 'straight', x: -1, z: 3, rot: 1 },
-      { name: 'hole-round', x: -2, z: 3, rot: 3 },
+    place: { x: 0, z: 0, yaw: 0 },
+    path: [
+      { x: 0, z: 0, w: 1.05 },
+      { x: 0.1, z: 3.5, w: 1.15 },
+      { x: 0.4, z: 6.5, w: 1.35 },
+      { x: -1.2, z: 9.2, w: 1.2 },
+      { x: -4.2, z: 10.2, w: 1.05 },
+      { x: -7, z: 9.6, w: 1.45 },
     ],
   },
   {
-    // Hole 2: up a ramp, across a raised bridge and down again.
+    // Hole 2: up a grassy hill, along a narrow ridge and down to the cup.
     number: 2,
     par: 3,
-    place: { x: -34, z: 30, turn: 1 },
-    tee: { x: 0, z: -0.2 },
-    teeYaw: 0,
-    pieces: [
-      { name: 'end', x: 0, z: 0, rot: 2 },
-      { name: 'ramp-low', x: 0, z: 1 },
-      { name: 'straight', x: 0, z: 2, level: 1 },
-      { name: 'ramp-low', x: 0, z: 3, rot: 2 },
-      { name: 'hole-round', x: 0, z: 4 },
+    place: { x: -34, z: 30, yaw: 90 },
+    path: [
+      { x: 0, z: 0, w: 1.05 },
+      { x: 0, z: 2.8, y: 0, w: 1.15 },
+      { x: 0.2, z: 5, y: 0.4, w: 1.0 },
+      { x: -0.2, z: 7.8, y: 0.4, w: 0.85 },
+      { x: 0, z: 10, y: 0, w: 1.1 },
+      { x: 0.8, z: 12.8, w: 1.45 },
     ],
   },
   {
     // Hole 3: through the windmill while its blades sweep the lane.
     number: 3,
     par: 3,
-    place: { x: 26, z: 52, turn: 2 },
-    tee: { x: 0, z: -0.2 },
-    teeYaw: 0,
-    pieces: [
-      { name: 'end', x: 0, z: 0, rot: 2 },
-      { name: 'straight', x: 0, z: 1 },
-      { name: 'windmill', x: 0, z: 2 },
-      { name: 'straight', x: 0, z: 3 },
-      { name: 'hole-round', x: 0, z: 4 },
+    place: { x: 26, z: 52, yaw: 180 },
+    windmill: 6.3,
+    path: [
+      { x: 0, z: 0, w: 1.05 },
+      { x: 0, z: 3.5, w: 1.2 },
+      { x: 0, z: 6.3, w: 1.2 },
+      { x: 0.2, z: 9, w: 1.2 },
+      { x: 1.6, z: 11.6, w: 1.45 },
     ],
   },
 ];
 
 export type Kit = Map<string, GLTF>;
+
+/** Where a point is relative to the lane. */
+export type LaneSpot = { distance: number; width: number; height: number };
 
 export type BuiltHole = {
   def: HoleDef;
@@ -100,16 +96,14 @@ export type BuiltHole = {
   floorCollider: RAPIER.Collider;
   /** Big pieces that may hide the ball from the camera; the game fades them out when they do. */
   occluders: THREE.Object3D[];
-  /** Centres of the hole's tiles (world, on the ground), so scenery can keep off the course. */
-  footprint: THREE.Vector3[];
+  /** The lane's outline including the bumpers, so the island can be shaped around it. */
+  lane: { bounds: THREE.Box3; nearest: (x: number, z: number) => LaneSpot; outerEdge: number };
 };
 
 export async function loadKit(): Promise<Kit> {
-  const names = new Set([...HOLES.flatMap((h) => h.pieces.map((p) => p.name)), 'flag-red']);
   const loader = new GLTFLoader();
-  const loaded = await Promise.all(
-    [...names].map(async (name) => [name, await loader.loadAsync(`/host/assets/minigolf/${name}.glb`)] as const),
-  );
+  const names = ['windmill', 'flag-red'];
+  const loaded = await Promise.all(names.map(async (name) => [name, await loader.loadAsync(`/host/assets/minigolf/${name}.glb`)] as const));
   return new Map(loaded);
 }
 
@@ -123,84 +117,67 @@ export function isInCup(p: { x: number; y: number; z: number }, hole: BuiltHole)
 
 /** Builds a hole at its place: its meshes (returned in a group) and its colliders in the physics world. */
 export function buildHole(def: HoleDef, kit: Kit, world: RAPIER.World, R: typeof RAPIER): BuiltHole {
-  const S = TUNING.course.tileSize;
-  const origin = new THREE.Vector3(def.place.x, 0, def.place.z);
-  const turn = def.place.turn;
-  /** Grid position (in tiles) to world position, turned with the hole. */
-  const toWorld = (x: number, z: number, y = 0): THREE.Vector3 =>
-    new THREE.Vector3(x * S, y, z * S).applyAxisAngle(UP, (turn * Math.PI) / 2).add(origin);
-  const group = new THREE.Group();
-  const floor = new TriangleSoup();
-  const walls = new TriangleSoup();
-  const grass = new SurfaceMesh();
-  const wood = new SurfaceMesh();
-  const colourAt = colourSampler(kit);
-  let cup: THREE.Vector3 | null = null;
-  const updates: ((dt: number) => void)[] = [];
-  const occluders: THREE.Object3D[] = [];
-
-  for (const piece of def.pieces) {
-    const source = kit.get(piece.name);
-    if (!source) throw new Error(`Missing kit piece ${piece.name}`);
-    const model = source.scene.clone(true);
-    model.scale.setScalar(S);
-    model.rotation.y = (((piece.rot ?? 0) + turn) * Math.PI) / 2;
-    model.position.copy(toWorld(piece.x, piece.z, ((piece.level ?? 0) * KIT_RAMP_STEP - KIT_FLOOR) * S));
-    model.traverse((o) => {
-      o.castShadow = true;
-      o.receiveShadow = true;
-    });
-    group.add(model);
-    model.updateMatrixWorld(true);
-
-    const pieceCup = piece.name.startsWith('hole-') ? model.localToWorld(new THREE.Vector3(0, KIT_FLOOR, 0)) : null;
-    if (pieceCup) cup = pieceCup;
-
-    const blades = model.getObjectByName('blades');
-    const reskin = !blades; // the windmill keeps its own colours
-    if (reskin) model.visible = false; // drawn by the grass and wood meshes instead
-    collectTriangles(model, blades ?? null, (a, b, c, local, uv) => {
-      // Leave out the shallow kit cup; the deeper pit below replaces it.
-      if (pieceCup && [a, b, c].every((v) => v.y < pieceCup.y - 0.001 && horizontalDistance(v, pieceCup) < KIT_CUP_RADIUS * S * 1.05)) {
-        return;
-      }
-      const normal = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a));
-      if (normal.lengthSq() < 1e-10) return;
-      normal.normalize();
-      // Looks: the kit paints lanes green and edges orange, which tells grass from wood.
-      if (reskin) (colourAt(uv) === 'green' ? grass : wood).add(a, b, c, normal);
-      if (isHiddenFace(local)) return;
-      (normal.y > 0.5 ? floor : walls).add(a, b, c);
-    });
-
-    if (blades) {
-      updates.push(addWindmillBlades(model, blades, world, R));
-      // Its own copies of the materials, so it can be faded out without fading the other pieces.
-      model.traverse((o) => {
-        if (o instanceof THREE.Mesh) o.material = (o.material as THREE.Material).clone();
-      });
-      occluders.push(model);
-      // A plain lane underneath, so the grass stays visible while the windmill is faded out.
-      const lane = new THREE.Mesh(new THREE.PlaneGeometry(0.8 * S, S), grassMaterial());
-      lane.rotation.x = -Math.PI / 2;
-      lane.rotation.z = model.rotation.y;
-      lane.position.set(model.position.x, model.position.y + (KIT_FLOOR - 0.002) * S, model.position.z);
-      lane.receiveShadow = true;
-      group.add(lane);
-    }
-  }
-  if (!cup) throw new Error(`Hole ${def.number} has no cup`);
-  group.add(grass.build(grassMaterial(), TUNING.course.grassTextureSize), wood.build(woodMaterial(), TUNING.course.woodTextureSize));
-
   const cfg = TUNING.course;
+  const group = new THREE.Group();
+  const lane = new Lane(def);
+  const cup = lane.points[lane.points.length - 1].clone();
+  const cupRadius = cfg.cupRadius;
+
+  // Lane surface: bright turf. One connected mesh, used for drawing and for physics.
+  const floor = buildFloor(lane, cup, cupRadius);
+  const turf = new THREE.Mesh(floor, turfMaterial());
+  turf.receiveShadow = true;
+  group.add(turf);
   const fixed = world.createRigidBody(R.RigidBodyDesc.fixed());
-  const floorMesh = floor.build();
   const floorCollider = world.createCollider(
-    R.ColliderDesc.trimesh(floorMesh.vertices, floorMesh.indices, R.TriMeshFlags.FIX_INTERNAL_EDGES)
+    R.ColliderDesc.trimesh(
+      floor.getAttribute('position').array as Float32Array,
+      floor.getIndex()!.array as Uint32Array,
+      R.TriMeshFlags.FIX_INTERNAL_EDGES,
+    )
       .setFriction(cfg.floorFriction)
       .setRestitution(0),
     fixed,
   );
+
+  // Round bumpers all around the edge, covered in dark green turf.
+  const bumper = buildBumper(lane);
+  const bumperMesh = new THREE.Mesh(bumper, bumperMaterial());
+  bumperMesh.castShadow = true;
+  bumperMesh.receiveShadow = true;
+  group.add(bumperMesh);
+  const walls = new TriangleSoup();
+  addMeshTriangles(bumper, walls);
+
+  addCupPit(group, cup, cupRadius, world, R);
+  const flag = kit.get('flag-red')!.scene.clone(true);
+  flag.scale.setScalar(cfg.tileSize);
+  flag.position.copy(cup);
+  flag.traverse((o) => (o.castShadow = true));
+  group.add(flag);
+
+  const updates: ((dt: number) => void)[] = [];
+  const occluders: THREE.Object3D[] = [];
+  if (def.windmill !== undefined) {
+    const spot = lane.at(def.windmill);
+    const model = kit.get('windmill')!.scene.clone(true);
+    model.scale.setScalar(cfg.tileSize);
+    model.rotation.y = Math.atan2(spot.tangent.x, spot.tangent.z);
+    model.position.set(spot.point.x, spot.point.y - KIT_FLOOR * cfg.tileSize - 0.01, spot.point.z);
+    // Its own copies of the materials, so it can be faded out without fading anything else.
+    model.traverse((o) => {
+      o.castShadow = true;
+      if (o instanceof THREE.Mesh) o.material = (o.material as THREE.Material).clone();
+    });
+    group.add(model);
+    model.updateMatrixWorld(true);
+    const blades = model.getObjectByName('blades')!;
+    // The windmill's building is solid; its own floor tile is replaced by our lane.
+    addModelTriangles(model, blades, walls, (local, normal) => normal.y > 0.5 && local.every((v) => v.y < KIT_FLOOR + 0.01));
+    updates.push(addWindmillBlades(model, blades, world, R));
+    occluders.push(model);
+  }
+
   const wallMesh = walls.build();
   world.createCollider(
     R.ColliderDesc.trimesh(wallMesh.vertices, wallMesh.indices, R.TriMeshFlags.FIX_INTERNAL_EDGES)
@@ -209,26 +186,251 @@ export function buildHole(def: HoleDef, kit: Kit, world: RAPIER.World, R: typeof
     fixed,
   );
 
-  const cupRadius = KIT_CUP_RADIUS * S;
-  addCupPit(group, cup, cupRadius, world, R);
-  const flag = kit.get('flag-red')!.scene.clone(true);
-  flag.scale.setScalar(S);
-  flag.position.copy(cup);
-  flag.traverse((o) => (o.castShadow = true));
-  group.add(flag);
-
+  const teeSpot = lane.at(cfg.teeDistance);
+  const outerEdge = cfg.bumperWidth + 0.05;
   return {
     def,
     group,
-    tee: toWorld(def.tee.x, def.tee.z),
-    teeYaw: THREE.MathUtils.degToRad(def.teeYaw + turn * 90),
+    tee: teeSpot.point.clone(),
+    teeYaw: Math.atan2(teeSpot.tangent.x, teeSpot.tangent.z),
     cup,
     cupRadius,
     update: (dt) => updates.forEach((u) => u(dt)),
     floorCollider,
     occluders,
-    footprint: def.pieces.map((p) => toWorld(p.x, p.z)),
+    lane: {
+      bounds: lane.bounds(outerEdge),
+      nearest: (x, z) => {
+        const n = lane.nearest(x, z);
+        return { distance: n.distance, width: n.width, height: n.height };
+      },
+      outerEdge,
+    },
   };
+}
+
+/** The lane's centre curve, sampled evenly, with the half-width and direction at every sample (world coordinates). */
+class Lane {
+  readonly points: THREE.Vector3[] = [];
+  readonly widths: number[] = [];
+  readonly tangents: THREE.Vector3[] = [];
+  readonly spacing: number;
+
+  constructor(def: HoleDef) {
+    const yaw = THREE.MathUtils.degToRad(def.place.yaw);
+    const origin = new THREE.Vector3(def.place.x, 0, def.place.z);
+    const toWorld = (p: PathPoint): THREE.Vector3 => new THREE.Vector3(p.x, 0, p.z).applyAxisAngle(UP, yaw).add(origin);
+    const curve = new THREE.CatmullRomCurve3(def.path.map(toWorld), false, 'centripetal');
+    const widthCurve = new THREE.CatmullRomCurve3(def.path.map((p) => new THREE.Vector3(p.w ?? 1.1, 0, 0)));
+    // Heights ease smoothly from point to point without overshooting (a curve would dip below the ground).
+    const heightAt = (t: number): number => {
+      const f = t * (def.path.length - 1);
+      const k = Math.min(def.path.length - 2, Math.floor(f));
+      const ease = THREE.MathUtils.smoothstep(f - k, 0, 1);
+      return THREE.MathUtils.lerp(def.path[k].y ?? 0, def.path[k + 1].y ?? 0, ease);
+    };
+    const count = Math.ceil(curve.getLength() / TUNING.course.laneSpacing);
+    this.spacing = curve.getLength() / count;
+    for (let i = 0; i <= count; i++) {
+      const t = curve.getUtoTmapping(i / count, 0);
+      this.points.push(curve.getPoint(t).setY(heightAt(t)));
+      this.widths.push(widthCurve.getPoint(t).x);
+      this.tangents.push(curve.getTangent(t).setY(0).normalize());
+    }
+  }
+
+  /** The sample `distance` units along the lane from the start. */
+  at(distance: number): { point: THREE.Vector3; tangent: THREE.Vector3; width: number } {
+    const i = Math.min(this.points.length - 1, Math.max(0, Math.round(distance / this.spacing)));
+    return { point: this.points[i], tangent: this.tangents[i], width: this.widths[i] };
+  }
+
+  /** The closest point of the centre curve to (x, z): how far it is, and the lane's width and floor height there. */
+  nearest(x: number, z: number): { distance: number; width: number; height: number; point: THREE.Vector3 } {
+    let best = 0;
+    let bestDistance = Infinity;
+    for (let i = 0; i < this.points.length; i++) {
+      const d = (this.points[i].x - x) ** 2 + (this.points[i].z - z) ** 2;
+      if (d < bestDistance) {
+        bestDistance = d;
+        best = i;
+      }
+    }
+    // Refine on the neighbouring segments, so the edge comes out smooth.
+    let point = this.points[best];
+    let width = this.widths[best];
+    for (const j of [best - 1, best + 1]) {
+      if (j < 0 || j >= this.points.length) continue;
+      const i0 = Math.min(best, j);
+      const a = this.points[i0];
+      const b = this.points[i0 + 1];
+      const abx = b.x - a.x;
+      const abz = b.z - a.z;
+      const t = Math.max(0, Math.min(1, ((x - a.x) * abx + (z - a.z) * abz) / (abx * abx + abz * abz || 1)));
+      const px = a.x + abx * t;
+      const pz = a.z + abz * t;
+      const d = (px - x) ** 2 + (pz - z) ** 2;
+      if (d < bestDistance) {
+        bestDistance = d;
+        point = new THREE.Vector3(px, a.y + (b.y - a.y) * t, pz);
+        width = this.widths[i0] + (this.widths[i0 + 1] - this.widths[i0]) * t;
+      }
+    }
+    return { distance: Math.sqrt(bestDistance), width, height: point.y, point };
+  }
+
+  bounds(margin: number): THREE.Box3 {
+    const box = new THREE.Box3().setFromPoints(this.points);
+    return box.expandByScalar(Math.max(...this.widths) + margin);
+  }
+}
+
+/**
+ * The lane surface as a fine grid: every grid point within the lane's width of the centre curve,
+ * at the floor height there. Grid points just outside are pulled onto the edge (and points inside
+ * the cup onto the cup's rim), so the edge and the cup come out round instead of jagged.
+ */
+function buildFloor(lane: Lane, cup: THREE.Vector3, cupRadius: number): THREE.BufferGeometry {
+  const cell = TUNING.course.floorCell;
+  const overlap = 0.05; // the turf reaches a little under the bumpers
+  const box = lane.bounds(0.3);
+  const nx = Math.ceil((box.max.x - box.min.x) / cell);
+  const nz = Math.ceil((box.max.z - box.min.z) / cell);
+  type GridPoint = { inLane: boolean; inCup: boolean; position: THREE.Vector3 };
+  const grid: GridPoint[] = [];
+  for (let j = 0; j <= nz; j++) {
+    for (let i = 0; i <= nx; i++) {
+      const x = box.min.x + i * cell;
+      const z = box.min.z + j * cell;
+      const n = lane.nearest(x, z);
+      const edge = n.width + overlap;
+      const inLane = n.distance <= edge;
+      const position = new THREE.Vector3(x, n.height, z);
+      if (!inLane) {
+        const out = new THREE.Vector3(x - n.point.x, 0, z - n.point.z).normalize();
+        position.set(n.point.x + out.x * edge, n.height, n.point.z + out.z * edge);
+      }
+      const toCup = Math.hypot(x - cup.x, z - cup.z);
+      const inCup = toCup < cupRadius;
+      if (inCup) {
+        const dx = (x - cup.x) / (toCup || 1);
+        const dz = (z - cup.z) / (toCup || 1);
+        position.set(cup.x + dx * cupRadius, cup.y, cup.z + dz * cupRadius);
+      }
+      grid.push({ inLane, inCup, position });
+    }
+  }
+
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+  const used = new Map<number, number>();
+  const size = TUNING.course.turfTextureSize;
+  const vertex = (index: number): number => {
+    let v = used.get(index);
+    if (v === undefined) {
+      const p = grid[index].position;
+      v = positions.length / 3;
+      positions.push(p.x, p.y, p.z);
+      uvs.push(p.x / size, p.z / size);
+      used.set(index, v);
+    }
+    return v;
+  };
+  for (let j = 0; j < nz; j++) {
+    for (let i = 0; i < nx; i++) {
+      const a = j * (nx + 1) + i;
+      const b = a + 1;
+      const c = a + nx + 1;
+      const d = c + 1;
+      const corners = [a, b, c, d].map((k) => grid[k]);
+      if (!corners.some((g) => g.inLane) || corners.every((g) => g.inCup)) continue;
+      indices.push(vertex(a), vertex(c), vertex(b), vertex(b), vertex(c), vertex(d)); // faces up
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(indices), 1));
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+/**
+ * The bumper: a rounded cushion swept all the way around the lane's edge
+ * (left side, round end around the cup, right side, round end behind the tee).
+ */
+function buildBumper(lane: Lane): THREE.BufferGeometry {
+  const cfg = TUNING.course;
+  const n = lane.points.length - 1;
+  const left = (i: number): THREE.Vector3 => new THREE.Vector3(lane.tangents[i].z, 0, -lane.tangents[i].x);
+
+  // The edge loop: points on the lane's edge with the outward direction there.
+  const loop: { point: THREE.Vector3; out: THREE.Vector3 }[] = [];
+  const capSteps = 24;
+  for (let i = 0; i <= n; i++) loop.push({ point: lane.points[i].clone().addScaledVector(left(i), lane.widths[i]), out: left(i) });
+  for (let k = 1; k < capSteps; k++) {
+    const a = (k / capSteps) * Math.PI;
+    const out = left(n).multiplyScalar(Math.cos(a)).addScaledVector(lane.tangents[n], Math.sin(a));
+    loop.push({ point: lane.points[n].clone().addScaledVector(out, lane.widths[n]), out });
+  }
+  for (let i = n; i >= 0; i--) loop.push({ point: lane.points[i].clone().addScaledVector(left(i), -lane.widths[i]), out: left(i).negate() });
+  for (let k = 1; k < capSteps; k++) {
+    const a = (k / capSteps) * Math.PI;
+    const out = left(0).multiplyScalar(-Math.cos(a)).addScaledVector(lane.tangents[0], -Math.sin(a));
+    loop.push({ point: lane.points[0].clone().addScaledVector(out, lane.widths[0]), out });
+  }
+
+  // The cushion's cross-section: (distance outwards from the edge, height above the floor).
+  const w = cfg.bumperWidth;
+  const h = cfg.bumperHeight;
+  const r = w / 2;
+  const profile: [number, number][] = [
+    [-0.02, -0.15],
+    [0, 0.02],
+  ];
+  const arcSteps = 10;
+  for (let k = 0; k <= arcSteps; k++) {
+    const a = Math.PI - (k / arcSteps) * Math.PI;
+    profile.push([r + r * Math.cos(a), h - r + r * Math.sin(a)]);
+  }
+  profile.push([w, 0.02], [w + 0.04, -0.3]);
+
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  const size = cfg.bumperTextureSize;
+  let along = 0;
+  loop.forEach((spot, k) => {
+    if (k > 0) along += spot.point.distanceTo(loop[k - 1].point);
+    let around = 0;
+    profile.forEach(([o, y], j) => {
+      if (j > 0) around += Math.hypot(o - profile[j - 1][0], y - profile[j - 1][1]);
+      positions.push(spot.point.x + spot.out.x * o, spot.point.y + y, spot.point.z + spot.out.z * o);
+      uvs.push(along / size, around / size);
+    });
+  });
+  const m = profile.length;
+  const indices: number[] = [];
+  for (let k = 0; k < loop.length; k++) {
+    const next = (k + 1) % loop.length;
+    for (let j = 0; j < m - 1; j++) {
+      const a = k * m + j;
+      const b = next * m + j;
+      indices.push(a, a + 1, b, b, a + 1, b + 1);
+    }
+  }
+  // The inner face (the first quad of the profile) must point back into the lane, against "out".
+  const p = (i: number): THREE.Vector3 => new THREE.Vector3(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
+  const normal = new THREE.Vector3().subVectors(p(indices[1]), p(indices[0])).cross(new THREE.Vector3().subVectors(p(indices[2]), p(indices[0])));
+  if (normal.dot(loop[0].out) > 0) {
+    for (let i = 0; i < indices.length; i += 3) [indices[i + 1], indices[i + 2]] = [indices[i + 2], indices[i + 1]];
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
 }
 
 /** A square pit under the cup, deep enough for the ball to drop in, with a dark inside so it looks deep. */
@@ -259,12 +461,7 @@ function addCupPit(group: THREE.Group, cup: THREE.Vector3, radius: number, world
  * Makes the windmill's blades long enough to sweep the lane and turns them.
  * They push the ball like a real obstacle (a "kinematic" body: moved by us, not by forces).
  */
-function addWindmillBlades(
-  model: THREE.Object3D,
-  blades: THREE.Object3D,
-  world: RAPIER.World,
-  R: typeof RAPIER,
-): (dt: number) => void {
+function addWindmillBlades(model: THREE.Object3D, blades: THREE.Object3D, world: RAPIER.World, R: typeof RAPIER): (dt: number) => void {
   const cfg = TUNING.course;
   blades.scale.setScalar(cfg.bladeScale);
   model.updateMatrixWorld(true);
@@ -294,96 +491,68 @@ function addWindmillBlades(
   };
 }
 
-/**
- * A tile's underside or one of its edges (lying in the tile's border, where it meets the next tile).
- * `local` holds the triangle's corners in kit units, relative to the piece.
- */
-function isHiddenFace(local: THREE.Vector3[]): boolean {
-  if (local.every((v) => v.y <= KIT_FLOOR + 0.001) && local.some((v) => v.y < KIT_FLOOR - 0.001)) return true;
-  const onBorder = (axis: 'x' | 'z'): boolean =>
-    local.every((v) => Math.abs(Math.abs(v[axis]) - 0.5) < 0.001 && Math.sign(v[axis]) === Math.sign(local[0][axis]));
-  return onBorder('x') || onBorder('z');
+/** Adds every triangle of an indexed geometry (already in world coordinates) to `soup`. */
+function addMeshTriangles(geometry: THREE.BufferGeometry, soup: TriangleSoup): void {
+  const position = geometry.getAttribute('position');
+  const index = geometry.getIndex()!;
+  const v = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  for (let i = 0; i < index.count; i += 3) {
+    for (let k = 0; k < 3; k++) v[k].fromBufferAttribute(position, index.getX(i + k));
+    soup.add(v[0], v[1], v[2]);
+  }
 }
 
 /**
- * Calls `visit` with every triangle of the model's meshes, skipping `skip` and its children:
- * the corners in world coordinates and in the piece's own (kit) coordinates, and the middle of its
- * texture coordinates (where it takes its colour from the kit's colour map).
+ * Adds a kit model's triangles (world coordinates) to `soup`, leaving out `skip` and its children,
+ * and triangles for which `leaveOut` says so (it gets the corners in the model's own kit units and the normal).
  */
-function collectTriangles(
+function addModelTriangles(
   model: THREE.Object3D,
-  skip: THREE.Object3D | null,
-  visit: (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, local: THREE.Vector3[], uv: THREE.Vector2) => void,
+  skip: THREE.Object3D,
+  soup: TriangleSoup,
+  leaveOut: (local: THREE.Vector3[], normal: THREE.Vector3) => boolean,
 ): void {
   const skipped = new Set<THREE.Object3D>();
-  skip?.traverse((o) => skipped.add(o));
-  const toPiece = model.matrixWorld.clone().invert();
+  skip.traverse((o) => skipped.add(o));
+  const toModel = model.matrixWorld.clone().invert();
   model.traverse((o) => {
     if (!(o instanceof THREE.Mesh) || skipped.has(o)) return;
     const position = o.geometry.getAttribute('position');
-    const uvs = o.geometry.getAttribute('uv');
     const index = o.geometry.getIndex();
     const count = index ? index.count : position.count;
     const v = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
-    const uv = new THREE.Vector2();
-    const corner = new THREE.Vector2();
     for (let i = 0; i < count; i += 3) {
-      uv.set(0, 0);
-      for (let k = 0; k < 3; k++) {
-        const vertex = index ? index.getX(i + k) : i + k;
-        v[k].fromBufferAttribute(position, vertex).applyMatrix4(o.matrixWorld);
-        if (uvs) uv.add(corner.fromBufferAttribute(uvs, vertex).multiplyScalar(1 / 3));
-      }
-      visit(v[0], v[1], v[2], v.map((w) => w.clone().applyMatrix4(toPiece)), uv);
+      for (let k = 0; k < 3; k++) v[k].fromBufferAttribute(position, index ? index.getX(i + k) : i + k).applyMatrix4(o.matrixWorld);
+      const normal = new THREE.Vector3().subVectors(v[1], v[0]).cross(new THREE.Vector3().subVectors(v[2], v[0]));
+      if (normal.lengthSq() < 1e-10) continue;
+      if (leaveOut(v.map((w) => w.clone().applyMatrix4(toModel)), normal.normalize())) continue;
+      soup.add(v[0], v[1], v[2]);
     }
   });
 }
 
 const UP = new THREE.Vector3(0, 1, 0);
 
-/** Reads the kit's colour map, to tell the green (lane) parts from the rest. */
-function colourSampler(kit: Kit): (uv: THREE.Vector2) => 'green' | 'other' {
-  let image: CanvasImageSource | null = null;
-  kit.get('straight')?.scene.traverse((o) => {
-    if (o instanceof THREE.Mesh && (o.material as THREE.MeshStandardMaterial).map?.image) {
-      image = (o.material as THREE.MeshStandardMaterial).map!.image as CanvasImageSource;
-    }
-  });
-  if (!image) return () => 'other';
-  const size = 512;
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
-  ctx.drawImage(image, 0, 0, size, size);
-  const pixels = ctx.getImageData(0, 0, size, size).data;
-  return (uv) => {
-    const x = Math.min(size - 1, Math.max(0, Math.floor(uv.x * size)));
-    const y = Math.min(size - 1, Math.max(0, Math.floor(uv.y * size)));
-    const i = (y * size + x) * 4;
-    const [r, g, b] = [pixels[i], pixels[i + 1], pixels[i + 2]];
-    return g > r * 1.15 && g > b ? 'green' : 'other';
-  };
+let turfCache: THREE.MeshStandardMaterial | null = null;
+let bumperCache: THREE.MeshStandardMaterial | null = null;
+
+/** Bright, fresh artificial turf for the lanes. */
+function turfMaterial(): THREE.MeshStandardMaterial {
+  turfCache ??= grassMaterial(TUNING.course.turfTint, 0.6);
+  return turfCache;
 }
 
-let grassCache: THREE.MeshStandardMaterial | null = null;
-let woodCache: THREE.MeshStandardMaterial | null = null;
-
-/** Real grass (CC0 photo texture), a little brighter and greener than the photo for a cheerful look. */
-function grassMaterial(): THREE.MeshStandardMaterial {
-  grassCache ??= texturedMaterial('grass', TUNING.course.grassTint);
-  return grassCache;
+/** Deep green, fuzzy turf on the bumpers. */
+function bumperMaterial(): THREE.MeshStandardMaterial {
+  bumperCache ??= grassMaterial(TUNING.course.bumperTint, 1.8);
+  return bumperCache;
 }
 
-/** Wooden planks (CC0 photo texture), lightened to a warm, friendly wood. */
-function woodMaterial(): THREE.MeshStandardMaterial {
-  woodCache ??= texturedMaterial('planks', TUNING.course.woodTint);
-  return woodCache;
-}
-
-function texturedMaterial(name: string, tint: readonly number[]): THREE.MeshStandardMaterial {
+/** The CC0 grass texture (colour and bumps), tinted and matte (shiny specks sparkle too much in the sun). Exported for the islands. */
+export function grassMaterial(tint: readonly number[], bumpiness: number): THREE.MeshStandardMaterial {
   const loader = new THREE.TextureLoader();
   const load = (map: string, colour: boolean): THREE.Texture => {
-    const texture = loader.load(`/host/assets/textures/${name}_${map}.jpg`);
+    const texture = loader.load(`/host/assets/textures/grass_${map}.jpg`);
     texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
     texture.anisotropy = 8;
     if (colour) texture.colorSpace = THREE.SRGBColorSpace;
@@ -392,55 +561,13 @@ function texturedMaterial(name: string, tint: readonly number[]): THREE.MeshStan
   return new THREE.MeshStandardMaterial({
     map: load('color', true),
     normalMap: load('normalgl', false),
-    roughnessMap: load('roughness', false),
+    normalScale: new THREE.Vector2(bumpiness, bumpiness),
+    roughness: 1,
     color: new THREE.Color(tint[0], tint[1], tint[2]),
   });
 }
 
-/**
- * Triangles for drawing a surface with a repeating texture. Each triangle gets texture coordinates
- * from its position, projected along its main direction: lanes from above, edges from the side
- * (so the planks run along the edges).
- */
-class SurfaceMesh {
-  private readonly positions: number[] = [];
-  private readonly normals: number[] = [];
-  private readonly corners: { v: THREE.Vector3; n: THREE.Vector3 }[] = [];
-
-  add(a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, normal: THREE.Vector3): void {
-    for (const v of [a, b, c]) {
-      this.positions.push(v.x, v.y, v.z);
-      this.normals.push(normal.x, normal.y, normal.z);
-      this.corners.push({ v: v.clone(), n: normal });
-    }
-  }
-
-  build(material: THREE.Material, textureSize: number): THREE.Mesh {
-    const uvs: number[] = [];
-    for (const { v, n } of this.corners) {
-      const ax = Math.abs(n.x);
-      const ay = Math.abs(n.y);
-      const az = Math.abs(n.z);
-      if (ay >= ax && ay >= az) uvs.push(v.x / textureSize, v.z / textureSize);
-      else if (ax > az) uvs.push(v.z / textureSize, v.y / textureSize);
-      else uvs.push(v.x / textureSize, v.y / textureSize);
-    }
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(this.positions, 3));
-    geometry.setAttribute('normal', new THREE.Float32BufferAttribute(this.normals, 3));
-    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    return mesh;
-  }
-}
-
-function horizontalDistance(a: THREE.Vector3, b: THREE.Vector3): number {
-  return Math.hypot(a.x - b.x, a.z - b.z);
-}
-
-/** Triangles with shared corners merged, so neighbouring tiles form one seamless surface. */
+/** Triangles with shared corners merged, so a surface is seamless for the physics. */
 class TriangleSoup {
   private readonly vertices: number[] = [];
   private readonly indices: number[] = [];

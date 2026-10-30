@@ -111,12 +111,22 @@ export const TUNING = {
     bladeScale: 1.5,
     /** How fast the windmill turns (degrees per second). */
     windmillDegreesPerSecond: 50,
-    /** One repeat of the grass and wood textures covers this many units. */
-    grassTextureSize: 1.6,
-    woodTextureSize: 1.2,
-    /** Colour boost on top of the photo textures (red, green, blue; 1 = as photographed). */
-    grassTint: [1.15, 1.45, 0.85],
-    woodTint: [1.9, 1.5, 1.15],
+    /** Half-width of the lane is set per hole; this is the cup's radius. */
+    cupRadius: 0.22,
+    /** The tee is this far along the lane from its round back end. */
+    teeDistance: 0.7,
+    /** How finely the lane curve is sampled and the lane surface divided (smaller = smoother, slower to build). */
+    laneSpacing: 0.08,
+    floorCell: 0.1,
+    /** The round bumpers: width and height. */
+    bumperWidth: 0.24,
+    bumperHeight: 0.3,
+    /** One repeat of the grass texture covers this many units, on the lane and on the bumpers. */
+    turfTextureSize: 2.2,
+    bumperTextureSize: 0.9,
+    /** Colour boost on top of the photo texture (red, green, blue; 1 = as photographed). */
+    turfTint: [1.7, 3.3, 1.05],
+    bumperTint: [0.38, 0.95, 0.42],
   },
 
   physics: {
@@ -161,14 +171,22 @@ export const TUNING = {
     /** Height of the sea surface (the course floor is at 0). */
     seaLevel: -0.55,
     /** Height of the waves. Small = calm and cute. */
-    waveHeight: 0.07,
+    waveHeight: 0.16,
+    /** How fast the waves roll (1 = normal). */
+    waveSpeed: 1.35,
     /** Size of the sea and how finely it is divided (more = smoother waves, a little slower). */
     seaSize: 420,
     seaDetail: 220,
     /** Island tops lie this far below the course floor (the thickness of the course tiles). */
     groundDepth: 0.21,
-    /** Sand around the course on each island. */
-    islandMargin: 2.2,
+    /** Island ground around the course (units) and its grass colour boost. */
+    islandMargin: 3.2,
+    islandGrassTint: [0.62, 1.0, 0.45],
+    /** Grass covers the island up to this part of its size (1 = the edge of the flat top); beyond is beach. */
+    grassReach: 0.86,
+    /** How finely the island ground is divided, and how big one repeat of its grass and sand textures is. */
+    islandCell: 0.25,
+    islandTextureSize: 2.5,
     rocksPerIsland: 9,
     clouds: 22,
     /** Haze in the distance: starts at fogNear, fully hazy at fogFar. */

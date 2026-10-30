@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { TUNING } from '../../shared/tuning.ts';
-import type { BuiltHole } from './course.ts';
+import { grassMaterial, type BuiltHole } from './course.ts';
 
-// The world around the course, all built in code: a sunny sky with puffy clouds, a cute sea with
-// rolling waves, sparkles and foam, and a little sandy island under every hole, so from one hole
+// The world around the course: a sunny sky with puffy clouds, a cute sea with rolling waves,
+// sparkles and foam, and a grassy island with a sandy beach under every hole, so from one hole
 // you can see the others across the water.
 
 export type IslandShape = { centre: THREE.Vector2; radius: THREE.Vector2 };
@@ -49,83 +49,114 @@ export class Scenery {
     }
   }
 
-  /** A soft sandy island under a hole: flat on top, a gentle beach sloping into the sea. */
+  /**
+   * An island under a hole: grassy on top, a sandy beach sloping into the sea. Around the course the
+   * ground follows the lane's height (so the hill on hole 2 is a real grassy hill) and lies just
+   * below the turf, so the course sits in the island instead of on top of it.
+   */
   private addIsland(hole: BuiltHole, random: () => number): IslandShape {
     const c = TUNING.scenery;
-    const S = TUNING.course.tileSize;
-    const box = new THREE.Box3().setFromPoints(hole.footprint).expandByScalar(S * 0.5 + c.islandMargin);
+    const box = hole.lane.bounds.clone().expandByScalar(c.islandMargin);
     const centre = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
-    const radius = new THREE.Vector2(size.x / 2, size.z / 2).multiplyScalar(1.15);
+    const radius = new THREE.Vector2(size.x / 2, size.z / 2).multiplyScalar(1.12);
     const top = hole.tee.y - c.groundDepth;
-    const rings = 28;
-    const segments = 96;
     const wobble = [random() * 6, random() * 6, random() * 6];
+    /** 0 at the centre, 1 at the edge of the grassy top (with a wobbly, natural outline). */
+    const reach = (x: number, z: number): number => {
+      const dx = (x - centre.x) / radius.x;
+      const dz = (z - centre.z) / radius.y;
+      const angle = Math.atan2(dz, dx);
+      const edge = 1 + 0.07 * Math.sin(angle * 3 + wobble[0]) + 0.05 * Math.sin(angle * 5 + wobble[1]) + 0.03 * Math.sin(angle * 9 + wobble[2]);
+      return Math.hypot(dx, dz) / edge;
+    };
+
+    const cell = c.islandCell;
+    const extent = 1.4;
+    const nx = Math.ceil((radius.x * 2 * extent) / cell);
+    const nz = Math.ceil((radius.y * 2 * extent) / cell);
+    const x0 = centre.x - radius.x * extent;
+    const z0 = centre.z - radius.y * extent;
     const positions: number[] = [];
-    const colours: number[] = [];
     const uvs: number[] = [];
-    const sand = new THREE.Color(c.sand);
-    const wetSand = new THREE.Color(c.wetSand);
-    for (let ring = 0; ring <= rings; ring++) {
-      const r = (ring / rings) * 1.35; // 0..1 flat top, 1..1.35 the beach
-      for (let seg = 0; seg <= segments; seg++) {
-        const angle = (seg / segments) * Math.PI * 2;
-        const edge = 1 + 0.07 * Math.sin(angle * 3 + wobble[0]) + 0.05 * Math.sin(angle * 5 + wobble[1]) + 0.03 * Math.sin(angle * 9 + wobble[2]);
-        const x = centre.x + Math.cos(angle) * radius.x * r * edge;
-        const z = centre.z + Math.sin(angle) * radius.y * r * edge;
-        const beach = THREE.MathUtils.smoothstep(r, 0.92, 1.35);
-        const y = THREE.MathUtils.lerp(top, c.seaLevel - 0.9, beach);
+    const reaches: number[] = [];
+    const bumpers = hole.lane.outerEdge;
+    for (let j = 0; j <= nz; j++) {
+      for (let i = 0; i <= nx; i++) {
+        const x = x0 + i * cell;
+        const z = z0 + j * cell;
+        const r = reach(x, z);
+        // Flat top, gentle beach down into the sea, small natural bumps on the grass.
+        let y = THREE.MathUtils.lerp(top, c.seaLevel - 0.9, THREE.MathUtils.smoothstep(r, 0.9, 1.35));
+        y += Math.sin(x * 0.9 + wobble[0]) * Math.sin(z * 0.7 + wobble[1]) * 0.06 * (1 - THREE.MathUtils.smoothstep(r, 0.6, 0.95));
+        // Near the course the ground follows the lane, just below the turf.
+        const spot = hole.lane.nearest(x, z);
+        const fromEdge = spot.distance - spot.width;
+        const blend = THREE.MathUtils.smoothstep(-fromEdge, -(bumpers + 1.6), -bumpers * 0.6);
+        y = THREE.MathUtils.lerp(y, Math.max(y, spot.height - 0.05), blend);
         positions.push(x, y, z);
-        uvs.push(x * 0.35, z * 0.35);
-        const colour = sand.clone().lerp(wetSand, THREE.MathUtils.smoothstep(r, 1.0, 1.2));
-        colours.push(colour.r, colour.g, colour.b);
+        uvs.push(x, z); // scaled per material below
+        reaches.push(r);
       }
     }
     const indices: number[] = [];
-    for (let ring = 0; ring < rings; ring++) {
-      for (let seg = 0; seg < segments; seg++) {
-        const a = ring * (segments + 1) + seg;
-        const b = a + segments + 1;
-        indices.push(a, a + 1, b, a + 1, b + 1, b); // counter-clockwise from above, so the surface faces up
+    for (let j = 0; j < nz; j++) {
+      for (let i = 0; i < nx; i++) {
+        const a = j * (nx + 1) + i;
+        const b = a + 1;
+        const cc = a + nx + 1;
+        const d = cc + 1;
+        if ((reaches[a] + reaches[b] + reaches[cc] + reaches[d]) / 4 > 1.38) continue;
+        indices.push(a, cc, b, b, cc, d);
       }
     }
+    // Grass where the island is high, fading softly into sand on the beach (with a wobbly line).
+    const sandiness = reaches.map((r, k) => {
+      const wiggle = Math.sin(positions[k * 3] * 1.7) * Math.sin(positions[k * 3 + 2] * 1.3) * 0.025;
+      return THREE.MathUtils.smoothstep(r + wiggle, c.grassReach - 0.03, c.grassReach + 0.04);
+    });
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colours, 3));
-    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs.map((v) => v / c.islandTextureSize), 2));
+    geometry.setAttribute('sandiness', new THREE.Float32BufferAttribute(sandiness, 1));
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
-    const island = new THREE.Mesh(
-      geometry,
-      new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, map: sandTexture() }),
-    );
+    const island = new THREE.Mesh(geometry, islandMaterial());
     island.receiveShadow = true;
     this.group.add(island);
-    this.addRocks(hole, centre, radius, top, random);
-    return { centre: new THREE.Vector2(centre.x, centre.z), radius };
+    this.addRocks(hole, centre, radius, reach, top, random);
+    return { centre: new THREE.Vector2(centre.x, centre.z), radius: radius.clone().multiplyScalar(1.02) };
   }
 
-  /** A few smooth pebbles and rocks on the beach. */
-  private addRocks(hole: BuiltHole, centre: THREE.Vector3, radius: THREE.Vector2, top: number, random: () => number): void {
+  /** A few smooth rocks on the beach. */
+  private addRocks(
+    hole: BuiltHole,
+    centre: THREE.Vector3,
+    radius: THREE.Vector2,
+    reach: (x: number, z: number) => number,
+    top: number,
+    random: () => number,
+  ): void {
     const count = TUNING.scenery.rocksPerIsland;
     const rocks = new THREE.InstancedMesh(
       new THREE.DodecahedronGeometry(1, 1),
       new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.9, flatShading: true }),
       count,
     );
-    const keepOff = TUNING.course.tileSize * 0.75 + 0.5;
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     let placed = 0;
-    for (let attempt = 0; attempt < count * 20 && placed < count; attempt++) {
+    for (let attempt = 0; attempt < count * 30 && placed < count; attempt++) {
       const angle = random() * Math.PI * 2;
-      const r = 0.55 + random() * 0.5;
-      const x = centre.x + Math.cos(angle) * radius.x * r;
-      const z = centre.z + Math.sin(angle) * radius.y * r;
-      if (hole.footprint.some((t) => Math.max(Math.abs(t.x - x), Math.abs(t.z - z)) < keepOff)) continue;
+      const x = centre.x + Math.cos(angle) * radius.x * (0.85 + random() * 0.15);
+      const z = centre.z + Math.sin(angle) * radius.y * (0.85 + random() * 0.15);
+      const spot = hole.lane.nearest(x, z);
+      if (spot.distance - spot.width < hole.lane.outerEdge + 0.6) continue;
+      const r = reach(x, z);
+      if (r > 1.05) continue;
       const size = 0.12 + random() * 0.3;
       q.setFromEuler(new THREE.Euler(random(), random() * 3, random()));
-      m.compose(new THREE.Vector3(x, top + size * 0.3, z), q, new THREE.Vector3(size * 1.3, size * 0.8, size));
+      m.compose(new THREE.Vector3(x, top + size * 0.2, z), q, new THREE.Vector3(size * 1.3, size * 0.8, size));
       rocks.setMatrixAt(placed, m);
       rocks.setColorAt(placed, new THREE.Color().setHSL(0.08, 0.12, 0.62 + random() * 0.15));
       placed++;
@@ -235,6 +266,7 @@ function makeSeaMaterial(islands: IslandShape[]): THREE.ShaderMaterial {
       sunColour: { value: new THREE.Color(c.sunColour) },
       islands: { value: islandData },
       waveHeight: { value: c.waveHeight },
+      waveSpeed: { value: c.waveSpeed },
       fogColour: { value: new THREE.Color(c.skyHorizon) },
       fogNear: { value: c.fogNear },
       fogFar: { value: c.fogFar },
@@ -242,6 +274,7 @@ function makeSeaMaterial(islands: IslandShape[]): THREE.ShaderMaterial {
     vertexShader: /* glsl */ `
       uniform float time;
       uniform float waveHeight;
+      uniform float waveSpeed;
       varying vec3 vWorld;
       varying vec3 vNormal;
       varying float vCrest;
@@ -249,7 +282,7 @@ function makeSeaMaterial(islands: IslandShape[]): THREE.ShaderMaterial {
       // One rounded wave: height and its slope along x and z.
       vec3 wave(vec2 p, vec2 direction, float length, float speed, float amount) {
         float k = 6.2831 / length;
-        float phase = dot(direction, p) * k + time * speed;
+        float phase = dot(direction, p) * k + time * speed * waveSpeed;
         float h = sin(phase) * amount;
         float slope = cos(phase) * amount * k;
         return vec3(h, direction * slope);
@@ -316,6 +349,34 @@ function makeSeaMaterial(islands: IslandShape[]): THREE.ShaderMaterial {
         gl_FragColor = vec4(mix(colour, fogColour, fog), 1.0);
       }`,
   });
+}
+
+let islandMaterialCache: THREE.MeshStandardMaterial | null = null;
+
+/**
+ * Island ground: the grass texture, blended into sand where the "sandiness" of the ground says so.
+ * (A small change to three.js's standard material: after it reads the grass colour, mix in sand.)
+ */
+function islandMaterial(): THREE.MeshStandardMaterial {
+  if (islandMaterialCache) return islandMaterialCache;
+  const c = TUNING.scenery;
+  const material = grassMaterial(c.islandGrassTint, 0.7);
+  const sand = sandTexture();
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.sandMap = { value: sand };
+    shader.uniforms.sandColour = { value: new THREE.Color(c.sand) };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float sandiness;\nvarying float vSandiness;')
+      .replace('#include <uv_vertex>', '#include <uv_vertex>\nvSandiness = sandiness;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform sampler2D sandMap;\nuniform vec3 sandColour;\nvarying float vSandiness;')
+      .replace(
+        '#include <map_fragment>',
+        '#include <map_fragment>\nvec3 sandSample = sandColour * texture2D(sandMap, vMapUv * 1.3).rgb;\ndiffuseColor.rgb = mix(diffuseColor.rgb, sandSample, vSandiness);',
+      );
+  };
+  islandMaterialCache = material;
+  return material;
 }
 
 /** A fine, sun-bleached sand texture (generated). */
