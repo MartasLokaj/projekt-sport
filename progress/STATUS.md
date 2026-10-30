@@ -57,7 +57,7 @@ running log of where we are, what the user decided, and what comes next).
 ### Cube World hub (SPEC §12) — started 2026-10-30, before 4c
 - The user added SPEC §12: the lobby becomes a floating rounded cube, one small world per face (Minigolf playable,
   Badminton teaser, other faces "under construction"), players' chibis on the cube, game registry architecture.
-- **Step 1 — visual concepts (done, waiting for the user's pick):** throwaway prototype `host/concepts/cube.html` +
+- **Step 1 — visual concepts (done; the user picked B · Starry space):** throwaway prototype `host/concepts/cube.html` +
   `cube.ts` (not the real hub). Open `https://localhost:8443/host/concepts/cube.html?v=sky|space|sunset`
   (buttons A/B/C top right):
   - **A · Dreamy sky — grassy block:** blue sky, puffy clouds, sandy cube with grass caps on every face.
@@ -66,7 +66,15 @@ running log of where we are, what the user decided, and what comes next).
   Each shows the Minigolf face (sea, 3 islands, windmill, flags, KayKit trees), the Badminton face (court, net,
   blue tarp with shuttlecock, "Badminton coming soon"), construction faces (cones, crates, scaffolding, glowing "?",
   fog puffs), 3 waving chibis on top, room/QR panel and a "Minigolf · Play" panel.
-- **Next:** the user picks a look (or mixes), then plan the real hub: game registry, cube scene in `host/`, face
+- **User's choice (2026-10-30): B · Starry space — toy planet.**
+- **Proposed build plan (waiting for the user's OK):**
+  - 2a Host hub: real 3D space cube replaces the HTML lobby (`host/hub/`), QR/room panel kept, players pop in as
+    waving chibis with name tags, arrows rotate the cube, Enter on Minigolf starts, locked faces say "Coming soon",
+    return to the cube after a match with Minigolf in front.
+  - 2b Game registry (`shared/games.ts` + host side), server remembers the selected game (`select_game`), phones
+    show it; leader swipes left/right and taps Play.
+  - 2c Juice: dive-into-the-face transition, sparkles, pop-in, 60 fps check.
+- **Then:** the real hub: game registry, cube scene in `host/`, face
   rotation with arrows/Enter/click and phone swipe, dive transition into the game, "Back to Cube". Plan first, list
   files, wait for OK.
 
@@ -125,5 +133,5 @@ running log of where we are, what the user decided, and what comes next).
 - Turf brightness/tint can still be tuned (`turfTint`, `bumperTint`, `islandGrassTint`).
 
 ## Next action
-Cube World: get the user's choice among concepts A/B/C, then plan and build the real hub (SPEC §12).
+Cube World: user chose concept B (space). Get OK on the 2a/2b/2c plan, then build 2a first (SPEC §12).
 After that 4c (juice, incl. **wind**: trees and grass swaying), then ask the user to approve Phase 4.
