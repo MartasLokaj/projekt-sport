@@ -5,25 +5,36 @@ import { Character } from '../game/character.ts';
 import { buildCourt, buildRacket, buildShuttle } from './court.ts';
 import { findContact, makeShot, type Contact, type Flight, type ShotKind } from './shuttle.ts';
 
-// Badminton prototype (phase B2): one player against the computer, full screen, camera behind the player.
-// The characters run to the shuttle by themselves; the player only swings the phone.
-// - Timing: the swing must come within hitWindowMs of the moment the racket meets the shuttle
+// Badminton (phases B2–B3): two sides of the net, each played by a phone or by the computer.
+// One phone: the player against the computer, full screen, camera behind the player.
+// Two phones: split screen, the first player on the left half (near side of the net), the second on the
+// right half (far side); each half has its own camera behind its own character, so the shuttle always
+// flies towards the player looking at it.
+// The characters run to the shuttle by themselves; the players only swing their phones.
+// - Timing: the swing must come within the hit window around the moment the racket meets the shuttle
 //   (judged with the phone's exact hit time, so Wi-Fi delay does not matter). Closer = better shot.
 // - Aim: the direction of the swing (left / straight / right).
-// - Shot type comes from where the character meets the shuttle: at the back overhead (a clear, or a
-//   smash when hit hard), high at the front a smash, low an underhand lift.
+// - Shot type comes from where the character meets the shuttle (see findContact).
 // - Rally scoring: every rally gives a point, the winner serves, first to pointsToWin.
-// Mac keyboard for testing: Space swings (hold ← or → to aim), Enter plays again after a match.
+// Mac keyboard for testing: Space swings for the near player (hold ← or → to aim), ↑ swings for the
+// far player, Enter plays again after a match.
 
-type Side = 1 | -1; // 1 = the player (near half, z > 0), -1 = the computer
+/** 1 = the near side of the net (z > 0), -1 = the far side. */
+export type Side = 1 | -1;
 type Stroke = Contact['stroke'];
 
 type Athlete = {
   side: Side;
+  /** A phone's player, or null for the computer. */
+  human: boolean;
+  name: string;
   /** Moves around the court and faces the net; bob makes the running bounce. */
   wrapper: THREE.Group;
   bob: THREE.Group;
   character: Character;
+  camera: THREE.PerspectiveCamera;
+  feedback: HTMLElement;
+  feedbackUntil: number;
   target: THREE.Vector3;
   /** Must be at the target by then (host clock), or null for "no hurry". */
   deadline: number | null;
@@ -35,12 +46,17 @@ type Athlete = {
   /** Swing animation: which stroke and when it started. */
   swing: { stroke: Stroke | 'serve'; start: number } | null;
   pose: { x: number; z: number };
+  score: number;
 };
 
 export type BadmintonHud = {
+  /** The whole badminton screen: gets the class "split" for two players. */
+  screen: HTMLElement;
   score: HTMLElement;
   message: HTMLElement;
-  feedback: HTMLElement;
+  /** Shot feedback for the near player (left half, or centre with one player) and the far player (right half). */
+  feedbackNear: HTMLElement;
+  feedbackFar: HTMLElement;
 };
 
 type Phase = 'serve' | 'rally' | 'point' | 'over';
@@ -57,18 +73,15 @@ const WINDUP: Record<Stroke, { x: number; z: number }> = {
 export class Badminton {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
-  private readonly camera: THREE.PerspectiveCamera;
   private readonly clock = new THREE.Clock();
   private readonly shuttle = buildShuttle();
   private readonly shadow: THREE.Mesh;
-  private readonly player: Athlete;
-  private readonly cpu: Athlete;
-  private playerName = 'You';
+  private readonly near: Athlete;
+  private readonly far: Athlete;
   private running = false;
 
   private phase: Phase = 'serve';
   private server: Side = 1;
-  private score = { player: 0, cpu: 0 };
   private flight: Flight | null = null;
   /** Who the shuttle is flying to, and where/when they meet it. */
   private receiver: Side = -1;
@@ -77,7 +90,6 @@ export class Badminton {
   private decided = false;
   private pointEndsAt = 0;
   private cpuServeAt = 0;
-  private feedbackUntil = 0;
   private readonly keys = new Set<string>();
 
   constructor(
@@ -102,7 +114,6 @@ export class Badminton {
     Object.assign(sun.shadow.camera, { left: -10, right: 10, top: 10, bottom: -10, near: 1, far: 40 });
     this.scene.add(sun, buildCourt());
 
-    this.camera = new THREE.PerspectiveCamera(cfg.cameraFov, 1, 0.1, 200);
     this.shadow = new THREE.Mesh(
       new THREE.CircleGeometry(0.09, 16),
       new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.25 }),
@@ -112,18 +123,16 @@ export class Badminton {
     this.shadow.scale.setScalar(cfg.shuttleScale);
     this.scene.add(this.shuttle, this.shadow);
 
-    this.player = this.makeAthlete(1, { shirt: '#ff5a5f', skin: SKIN_TONES[1], handedness: 'right' });
-    this.cpu = this.makeAthlete(-1, { shirt: '#9b5cff', skin: SKIN_TONES[3], handedness: 'right' });
+    this.near = this.makeAthlete(1, hud.feedbackNear);
+    this.far = this.makeAthlete(-1, hud.feedbackFar);
   }
 
   // ---------- Public ----------
 
-  /** Starts a new match for this player (null = keyboard only). */
-  start(player: PlayerInfo | null): void {
-    this.setPlayer(player);
-    this.score = { player: 0, cpu: 0 };
-    this.server = 1;
-    this.startServe();
+  /** Starts a new match: near = the first phone's player, far = the second phone's player or null for the computer. */
+  start(near: PlayerInfo | null, far: PlayerInfo | null): void {
+    this.setPlayers(near, far);
+    this.newMatch();
     this.snapAthletes();
     if (this.running) return;
     this.running = true;
@@ -143,62 +152,71 @@ export class Badminton {
     window.removeEventListener('keyup', this.onKeyUp);
   }
 
-  /** The player's look (colour, skin, hand) and name, e.g. after they edited their profile. */
-  setPlayer(player: PlayerInfo | null): void {
-    this.playerName = player?.name ?? 'You';
-    const handedness = player?.handedness ?? 'right';
-    this.player.character.setLook({ shirt: player?.colour ?? '#ff5a5f', skin: player?.skinTone ?? SKIN_TONES[1], handedness: 'right' });
-    // A left-handed player is the mirror image; the racket hand then is on the other side.
-    const s = TUNING.badminton.characterScale;
-    this.player.wrapper.scale.set(handedness === 'left' ? -s : s, s, s);
-    this.player.handSign = handedness === 'left' ? -1 : 1;
+  /** The players' looks (colour, skin, hand) and names, e.g. after someone edited their profile. */
+  setPlayers(near: PlayerInfo | null, far: PlayerInfo | null): void {
+    this.setLook(this.near, near, true);
+    this.setLook(this.far, far, far !== null);
+    this.hud.screen.classList.toggle('split', this.far.human);
+    this.onResize();
     this.renderScore();
   }
 
-  /** A swing from the phone. at = the exact hit time (server clock = this Mac's clock), power 0..100, aim -1..1. */
-  onSwing(at: number, power: number, aim: number): void {
+  /**
+   * A swing from the phone playing `side`. at = the exact hit time (server clock = this Mac's clock),
+   * power 0..100, aim -1..1.
+   */
+  onSwing(side: Side, at: number, power: number, aim: number): void {
     const cfg = TUNING.badminton;
+    const a = this.athlete(side);
+    if (!a.human) return;
     const now = Date.now();
-    if (this.phase === 'serve' && this.server === 1) {
-      this.serve(this.player, now, power, aim);
+    if (this.phase === 'serve' && this.server === side) {
+      this.serve(a, now, power, aim);
       return;
     }
-    if (this.phase !== 'rally' || this.receiver !== 1 || this.decided || !this.contact) return;
+    if (this.phase !== 'rally' || this.receiver !== side || this.decided || !this.contact) return;
     const off = at - this.contact.time;
-    this.player.swing = { stroke: this.contact.stroke, start: now };
+    a.swing = { stroke: this.contact.stroke, start: now };
     if (off < -cfg.hitWindowEarlyMs) {
-      this.showFeedback(`Too early! (${Math.round(-off)} ms)`);
+      this.showFeedback(a, `Too early! (${Math.round(-off)} ms)`);
       return;
     }
     if (off > cfg.hitWindowMs) {
-      this.showFeedback(`Too late! (${Math.round(off)} ms)`);
+      this.showFeedback(a, `Too late! (${Math.round(off)} ms)`);
       this.miss();
       return;
     }
     const size = Math.abs(off);
     const window = off < 0 ? cfg.hitWindowEarlyMs : cfg.hitWindowMs;
     const quality = size <= cfg.perfectMs ? 1 : 1 - (size - cfg.perfectMs) / (window - cfg.perfectMs);
-    const kind = this.hit(this.player, power, aim, quality);
+    const kind = this.hit(a, power, aim, quality);
     const verdict = quality >= 1 ? 'Perfect!' : `Good · ${Math.round(size)} ms ${off < 0 ? 'early' : 'late'}`;
-    this.showFeedback(`${shotName(kind)} · ${verdict}`);
+    this.showFeedback(a, `${shotName(kind)} · ${verdict}`);
   }
 
   // ---------- Rally ----------
+
+  private newMatch(): void {
+    this.near.score = 0;
+    this.far.score = 0;
+    this.server = 1;
+    this.renderScore();
+    this.startServe();
+  }
 
   private startServe(): void {
     this.phase = 'serve';
     this.flight = null;
     this.contact = null;
     this.decided = false;
-    const serverScore = this.server === 1 ? this.score.player : this.score.cpu;
-    // Even score: serve from the right service court, odd: from the left (right = +x for the player, -x for the computer).
-    const x = this.server * (serverScore % 2 === 0 ? 1 : -1) * 0.9;
     const server = this.athlete(this.server);
     const other = this.athlete(-this.server as Side);
+    // Even score: serve from the right service court, odd: from the left (right = +x for the near side, -x for the far side).
+    const x = this.server * (server.score % 2 === 0 ? 1 : -1) * 0.9;
     this.moveTo(server, new THREE.Vector3(x, 0, this.server * 2.6), null);
     this.moveTo(other, new THREE.Vector3(-x, 0, -this.server * TUNING.badminton.homeDepth), null);
     this.cpuServeAt = Date.now() + TUNING.badminton.cpu.serveDelayMs;
-    this.hud.message.textContent = this.server === 1 ? 'Your serve: swing to serve!' : 'CPU serves';
+    this.hud.message.textContent = server.human ? `${server.name}: swing to serve!` : `${server.name} serves`;
     this.hud.message.hidden = false;
   }
 
@@ -248,8 +266,7 @@ export class Badminton {
     this.moveTo(receiver, spot, this.contact.time - cfg.jumpRiseMs - 60);
     const jump = this.contact.position.y - cfg.standingReach;
     receiver.jump = jump > 0 ? { height: jump, peak: this.contact.time } : null;
-    const hitterAthlete = this.athlete(hitter);
-    this.moveTo(hitterAthlete, new THREE.Vector3(0, 0, hitter * cfg.homeDepth), null);
+    this.moveTo(this.athlete(hitter), new THREE.Vector3(0, 0, hitter * cfg.homeDepth), null);
   }
 
   /** Nobody hits it: the shuttle just flies on and lands. */
@@ -258,36 +275,38 @@ export class Badminton {
     this.contact = null;
   }
 
-  private cpuTurn(now: number): void {
+  private cpuTurn(cpu: Athlete, now: number): void {
     const cfg = TUNING.badminton.cpu;
     const contact = this.contact!;
     const incomingSmash = this.flight?.kind === 'smash';
-    this.cpu.swing = { stroke: contact.stroke, start: now };
+    cpu.swing = { stroke: contact.stroke, start: now };
     if (Math.random() > (incomingSmash ? cfg.smashReturnChance : cfg.hitChance)) {
       this.miss();
       return;
     }
     let power = cfg.power[0] + Math.random() * (cfg.power[1] - cfg.power[0]);
-    if (contact.stroke === 'overhead') power = Math.random() < cfg.smashChance ? Math.max(power, TUNING.badminton.smashPower + 5) : Math.min(power, TUNING.badminton.smashPower - 5);
-    this.hit(this.cpu, power, Math.random() * 1.6 - 0.8, 0.5 + Math.random() * 0.5);
+    if (contact.stroke === 'overhead') {
+      const smashPower = TUNING.badminton.smashPower;
+      power = Math.random() < cfg.smashChance ? Math.max(power, smashPower + 5) : Math.min(power, smashPower - 5);
+    }
+    this.hit(cpu, power, Math.random() * 1.6 - 0.8, 0.5 + Math.random() * 0.5);
   }
 
   private pointTo(winner: Side): void {
-    if (winner === 1) this.score.player++;
-    else this.score.cpu++;
+    const w = this.athlete(winner);
+    const loser = this.athlete(-winner as Side);
+    w.score++;
     this.server = winner;
     this.renderScore();
-    const won = Math.max(this.score.player, this.score.cpu) >= TUNING.badminton.pointsToWin;
+    const won = w.score >= TUNING.badminton.pointsToWin;
     this.phase = won ? 'over' : 'point';
     this.pointEndsAt = Date.now() + TUNING.badminton.pointPauseMs;
     this.hud.message.textContent = won
-      ? `${winner === 1 ? `${this.playerName} wins!` : 'CPU wins!'} ${this.score.player} : ${this.score.cpu}\nEnter: play again · Esc: back to the cube`
-      : winner === 1
-        ? 'Point to you!'
-        : 'Point to CPU';
+      ? `${w.name} wins! ${this.near.score} : ${this.far.score}\nEnter: play again · Esc: back to the cube`
+      : `Point to ${w.name}!`;
     this.hud.message.hidden = false;
-    this.athlete(winner).character.play('cheer');
-    this.athlete(-winner as Side).character.play('slump');
+    w.character.play('cheer');
+    loser.character.play('slump');
   }
 
   // ---------- Frame ----------
@@ -297,14 +316,16 @@ export class Badminton {
     const now = Date.now();
     const cfg = TUNING.badminton;
 
-    if (this.phase === 'serve' && this.server === -1 && now >= this.cpuServeAt) {
+    const server = this.athlete(this.server);
+    if (this.phase === 'serve' && !server.human && now >= this.cpuServeAt) {
       const c = cfg.cpu;
-      this.serve(this.cpu, now, c.power[0] + Math.random() * (c.power[1] - c.power[0]), Math.random() * 1.6 - 0.8);
+      this.serve(server, now, c.power[0] + Math.random() * (c.power[1] - c.power[0]), Math.random() * 1.6 - 0.8);
     } else if (this.phase === 'rally' && this.flight) {
       if (!this.decided && this.contact) {
-        if (this.receiver === -1 && now >= this.contact.time) this.cpuTurn(now);
-        else if (this.receiver === 1 && now > this.contact.time + cfg.hitWindowMs + cfg.lateGraceMs) {
-          this.showFeedback('Missed!');
+        const receiver = this.athlete(this.receiver);
+        if (!receiver.human && now >= this.contact.time) this.cpuTurn(receiver, now);
+        else if (receiver.human && now > this.contact.time + cfg.hitWindowMs + cfg.lateGraceMs) {
+          this.showFeedback(receiver, 'Missed!');
           this.miss();
         }
       }
@@ -315,10 +336,36 @@ export class Badminton {
     }
 
     this.updateShuttle(now);
-    for (const a of [this.player, this.cpu]) this.updateAthlete(a, now, dt);
-    this.updateCamera(dt);
-    if (now > this.feedbackUntil) this.hud.feedback.hidden = true;
-    this.renderer.render(this.scene, this.camera);
+    for (const a of [this.near, this.far]) {
+      this.updateAthlete(a, now, dt);
+      if (now > a.feedbackUntil) a.feedback.hidden = true;
+    }
+    this.render(dt);
+  }
+
+  /** One player: full screen from behind the near player. Two: left half near player, right half far player. */
+  private render(dt: number): void {
+    const w = this.container.clientWidth || window.innerWidth;
+    const h = this.container.clientHeight || window.innerHeight;
+    this.updateCamera(this.near, dt);
+    if (!this.far.human) {
+      this.renderer.setScissorTest(false);
+      this.renderer.setViewport(0, 0, w, h);
+      this.renderer.render(this.scene, this.near.camera);
+      return;
+    }
+    this.updateCamera(this.far, dt);
+    const half = Math.floor(w / 2);
+    this.renderer.setScissorTest(true);
+    for (const [a, x, width] of [
+      [this.near, 0, half],
+      [this.far, half, w - half],
+    ] as const) {
+      this.renderer.setViewport(x, 0, width, h);
+      this.renderer.setScissor(x, 0, width, h);
+      this.renderer.render(this.scene, a.camera);
+    }
+    this.renderer.setScissorTest(false);
   }
 
   private updateShuttle(now: number): void {
@@ -382,47 +429,74 @@ export class Badminton {
     a.character.update(dt);
   }
 
-  private updateCamera(dt: number): void {
+  /** Behind the athlete's own baseline, looking down the court over the net. */
+  private updateCamera(a: Athlete, dt: number): void {
     const cfg = TUNING.badminton;
-    const x = this.player.wrapper.position.x;
-    const want = new THREE.Vector3(x * 0.5, cfg.cameraHeight, cfg.courtHalfLength + cfg.cameraBack);
-    this.camera.position.lerp(want, Math.min(1, dt * 3));
-    this.camera.lookAt(x * 0.25, 1, cfg.cameraLookAt);
+    const split = this.far.human;
+    const x = a.wrapper.position.x;
+    const back = split ? cfg.splitCameraBack : cfg.cameraBack;
+    const want = new THREE.Vector3(x * 0.5, cfg.cameraHeight, a.side * (cfg.courtHalfLength + back));
+    a.camera.position.lerp(want, Math.min(1, dt * 3));
+    a.camera.lookAt(x * 0.25, 1, a.side * cfg.cameraLookAt);
   }
 
   // ---------- Helpers ----------
 
-  private makeAthlete(side: Side, look: { shirt: string; skin: string; handedness: 'right' | 'left' }): Athlete {
-    const s = TUNING.badminton.characterScale;
-    const character = new Character(look, { putter: false });
+  private makeAthlete(side: Side, feedback: HTMLElement): Athlete {
+    const cfg = TUNING.badminton;
+    const character = new Character({ shirt: '#9b5cff', skin: SKIN_TONES[3], handedness: 'right' }, { putter: false });
     character.handArm.add(buildRacket(side === 1 ? '#ff8a3d' : '#00a6ed'));
     const bob = new THREE.Group();
     bob.add(character.root);
     const wrapper = new THREE.Group();
     wrapper.add(bob);
-    wrapper.scale.setScalar(s);
-    // The character model faces +z: the player turns round to face the net.
+    wrapper.scale.setScalar(cfg.characterScale);
+    // The character model faces +z: the near player turns round to face the net.
     wrapper.rotation.y = side === 1 ? Math.PI : 0;
     this.scene.add(wrapper);
     wrapper.traverse((o) => (o.castShadow = true));
+    const camera = new THREE.PerspectiveCamera(cfg.cameraFov, 1, 0.1, 200);
+    camera.position.set(0, cfg.cameraHeight, side * (cfg.courtHalfLength + cfg.cameraBack));
     return {
       side,
+      human: side === 1,
+      name: side === 1 ? 'You' : 'CPU',
       wrapper,
       bob,
       character,
-      target: new THREE.Vector3(0, 0, side * TUNING.badminton.homeDepth),
+      camera,
+      feedback,
+      feedbackUntil: 0,
+      target: new THREE.Vector3(0, 0, side * cfg.homeDepth),
       deadline: null,
-      // The character's right hand is on its local -x side: +x in the world when facing -z, -x when facing +z.
       handSign: side === 1 ? 1 : -1,
       runPhase: 0,
       jump: null,
       swing: null,
       pose: { ...READY_POSE },
+      score: 0,
     };
   }
 
+  /** A phone's player (or the computer, when human is false) takes this side. */
+  private setLook(a: Athlete, player: PlayerInfo | null, human: boolean): void {
+    a.human = human;
+    a.name = human ? (player?.name ?? (a.side === 1 ? 'You' : 'Player 2')) : 'CPU';
+    const handedness = human ? (player?.handedness ?? 'right') : 'right';
+    const shirt = human ? (player?.colour ?? (a.side === 1 ? '#ff5a5f' : '#00a6ed')) : '#9b5cff';
+    const skin = human ? (player?.skinTone ?? SKIN_TONES[1]) : SKIN_TONES[3];
+    a.character.setLook({ shirt, skin, handedness: 'right' });
+    // A left-handed player is the mirror image, so the racket hand is on the other side.
+    // The character's right hand is on its local -x side: +x in the world when facing -z (near side),
+    // -x when facing +z (far side).
+    const s = TUNING.badminton.characterScale;
+    const left = handedness === 'left';
+    a.wrapper.scale.set(left ? -s : s, s, s);
+    a.handSign = (a.side === 1 ? 1 : -1) * (left ? -1 : 1);
+  }
+
   private athlete(side: Side): Athlete {
-    return side === 1 ? this.player : this.cpu;
+    return side === 1 ? this.near : this.far;
   }
 
   private moveTo(a: Athlete, target: THREE.Vector3, deadline: number | null): void {
@@ -436,7 +510,7 @@ export class Badminton {
   }
 
   private snapAthletes(): void {
-    for (const a of [this.player, this.cpu]) a.wrapper.position.copy(a.target);
+    for (const a of [this.near, this.far]) a.wrapper.position.copy(a.target);
   }
 
   /** Where the athlete's racket hand holds the shuttle (for serving). */
@@ -444,35 +518,41 @@ export class Badminton {
     return a.wrapper.position.clone().add(new THREE.Vector3(a.handSign * 0.45, height, -a.side * 0.3));
   }
 
-  private showFeedback(text: string): void {
-    this.hud.feedback.textContent = text;
-    this.hud.feedback.hidden = false;
-    this.feedbackUntil = Date.now() + 1400;
+  private showFeedback(a: Athlete, text: string): void {
+    a.feedback.textContent = text;
+    a.feedback.hidden = false;
+    a.feedbackUntil = Date.now() + 1400;
   }
 
   private renderScore(): void {
-    this.hud.score.textContent = `${this.playerName} ${this.score.player} : ${this.score.cpu} CPU`;
+    this.hud.score.textContent = `${this.near.name} ${this.near.score} : ${this.far.score} ${this.far.name}`;
   }
 
   private readonly onResize = (): void => {
+    const cfg = TUNING.badminton;
     const w = this.container.clientWidth || window.innerWidth;
     const h = this.container.clientHeight || window.innerHeight;
     this.renderer.setSize(w, h);
-    this.camera.aspect = w / h;
-    this.camera.updateProjectionMatrix();
+    const split = this.far.human;
+    for (const a of [this.near, this.far]) {
+      a.camera.aspect = (split ? w / 2 : w) / h;
+      a.camera.fov = split ? cfg.splitCameraFov : cfg.cameraFov;
+      a.camera.updateProjectionMatrix();
+    }
   };
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {
     this.keys.add(e.key);
-    if (e.key === ' ' && !e.repeat) {
+    if (e.repeat) return;
+    if (e.key === ' ') {
       e.preventDefault();
       const aim = (this.keys.has('ArrowRight') ? 0.7 : 0) - (this.keys.has('ArrowLeft') ? 0.7 : 0);
-      this.onSwing(Date.now(), TUNING.badminton.keyPower, aim);
+      this.onSwing(1, Date.now(), TUNING.badminton.keyPower, aim);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      this.onSwing(-1, Date.now(), TUNING.badminton.keyPower, 0);
     } else if (e.key === 'Enter' && this.phase === 'over') {
-      this.score = { player: 0, cpu: 0 };
-      this.server = 1;
-      this.renderScore();
-      this.startServe();
+      this.newMatch();
     }
   };
 

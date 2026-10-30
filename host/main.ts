@@ -47,8 +47,13 @@ let badminton: Badminton | null = null;
 /** Which badminton screen to show when the server confirms (or null while on the cube). */
 let badmintonWanted: 'game' | 'lab' = 'lab';
 let labOpen = false;
-/** The phone that plays the prototype: the first connected player. */
-let badmintonPlayerId: string | null = null;
+/** The phones that play badminton: the first connected player (near side) and the second (far side, else the computer). */
+let badmintonIds: [string | null, string | null] = [null, null];
+
+function badmintonPlayers(): [PlayerInfo | null, PlayerInfo | null] {
+  const find = (id: string | null): PlayerInfo | null => players.find((p) => p.id === id) ?? null;
+  return [find(badmintonIds[0]), find(badmintonIds[1])];
+}
 
 function openBadminton(view: 'game' | 'lab'): void {
   badmintonWanted = view;
@@ -65,15 +70,17 @@ function showLab(on: boolean): void {
   if (on) {
     hub?.stop();
     if (game) {
-      const player = players.find((p) => p.connected) ?? null;
-      badmintonPlayerId = player?.id ?? null;
+      const connected = players.filter((p) => p.connected);
+      badmintonIds = [connected[0]?.id ?? null, connected[1]?.id ?? null];
       badminton ??= new Badminton(document.getElementById('badminton-canvas')!, {
+        screen: badmintonScreen,
         score: document.getElementById('badminton-score')!,
         message: document.getElementById('badminton-message')!,
-        feedback: document.getElementById('badminton-feedback')!,
+        feedbackNear: document.getElementById('badminton-feedback-near')!,
+        feedbackFar: document.getElementById('badminton-feedback-far')!,
       });
       if (import.meta.env.DEV) Object.assign(window, { badminton }); // for debugging in the browser console
-      badminton.start(player);
+      badminton.start(...badmintonPlayers());
     } else lab.start();
   } else {
     lab.stop();
@@ -117,7 +124,7 @@ function showPick(face: FaceInfo | null): void {
     // The prototype: one player against the computer (the keyboard works without a phone too).
     startButton.textContent = 'Play prototype (Enter)';
     startButton.disabled = false;
-    pickPlayers.textContent = 'Prototype · 1 player vs CPU · L: Swing Lab';
+    pickPlayers.textContent = `Prototype · ${ready >= 2 ? '2 players, split screen' : '1 player vs CPU'} · L: Swing Lab`;
     return;
   }
   startButton.textContent = face.available ? 'Play (Enter)' : 'Coming soon';
@@ -168,7 +175,7 @@ function connect(): void {
       if (hub) showPick(hub.selected);
       game?.setPlayers(players);
       lab.setPlayers(players);
-      if (badmintonPlayerId) badminton?.setPlayer(players.find((p) => p.id === badmintonPlayerId) ?? null);
+      if (!badmintonScreen.hidden) badminton?.setPlayers(...badmintonPlayers());
       labEmpty.hidden = players.length > 0;
     } else if (msg.type === 'game_state') void onGameState(msg);
     else if (msg.type === 'player_aim') {
@@ -183,7 +190,8 @@ function connect(): void {
     } else if (msg.type === 'lab_state') showLab(msg.on);
     else if (msg.type === 'player_badminton_swing') {
       if (!badmintonScreen.hidden) {
-        if (msg.playerId === badmintonPlayerId && !msg.ignored) badminton?.onSwing(msg.at, msg.power, msg.aim);
+        const side = msg.playerId === badmintonIds[0] ? 1 : msg.playerId === badmintonIds[1] ? -1 : null;
+        if (side !== null && !msg.ignored) badminton?.onSwing(side, msg.at, msg.power, msg.aim);
       } else lab.onSwing(msg);
     }
   });

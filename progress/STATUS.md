@@ -153,7 +153,14 @@ running log of where we are, what the user decided, and what comes next).
     drag lowered (steadier speed), `waitSlowdown` removed — a late-arriving swing starts the return from where the
     shuttle is by then. Later (B5): make shot speeds visually distinct.
   - **User test 4: "Rychlost je dobrá" — B2 approved (2026-10-30).**
-  - Next: B3 split screen 1v1 (plan first, wait for OK).
+- **B3 split screen 1v1 — built (user said "Ano, postav B3"), waiting for the user's test with two phones.**
+  `Badminton.ts` now has a near and a far athlete, each human (a phone) or the computer. Two connected phones →
+  split screen: first player = near side, left half; second = far side, right half; each half has its own camera
+  behind its own player (`splitCameraFov`, `splitCameraBack`), white divider, per-half shot feedback, shared
+  score with both names. One phone → vs CPU full screen as before. `host/main.ts` maps phones to sides
+  (`badmintonIds`). Mac keys: Space = near player (← → aim), ↑ = far player. Left-handed far players mirrored.
+  Scripted 2-player test in the dev browser: rallies, scoring, no errors, ~2.7 ms CPU per frame (two renders).
+  - Next: user test with two phones → B4 2v2 (plan first).
 
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.
@@ -210,7 +217,7 @@ running log of where we are, what the user decided, and what comes next).
 - Turf brightness/tint can still be tuned (`turfTint`, `bumperTint`, `islandGrassTint`).
 
 ## Next action
-**Badminton B3:** propose the split-screen 1v1 plan, wait for OK, build it.
+**Badminton B3:** get the user's test with two phones (split screen), then plan B4 (2v2).
 Older (paused):
 Cube World: 2a (host hub) is built — get the user's test on the TV with real phones, then 2b (registry + phone control), then 2c.
 After that 4c (juice, incl. **wind**: trees and grass swaying), then ask the user to approve Phase 4.

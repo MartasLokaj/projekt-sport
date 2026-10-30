@@ -458,6 +458,9 @@ export const TUNING = {
     cameraBack: 5.0,
     cameraLookAt: -3,
     cameraFov: 50,
+    /** Split screen (two players): each half is narrow, so the camera sees wider and sits a little closer. */
+    splitCameraFov: 62,
+    splitCameraBack: 4.0,
     /** The shuttle is drawn this much bigger than real, so it is easy to follow from the sofa. */
     shuttleScale: 1.6,
     /** Look: sand, court, lines, sky. */
