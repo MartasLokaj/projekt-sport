@@ -27,15 +27,20 @@ export function shotSpeed(power: number): number {
 }
 
 /** Grass slows a rolling ball down by a steady amount, so it stops cleanly instead of creeping. Call every physics step. */
-export function applyRollingResistance(ball: RAPIER.RigidBody, dt: number): void {
-  const p = ball.translation();
-  const onFloor = p.y > 0 && p.y < TUNING.ball.radius + 0.02;
-  if (!onFloor) return;
+export function applyRollingResistance(ball: RAPIER.RigidBody, world: RAPIER.World, R: typeof RAPIER, dt: number): void {
+  if (!isOnFloor(ball, world, R)) return;
   const v = ball.linvel();
   const speed = Math.hypot(v.x, v.z);
   if (speed === 0) return;
   const scale = Math.max(0, speed - TUNING.ball.rollingResistance * dt) / speed;
   ball.setLinvel({ x: v.x * scale, y: v.y, z: v.z * scale }, true);
+}
+
+/** True when there is ground right under the ball (it is rolling, not flying or falling). */
+export function isOnFloor(ball: RAPIER.RigidBody, world: RAPIER.World, R: typeof RAPIER): boolean {
+  const p = ball.translation();
+  const ray = new R.Ray({ x: p.x, y: p.y, z: p.z }, { x: 0, y: -1, z: 0 });
+  return world.castRay(ray, TUNING.ball.radius + 0.03, true, undefined, undefined, undefined, ball) !== null;
 }
 
 /**

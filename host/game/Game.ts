@@ -4,10 +4,10 @@ import type { BallResult, GameState, PlayerInfo, SwingProgress } from '../../sha
 import { TUNING } from '../../shared/tuning.ts';
 import { applyCurve, applyRollingResistance, createBall, curveFromTwist, shotSpeed } from './ball.ts';
 import { ADDRESS_DISTANCE, Character } from './character.ts';
-import { buildCourse, HOLE_1, isInCup, type HoleDef } from './course.ts';
+import { buildHole, HOLES, isInCup, loadKit, type BuiltHole, type Kit } from './course.ts';
 import { DistancePreview } from './preview.ts';
 
-// Phase 2: one graybox hole for 1–4 players. The host owns the ball physics; the server decides
+// Three holes built from the Kenney kit, for 1–4 players. The host owns the ball physics; the server decides
 // whose turn it is and counts strokes (see syncState). Each player has their own ball: the current
 // player's ball is the physical one, the others wait as see-through "ghost" balls.
 // The current player's aim, live swing, practice swings and strokes come in through the onPhone… methods.
@@ -63,7 +63,9 @@ export class Game {
   private readonly distancePreview: DistancePreview;
   private readonly clock = new THREE.Clock();
 
-  private hole: HoleDef = HOLE_1;
+  private readonly holes: BuiltHole[];
+  private hole: BuiltHole;
+  private readonly sun: THREE.DirectionalLight;
   private state: State = 'waiting';
   private readonly players = new Map<string, PlayerBall>();
   /** Whose ball is on the course right now. */
@@ -106,13 +108,14 @@ export class Game {
   private readonly followDir = new THREE.Vector3(0, 0, 1);
 
   static async create(container: HTMLElement, hud: GameHud): Promise<Game> {
-    await RAPIER.init();
-    return new Game(container, hud);
+    const [kit] = await Promise.all([loadKit(), RAPIER.init()]);
+    return new Game(container, hud, kit);
   }
 
   private constructor(
     private readonly container: HTMLElement,
     private readonly hud: GameHud,
+    kit: Kit,
   ) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -123,16 +126,21 @@ export class Game {
     this.scene.background = new THREE.Color('#9fd8ff');
     this.scene.add(new THREE.HemisphereLight('#ffffff', '#8a9a7a', 1.6));
     const sun = new THREE.DirectionalLight('#fff3dd', 2.2);
-    sun.position.set(-6, 12, -4);
-    sun.target.position.set(4, 0, 5);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
-    Object.assign(sun.shadow.camera, { left: -12, right: 12, top: 12, bottom: -12, near: 1, far: 40 });
+    Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 16, bottom: -16, near: 1, far: 60 });
+    this.sun = sun;
     this.scene.add(sun, sun.target);
 
     this.world = new RAPIER.World({ x: 0, y: -TUNING.physics.gravity, z: 0 });
     this.world.timestep = 1 / TUNING.physics.stepsPerSecond;
-    this.scene.add(buildCourse(this.hole, this.world, RAPIER));
+    // All holes exist at once, side by side; the game moves between them.
+    this.holes = HOLES.map((def, i) => {
+      const built = buildHole(def, kit, new THREE.Vector3(i * TUNING.course.holeSpacing, 0, 0), this.world, RAPIER);
+      this.scene.add(built.group);
+      return built;
+    });
+    this.hole = this.holes[0];
     this.distancePreview = new DistancePreview(RAPIER);
 
     // Ball
@@ -158,10 +166,27 @@ export class Game {
     this.aimLine.add(this.aimStripe);
     this.scene.add(this.aimLine);
 
+    this.setHole(0);
+  }
+
+  /** Moves the game to hole `index`: ball on the tee, sunlight over the hole, camera behind the tee. */
+  private setHole(index: number): void {
+    this.hole = this.holes[Math.min(index, this.holes.length - 1)];
+    const box = new THREE.Box3().setFromObject(this.hole.group);
+    const centre = box.getCenter(new THREE.Vector3());
+    this.sun.target.position.copy(centre);
+    this.sun.position.copy(centre).add(new THREE.Vector3(-8, 16, -6));
     this.resetBall(this.teePosition());
-    this.baseYaw = THREE.MathUtils.degToRad(this.hole.teeYaw);
+    this.baseYaw = this.hole.teeYaw;
     this.followDir.set(Math.sin(this.baseYaw), 0, Math.cos(this.baseYaw));
+    this.state = 'waiting';
     this.snapCamera();
+    // Everyone appears next to the tee.
+    let i = 0;
+    for (const player of this.players.values()) {
+      const side = new THREE.Vector3(Math.cos(this.baseYaw), 0, -Math.sin(this.baseYaw));
+      player.character.place(this.teePosition().addScaledVector(side, 0.6 + 0.5 * i++), this.baseYaw);
+    }
   }
 
   start(): void {
@@ -222,7 +247,7 @@ export class Game {
 
   /** The match changed on the server: new round, new turn, strokes or finished players. */
   syncState(game: GameState): void {
-    if (game.phase === 'playing' && this.lastPhase !== 'playing') this.resetRound();
+    if (game.phase === 'playing' && this.lastPhase !== 'playing') this.resetRound(game.hole);
     this.lastPhase = game.phase;
     for (const player of this.players.values()) player.inMatch = false;
     for (const entry of game.players) {
@@ -244,8 +269,8 @@ export class Game {
     this.updateInfo();
   }
 
-  /** Everyone back to the tee, before a new round. */
-  private resetRound(): void {
+  /** Everyone back to the tee of hole `holeIndex`, before playing it. */
+  private resetRound(holeIndex: number): void {
     for (const player of this.players.values()) {
       player.pos = null;
       player.yaw = null;
@@ -253,8 +278,7 @@ export class Game {
       player.strokes = 0;
     }
     this.active = null;
-    this.state = 'waiting';
-    this.resetBall(this.teePosition());
+    this.setHole(holeIndex);
     this.updateGhosts();
   }
 
@@ -265,7 +289,7 @@ export class Game {
     this.resetBall(player.pos ?? this.teePosition());
     (this.ballMesh.material as THREE.MeshStandardMaterial).color.set(player.colour);
     this.ballMesh.visible = true;
-    this.beginShot(player.yaw ?? THREE.MathUtils.degToRad(this.hole.teeYaw));
+    this.beginShot(player.yaw ?? this.hole.teeYaw);
     this.turnStart.copy(player.pos ?? this.teePosition());
     this.turnYaw = this.baseYaw;
     this.golferSpot = null;
@@ -281,7 +305,7 @@ export class Game {
     const face = new THREE.Vector3(-Math.cos(yaw), 0, Math.sin(yaw));
     const side = handedness === 'left' ? 1 : -1;
     return {
-      position: ball.clone().setY(0).addScaledVector(face, side * ADDRESS_DISTANCE * scale),
+      position: ball.clone().setY(ball.y - TUNING.ball.radius).addScaledVector(face, side * ADDRESS_DISTANCE * scale),
       yaw: Math.atan2(face.x, face.z),
     };
   }
@@ -342,7 +366,7 @@ export class Game {
   }
 
   private teePosition(): THREE.Vector3 {
-    return new THREE.Vector3(this.hole.tee.x, 0, this.hole.tee.z);
+    return this.hole.tee.clone();
   }
 
   /** See-through balls for everyone who is not playing right now and has not finished. */
@@ -351,7 +375,7 @@ export class Game {
       const show = player.inMatch && this.lastPhase === 'playing' && id !== this.active && !player.done;
       player.ghost.visible = show;
       const at = player.pos ?? this.teePosition();
-      player.ghost.position.set(at.x, TUNING.ball.radius, at.z);
+      player.ghost.position.set(at.x, at.y + TUNING.ball.radius, at.z);
     }
   }
 
@@ -407,7 +431,7 @@ export class Game {
     const player = this.active ? this.players.get(this.active) : undefined;
     if (player && result !== 'holed') {
       const p = this.ball.translation();
-      player.pos = new THREE.Vector3(p.x, 0, p.z);
+      player.pos = new THREE.Vector3(p.x, p.y - TUNING.ball.radius, p.z);
       player.yaw = this.cameraYaw();
     }
     if (result !== 'holed') this.react(result); // a hole-in reacts at once, see holed()
@@ -480,7 +504,7 @@ export class Game {
       if (this.restTime >= TUNING.ball.restTimeMs) {
         this.ball.setLinvel({ x: 0, y: 0, z: 0 }, true);
         this.ball.setAngvel({ x: 0, y: 0, z: 0 }, true);
-        this.lastRest.set(p.x, 0, p.z);
+        this.lastRest.set(p.x, p.y - TUNING.ball.radius, p.z);
         this.finishTurn('rest');
       }
     } else {
@@ -492,7 +516,7 @@ export class Game {
     this.state = 'holed';
     const player = this.active ? this.players.get(this.active) : undefined;
     const strokes = player?.strokes ?? 0;
-    const diff = strokes - this.hole.par;
+    const diff = strokes - this.hole.def.par;
     const name =
       strokes === 1 ? 'HOLE IN ONE!' : ({ [-2]: 'Eagle!', [-1]: 'Birdie!', 0: 'Par', 1: 'Bogey' } as Record<number, string>)[diff];
     const strokesText = `${strokes} stroke${strokes === 1 ? '' : 's'}`;
@@ -511,11 +535,11 @@ export class Game {
   }
 
   private resetBall(at: THREE.Vector3): void {
-    this.ball.setTranslation({ x: at.x, y: TUNING.ball.radius + 0.005, z: at.z }, true);
+    this.ball.setTranslation({ x: at.x, y: at.y + TUNING.ball.radius + 0.005, z: at.z }, true);
     this.ball.setLinvel({ x: 0, y: 0, z: 0 }, true);
     this.ball.setAngvel({ x: 0, y: 0, z: 0 }, true);
     this.curve = 0;
-    this.lastRest.set(at.x, 0, at.z);
+    this.lastRest.copy(at);
   }
 
   /** The direction the camera is looking, flat on the ground. */
@@ -549,7 +573,8 @@ export class Game {
     const step = this.world.timestep;
     this.stepAccumulator += dt;
     while (this.stepAccumulator >= step) {
-      applyRollingResistance(this.ball, step);
+      this.hole.update(step);
+      applyRollingResistance(this.ball, this.world, RAPIER, step);
       if (this.state === 'rolling') applyCurve(this.ball, this.curve, step);
       this.world.step();
       this.checkBall(step);
@@ -571,7 +596,8 @@ export class Game {
     const aiming = this.state === 'aiming';
     const yaw = this.aimYaw();
     this.aimLine.visible = aiming;
-    this.aimLine.position.set(this.ballMesh.position.x, 0, this.ballMesh.position.z);
+    const ball = this.ballMesh.position;
+    this.aimLine.position.set(ball.x, ball.y - TUNING.ball.radius, ball.z);
     this.aimLine.rotation.y = yaw;
     // The line starts just in front of the ball and is as long as the rough rolling distance.
     const start = TUNING.ball.radius * 1.6;
@@ -635,7 +661,7 @@ export class Game {
   private updateInfo(): void {
     const player = this.active ? this.players.get(this.active) : undefined;
     const turn = player && this.state !== 'waiting' ? ` · ${player.name}: ${player.strokes} stroke${player.strokes === 1 ? '' : 's'}` : '';
-    this.hud.info.textContent = `Hole ${this.hole.number} · Par ${this.hole.par}${turn}`;
+    this.hud.info.textContent = `Hole ${this.hole.def.number}/${this.holes.length} · Par ${this.hole.def.par}${turn}`;
     this.hud.info.style.borderLeft = player ? `10px solid ${player.colour}` : '';
   }
 

@@ -123,10 +123,17 @@ export class Lobby {
       case 'start_game': {
         const fromLeader = this.seatOf(ws)?.id === this.leaderId();
         if (!this.hosts.has(ws) && !fromLeader) return;
-        if (this.match.playing) return;
+        if (!this.match.canStart) return;
         const players = [...this.seats.values()].filter((s) => s.socket).map((s) => s.id);
         if (players.length === 0) return;
         this.match.start(players, this.isConnected);
+        this.broadcastGame();
+        return;
+      }
+      case 'next_hole': {
+        const fromLeader = this.seatOf(ws)?.id === this.leaderId();
+        if (!this.hosts.has(ws) && !fromLeader) return;
+        this.match.nextHole(this.isConnected);
         this.broadcastGame();
         return;
       }

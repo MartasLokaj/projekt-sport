@@ -44,3 +44,7 @@ A new certificate (and so the warning once more) appears only when the Mac gets 
 ```bash
 npm run check    # TypeScript type check
 ```
+
+## Credits
+
+- Course pieces: [Minigolf Kit](https://kenney.nl/assets/minigolf-kit) by Kenney (CC0), in `host/assets/minigolf/`.

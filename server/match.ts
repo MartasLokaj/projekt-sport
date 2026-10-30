@@ -1,7 +1,7 @@
-import type { BallResult, GameState } from '../shared/protocol.ts';
+import { HOLE_COUNT, type BallResult, type GameState } from '../shared/protocol.ts';
 import { TUNING } from '../shared/tuning.ts';
 
-// Turns, strokes and scores. The server is the referee: it decides whose turn it is,
+// Turns, strokes and scores over all holes. The server is the referee: it decides whose turn it is,
 // counts strokes and keeps the score. The host only reports what the ball did.
 
 type Done = 'holed' | 'picked_up';
@@ -11,6 +11,9 @@ export class Match {
   private order: string[] = [];
   private current: string | null = null;
   private turn = 0;
+  private hole = 0;
+  /** Scores of the finished holes, per player. */
+  private holeScores = new Map<string, number[]>();
   private strokes = new Map<string, number>();
   private done = new Map<string, Done>();
   /** True between a stroke and the host's report of where the ball ended up. */
@@ -20,14 +23,30 @@ export class Match {
     return this.phase === 'playing';
   }
 
+  /** A new game may start from the lobby or after the last hole. */
+  get canStart(): boolean {
+    return this.phase === 'lobby' || this.phase === 'game_end';
+  }
+
   get currentPlayer(): string | null {
     return this.current;
   }
 
   start(playerIds: string[], isConnected: (id: string) => boolean): void {
-    this.phase = 'playing';
     this.order = [...playerIds];
-    this.strokes = new Map(playerIds.map((id) => [id, 0]));
+    this.holeScores = new Map(playerIds.map((id) => [id, []]));
+    this.startHole(0, isConnected);
+  }
+
+  /** After a hole's scoreboard: on to the next hole. */
+  nextHole(isConnected: (id: string) => boolean): void {
+    if (this.phase === 'hole_end') this.startHole(this.hole + 1, isConnected);
+  }
+
+  private startHole(hole: number, isConnected: (id: string) => boolean): void {
+    this.phase = 'playing';
+    this.hole = hole;
+    this.strokes = new Map(this.order.map((id) => [id, 0]));
     this.done.clear();
     this.current = null;
     this.waitingForBall = false;
@@ -73,15 +92,24 @@ export class Match {
   state(leaderId: string | null): GameState {
     return {
       phase: this.phase,
+      hole: this.hole,
+      holeCount: HOLE_COUNT,
       leaderId,
       current: this.current,
       turn: this.turn,
       players: this.order.map((id) => {
         const strokes = this.strokes.get(id) ?? 0;
         const done = this.done.get(id) ?? null;
-        return { id, strokes, done, score: done === 'picked_up' ? TUNING.rules.pickedUpScore : strokes };
+        const score = this.score(id);
+        const holeScores = this.holeScores.get(id) ?? [];
+        const finished = holeScores.reduce((sum, s) => sum + s, 0);
+        return { id, strokes, done, score, holeScores, total: finished + (this.phase === 'playing' ? score : 0) };
       }),
     };
+  }
+
+  private score(id: string): number {
+    return this.done.get(id) === 'picked_up' ? TUNING.rules.pickedUpScore : (this.strokes.get(id) ?? 0);
   }
 
   /** Next player in the fixed order who has not finished. Players whose phone is away are skipped while others can play. */
@@ -89,7 +117,8 @@ export class Match {
     this.turn++;
     const waiting = this.order.filter((id) => !this.done.has(id));
     if (waiting.length === 0) {
-      this.phase = 'hole_end';
+      for (const id of this.order) this.holeScores.get(id)?.push(this.score(id));
+      this.phase = this.hole + 1 >= HOLE_COUNT ? 'game_end' : 'hole_end';
       this.current = null;
       return;
     }

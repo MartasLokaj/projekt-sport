@@ -10,7 +10,7 @@ export class DistancePreview {
   private readonly world: RAPIER.World;
   private readonly ball: RAPIER.RigidBody;
 
-  constructor(R: typeof RAPIER) {
+  constructor(private readonly R: typeof RAPIER) {
     this.world = new R.World({ x: 0, y: -TUNING.physics.gravity, z: 0 });
     this.world.timestep = 1 / TUNING.physics.stepsPerSecond;
     const floor = this.world.createRigidBody(R.RigidBodyDesc.fixed().setTranslation(0, -0.1, 0));
@@ -28,7 +28,7 @@ export class DistancePreview {
     const dt = this.world.timestep;
     const maxSteps = TUNING.aimLine.previewSeconds / dt;
     for (let i = 0; i < maxSteps; i++) {
-      applyRollingResistance(this.ball, dt);
+      applyRollingResistance(this.ball, this.world, this.R, dt);
       applyCurve(this.ball, curve, dt);
       this.world.step();
       const v = this.ball.linvel();

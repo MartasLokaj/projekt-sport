@@ -158,9 +158,15 @@ function renderTurn(): void {
       title = `${nameOf(state.current)}'s turn`;
       text = `You: ${mine.strokes} stroke${mine.strokes === 1 ? '' : 's'} so far.`;
     }
+  } else if (state.phase === 'hole_end') {
+    title = `Hole ${state.hole + 1} complete!`;
+    text = mine ? `This hole: ${mine.score}. Total: ${mine.total}.` : 'Look at the big screen.';
+    button = leader ? 'Next hole' : null;
   } else {
-    title = 'Hole complete!';
-    text = mine ? `Your score: ${mine.score}. Look at the big screen.` : 'Look at the big screen.';
+    const ranked = [...state.players].sort((a, b) => a.total - b.total);
+    const place = mine ? ranked.findIndex((p) => p.total === mine.total) + 1 : 0;
+    title = place === 1 ? 'You win! 🏆' : 'Game over!';
+    text = mine ? `Total: ${mine.total} · Place ${place} of ${ranked.length}` : 'Look at the big screen.';
     button = leader ? 'Play again' : null;
   }
   play.cancel();
@@ -172,7 +178,7 @@ function renderTurn(): void {
   turnOverlay.hidden = false;
 }
 
-turnButton.addEventListener('click', () => send({ type: 'start_game' }));
+turnButton.addEventListener('click', () => send({ type: gameState?.phase === 'hole_end' ? 'next_hole' : 'start_game' }));
 turnEdit.addEventListener('click', () => showJoinForm());
 
 function renderSettings(): void {

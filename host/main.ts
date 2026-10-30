@@ -26,6 +26,8 @@ const startButton = document.getElementById('start') as HTMLButtonElement;
 const scoresEl = document.getElementById('hud-scores')!;
 const scoreboardEl = document.getElementById('scoreboard')!;
 const scoreboardRows = document.getElementById('scoreboard-rows')!;
+const scoreboardTitle = document.getElementById('scoreboard-title')!;
+const scoreboardHint = document.getElementById('scoreboard-hint')!;
 
 let game: Game | null = null;
 let gameLoading: Promise<Game> | null = null;
@@ -244,20 +246,38 @@ function renderScores(state: GameState): void {
     const dot = el('span', 'score-dot');
     dot.style.background = colourOf(entry.id);
     const status = entry.done === 'holed' ? '⛳' : entry.done === 'picked_up' ? '✋' : '';
-    row.append(dot, el('span', 'score-name', nameOf(entry.id)), el('span', 'score-value', `${entry.strokes} ${status}`));
+    row.append(
+      dot,
+      el('span', 'score-name', nameOf(entry.id)),
+      el('span', 'score-value', `${entry.strokes} ${status}`),
+      el('span', 'score-total', `Σ ${entry.total}`),
+    );
     scoresEl.append(row);
   }
 
-  scoreboardEl.hidden = state.phase !== 'hole_end';
-  if (state.phase !== 'hole_end') return;
+  const finished = state.phase === 'hole_end' || state.phase === 'game_end';
+  scoreboardEl.hidden = !finished;
+  if (!finished) return;
+  const last = state.phase === 'game_end';
+  scoreboardTitle.textContent = last ? 'Final results' : `Hole ${state.hole + 1} complete!`;
+  scoreboardHint.textContent = last ? 'Enter: play again · Esc: back to the lobby' : 'Enter: next hole · Esc: back to the lobby';
+
+  // A table: one column per hole, then the total. Ranked by total (lowest wins).
   scoreboardRows.replaceChildren();
-  const ranked = [...state.players].sort((a, b) => a.score - b.score);
+  const header = el('div', 'board-row board-header');
+  header.append(el('span', 'board-place'), el('span', 'score-dot hidden-dot'), el('span', 'board-name', ''));
+  for (let h = 0; h < state.holeCount; h++) header.append(el('span', 'board-hole', `${h + 1}`));
+  header.append(el('span', 'board-score', 'Total'));
+  scoreboardRows.append(header);
+  const ranked = [...state.players].sort((a, b) => a.total - b.total);
   ranked.forEach((entry, i) => {
-    const place = i > 0 && entry.score === ranked[i - 1].score ? '' : `${i + 1}.`;
+    const place = i > 0 && entry.total === ranked[i - 1].total ? '' : `${i + 1}.`;
     const row = el('div', 'board-row');
     const dot = el('span', 'score-dot');
     dot.style.background = colourOf(entry.id);
-    row.append(el('span', 'board-place', place), dot, el('span', 'board-name', nameOf(entry.id)), el('span', 'board-score', String(entry.score)));
+    row.append(el('span', 'board-place', place), dot, el('span', 'board-name', nameOf(entry.id)));
+    for (let h = 0; h < state.holeCount; h++) row.append(el('span', 'board-hole', entry.holeScores[h]?.toString() ?? '–'));
+    row.append(el('span', 'board-score', String(entry.total)));
     scoreboardRows.append(row);
   });
 }
@@ -265,7 +285,8 @@ function renderScores(state: GameState): void {
 startButton.addEventListener('click', () => send({ type: 'start_game' }));
 window.addEventListener('keydown', (e) => {
   const phase = lastState?.phase ?? 'lobby';
-  if (e.key === 'Enter' && phase !== 'playing') send({ type: 'start_game' });
+  if (e.key === 'Enter' && phase === 'hole_end') send({ type: 'next_hole' });
+  else if (e.key === 'Enter' && phase !== 'playing') send({ type: 'start_game' });
   else if (e.key === 'Escape' && phase !== 'lobby') send({ type: 'end_game' });
 });
 

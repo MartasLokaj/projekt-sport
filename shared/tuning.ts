@@ -95,21 +95,24 @@ export const TUNING = {
   },
 
   course: {
-    floorColour: '#a9b4bc',
-    wallColour: '#6f7d88',
-    floorThickness: 0.2,
-    wallHeight: 0.25,
+    /** Size of one Kenney kit tile in game units (3.33 makes the kit's ball the same size as ours). */
+    tileSize: 0.1 / 0.03,
     floorFriction: 0.6,
     wallFriction: 0.1,
     /** How bouncy the walls are (0 = dead, 1 = perfect bounce). */
     wallBounce: 0.65,
-    /** Size of the square opening of the cup. The ball is 0.2 wide. */
-    cupGap: 0.3,
+    /** Depth of the pit under the cup. */
     cupDepth: 0.3,
     /** A slow ball whose centre comes this close to the cup's centre just rolls in (no annoying near-misses). */
-    tapInRadius: 0.28,
+    tapInRadius: 0.32,
     /** ...if it is slower than this (units per second). */
     tapInSpeed: 1,
+    /** The windmill's blades are made this much longer than in the kit, so they reach the lane. */
+    bladeScale: 1.5,
+    /** How fast the windmill turns (degrees per second). */
+    windmillDegreesPerSecond: 50,
+    /** The holes are built side by side, this far apart. */
+    holeSpacing: 60,
   },
 
   physics: {

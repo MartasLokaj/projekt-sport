@@ -3,6 +3,8 @@
 export const WS_PATH = '/ws';
 
 export const MAX_PLAYERS = 4;
+/** Number of holes in a game (the holes themselves are defined on the host, host/game/course.ts). */
+export const HOLE_COUNT = 3;
 export const ROOM_CODE_LENGTH = 4;
 export const NAME_MAX_LENGTH = 12;
 export const SHIRT_COLOURS = ['#ff5a5f', '#ffb400', '#3ec300', '#00a6ed', '#9b5cff', '#ff7ac6'] as const;
@@ -64,15 +66,28 @@ export type BallResult = 'rest' | 'holed' | 'out';
 
 /** The match, decided by the server. */
 export type GameState = {
-  phase: 'lobby' | 'playing' | 'hole_end';
+  phase: 'lobby' | 'playing' | 'hole_end' | 'game_end';
+  /** Current hole, counting from 0. */
+  hole: number;
+  holeCount: number;
   /** The player who may start the game from their phone (the first connected one). */
   leaderId: string | null;
   /** Whose turn it is (null when nobody's). */
   current: string | null;
   /** Goes up by one at every new turn, so pages can tell a new turn from a repeat. */
   turn: number;
-  /** Players taking part, in turn order. done: holed out or picked up after too many strokes. */
-  players: { id: string; strokes: number; done: 'holed' | 'picked_up' | null; score: number }[];
+  /**
+   * Players taking part, in turn order. strokes/done/score are for the current hole (done: holed out or
+   * picked up after too many strokes). holeScores has the finished holes; total is the score so far.
+   */
+  players: {
+    id: string;
+    strokes: number;
+    done: 'holed' | 'picked_up' | null;
+    score: number;
+    holeScores: number[];
+    total: number;
+  }[];
 };
 
 /** Why the server refused a phone. */
@@ -107,6 +122,8 @@ export type ClientMessage =
   | ({ type: 'swing_progress' } & SwingProgress)
   /** From the host, or from the leader's phone. */
   | { type: 'start_game' }
+  /** From the host, or from the leader's phone, after a hole's scoreboard. */
+  | { type: 'next_hole' }
   /** From the host: back to the lobby. */
   | { type: 'end_game' }
   /** From the host: the current player's ball stopped, dropped in or went out of bounds. */
