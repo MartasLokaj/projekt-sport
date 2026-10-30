@@ -152,7 +152,8 @@ running log of where we are, what the user decided, and what comes next).
     Then asked: shuttle slower and predictable, no slowing down near the player. **Done:** flight times ×~1.4,
     drag lowered (steadier speed), `waitSlowdown` removed — a late-arriving swing starts the return from where the
     shuttle is by then. Later (B5): make shot speeds visually distinct.
-  - Next: user test 4 (speed feel) → B3 split screen 1v1.
+  - **User test 4: "Rychlost je dobrá" — B2 approved (2026-10-30).**
+  - Next: B3 split screen 1v1 (plan first, wait for OK).
 
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.
@@ -209,7 +210,7 @@ running log of where we are, what the user decided, and what comes next).
 - Turf brightness/tint can still be tuned (`turfTint`, `bumperTint`, `islandGrassTint`).
 
 ## Next action
-**Badminton B2:** get the user's test of the prototype (and of aiming in the lab), tune, then B3 (split screen 1v1).
+**Badminton B3:** propose the split-screen 1v1 plan, wait for OK, build it.
 Older (paused):
 Cube World: 2a (host hub) is built — get the user's test on the TV with real phones, then 2b (registry + phone control), then 2c.
 After that 4c (juice, incl. **wind**: trees and grass swaying), then ask the user to approve Phase 4.
