@@ -1,9 +1,10 @@
-import type { ClientMessage, ControlMode } from '../shared/protocol.ts';
+import type { ClientMessage, ControlMode, Stroke, SwingProgress } from '../shared/protocol.ts';
 import { TUNING } from '../shared/tuning.ts';
-import { powerFromValue, SwingDetector } from './swing.ts';
+import { powerFromValue, SwingDetector, type MotionSample, type SwingPhase } from './swing.ts';
 
-// The play screen: drag to aim (0 = straight at the cup), try a practice swing,
-// then "HOLD & SWING" with the phone, or the slingshot fallback (pull down with a finger and let go).
+// The play screen: drag to aim (0 = straight ahead, where the big screen's camera looks),
+// try a practice swing, then swing for real. With the motion sensor: tap, hold still, swing.
+// Without it: the slingshot (pull down with a finger and let go).
 
 const MODE_KEY = 'minigolf.controlMode';
 
@@ -81,33 +82,87 @@ export function initPlayScreen(send: (msg: ClientMessage) => void): { onJoined: 
   aimPad.addEventListener('pointercancel', endAim);
 
   // ---------- Hitting ----------
-  // Both buttons measure a swing the same way. HOLD & SWING hits the ball,
-  // the practice button only shows the power and where the ball would roll.
+  // Swing mode: tap a button, hold the phone still, then swing. The stroke fires by itself.
+  // Slingshot mode: press a button, pull down and let go.
+  // The swing button hits the ball, the practice button only shows the power and how far it would roll.
 
-  /** The button being held, or null. */
-  let heldButton: HTMLElement | null = null;
+  /** The tapped (swing mode) or held (slingshot mode) button, or null. */
+  let activeButton: HTMLElement | null = null;
   let practice = false;
-  let strokeSent = false;
+  let armTimer: number | undefined;
+  let lastProgressSent = 0;
+  let lastPhase: SwingPhase = 'idle';
   let pullStartY = 0;
   let pullPower = 0;
 
   function setMeter(power: number): void {
     powerFill.style.width = `${power}%`;
-    powerText.textContent = `${power}%`;
+    powerText.textContent = `${Math.round(power)}%`;
   }
 
-  function hit(power: number, backswing: number | null, speed: number | null): void {
-    strokeSent = true;
-    const stroke = { power, angle: Math.round(angle * 10) / 10, mode, backswing, speed };
-    setMeter(power);
+  function setButtonLabel(button: HTMLElement, text: string): void {
+    (button === swingButton ? swingLabel : practiceButton).textContent = text;
+  }
+
+  function idleLabels(): void {
+    swingLabel.textContent = mode === 'swing' ? 'TAP TO SWING' : 'PULL DOWN & RELEASE';
+    practiceButton.textContent = mode === 'swing' ? 'Tap for a practice swing' : 'Practice: pull down & release';
+  }
+
+  function sendProgress(phase: SwingProgress['phase'], force = false): void {
+    const now = performance.now();
+    if (!force && now - lastProgressSent < TUNING.swing.progressIntervalMs) return;
+    lastProgressSent = now;
+    send({ type: 'swing_progress', practice, phase, backswing: detector.liveBackswing, power: detector.livePower });
+  }
+
+  function hit(stroke: Omit<Stroke, 'angle' | 'mode'>): void {
+    const full: Stroke = { ...stroke, angle: Math.round(angle * 10) / 10, mode };
+    setMeter(stroke.power);
     if (practice) {
-      send({ type: 'practice', ...stroke });
-      statusEl.textContent = `Practice: ${power}%. Look at the big screen.`;
+      send({ type: 'practice', ...full });
+      statusEl.textContent = `Practice: ${Math.round(stroke.power)}%. Look at the big screen.`;
     } else {
-      send({ type: 'stroke', ...stroke });
-      statusEl.textContent = `Hit! ${power}%`;
+      send({ type: 'stroke', ...full });
+      statusEl.textContent = `Hit! ${Math.round(stroke.power)}%`;
       if ('vibrate' in navigator) navigator.vibrate(40); // not supported on iPhone
     }
+  }
+
+  function finishSwing(): void {
+    clearTimeout(armTimer);
+    if (activeButton) {
+      activeButton.classList.remove('held');
+      activeButton.style.setProperty('--pull', '0px');
+    }
+    activeButton = null;
+    idleLabels();
+  }
+
+  /** Swing mode: the first tap arms the swing, a second tap cancels it. */
+  function armSwing(button: HTMLElement): void {
+    if (activeButton) {
+      cancelSwing('Swing cancelled.');
+      return;
+    }
+    activeButton = button;
+    practice = button === practiceButton;
+    button.classList.add('held');
+    setButtonLabel(button, 'Hold still…');
+    setMeter(0);
+    statusEl.textContent = 'Hold the phone still at the ball.';
+    lastPhase = 'settling';
+    detector.arm();
+    armTimer = window.setTimeout(() => cancelSwing('Too slow. Tap again to swing.'), TUNING.swing.armTimeoutMs);
+  }
+
+  function cancelSwing(message: string): void {
+    if (!activeButton) return;
+    detector.cancel();
+    if (mode === 'swing' && lastPhase !== 'settling') sendProgress('cancelled', true);
+    finishSwing();
+    setMeter(0);
+    statusEl.textContent = message;
   }
 
   let lastMotionTime = 0;
@@ -119,62 +174,57 @@ export function initPlayScreen(send: (msg: ClientMessage) => void): { onJoined: 
     // Seconds since the previous reading (about 1/60), capped in case readings paused.
     const dt = lastMotionTime ? Math.min(0.05, Math.max(0, (e.timeStamp - lastMotionTime) / 1000)) : 1 / 60;
     lastMotionTime = e.timeStamp;
-    if (!heldButton || mode !== 'swing' || strokeSent) return;
-    const result = detector.sample({ alpha: r.alpha, beta: r.beta, gamma: r.gamma }, dt);
-    if (result) {
-      hit(result.power, result.backswing, result.speed);
-    } else {
-      const back = detector.liveBackswing;
-      const cfg = TUNING.swing;
-      setMeter(powerFromValue(back, cfg.minBackswing, cfg.maxBackswing, cfg.curveExponent));
-      if (back > 0) statusEl.textContent = `Back ${back}°`;
+    if (!activeButton || mode !== 'swing') return;
+
+    const result = detector.sample({ rate: { alpha: r.alpha, beta: r.beta, gamma: r.gamma }, ...readAccelerations(e) }, dt);
+    const phase = detector.phase;
+    if (phase === 'ready' && lastPhase === 'settling') {
+      setButtonLabel(activeButton, 'Swing!');
+      statusEl.textContent = 'Swing back, then forward through this point.';
+      sendProgress('ready', true);
+      if ('vibrate' in navigator) navigator.vibrate(15);
+    }
+    lastPhase = phase;
+
+    if (result?.type === 'wrist') {
+      cancelSwing(`Swing with your arms, not just your wrist (arc ${result.radius} cm).`);
+    } else if (result) {
+      const { type: _type, ...stroke } = result;
+      finishSwing();
+      hit(stroke);
+    } else if (phase === 'backswing' || phase === 'forward') {
+      setMeter(detector.livePower);
+      statusEl.textContent = `Back ${detector.liveBackswing}°`;
+      sendProgress('swinging');
     }
   });
 
-  function startHold(button: HTMLElement, e: PointerEvent): void {
-    e.preventDefault();
-    if (heldButton) return;
+  function startPull(button: HTMLElement, e: PointerEvent): void {
+    if (activeButton) return;
     button.setPointerCapture(e.pointerId);
-    heldButton = button;
+    activeButton = button;
     practice = button === practiceButton;
-    strokeSent = false;
     button.classList.add('held');
+    pullStartY = e.clientY;
+    pullPower = 0;
     setMeter(0);
-    if (mode === 'swing') {
-      detector.start();
-      statusEl.textContent = practice ? 'Practice: swing back, then forward!' : 'Swing back, then forward through this point!';
-    } else {
-      pullStartY = e.clientY;
-      pullPower = 0;
-      statusEl.textContent = practice ? 'Practice: pull down, then let go!' : 'Pull down, then let go!';
-    }
+    statusEl.textContent = practice ? 'Practice: pull down, then let go!' : 'Pull down, then let go!';
   }
 
   function movePull(e: PointerEvent): void {
-    if (!heldButton || mode !== 'slingshot') return;
+    if (!activeButton || mode !== 'slingshot') return;
     const pull = Math.max(0, e.clientY - pullStartY);
     const cfg = TUNING.slingshot;
     pullPower = powerFromValue(pull, cfg.minPullPx, cfg.maxPullPx, cfg.curveExponent);
-    heldButton.style.setProperty('--pull', `${Math.min(pull, cfg.maxPullPx) * 0.3}px`);
+    activeButton.style.setProperty('--pull', `${Math.min(pull, cfg.maxPullPx) * 0.3}px`);
     setMeter(pullPower);
   }
 
-  function endHold(cancelled: boolean): void {
-    if (!heldButton) return;
-    heldButton.classList.remove('held');
-    heldButton.style.setProperty('--pull', '0px');
-    heldButton = null;
-    if (mode === 'swing') {
-      const result = strokeSent ? null : detector.release();
-      if (result && !cancelled) hit(result.power, result.backswing, result.speed);
-      if (!strokeSent) {
-        statusEl.textContent =
-          detector.missReason === 'too_short'
-            ? 'No swing detected. Swing back a little further.'
-            : 'Swing forward through the start point before you let go.';
-      }
-    } else if (!cancelled && pullPower > 0) {
-      hit(pullPower, null, null);
+  function endPull(cancelled: boolean): void {
+    if (!activeButton || mode !== 'slingshot') return;
+    finishSwing();
+    if (!cancelled && pullPower > 0) {
+      hit({ power: pullPower, twist: null, backswing: null, speed: null, radius: null });
     } else {
       setMeter(0);
       statusEl.textContent = 'Pull further down to hit.';
@@ -182,13 +232,19 @@ export function initPlayScreen(send: (msg: ClientMessage) => void): { onJoined: 
   }
 
   for (const button of [swingButton, practiceButton]) {
-    button.addEventListener('pointerdown', (e) => startHold(button, e));
+    button.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (mode === 'swing') armSwing(button);
+      else startPull(button, e);
+    });
     button.addEventListener('pointermove', movePull);
-    button.addEventListener('pointerup', () => endHold(false));
-    button.addEventListener('pointercancel', () => endHold(true));
+    button.addEventListener('pointerup', () => endPull(false));
+    button.addEventListener('pointercancel', () => endPull(true));
   }
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState !== 'visible') endHold(true);
+    if (document.visibilityState === 'visible') return;
+    cancelSwing('Swing cancelled.');
+    endPull(true);
   });
 
   // ---------- Motion sensor and control mode ----------
@@ -229,6 +285,8 @@ export function initPlayScreen(send: (msg: ClientMessage) => void): { onJoined: 
   });
 
   function setMode(next: ControlMode): void {
+    cancelSwing('');
+    endPull(true);
     mode = next;
     saveMode(next);
     setMeter(0);
@@ -246,8 +304,8 @@ export function initPlayScreen(send: (msg: ClientMessage) => void): { onJoined: 
     practiceButton.hidden = !swingReady;
     motionPanel.hidden = swingReady;
     swingButton.classList.toggle('slingshot', mode === 'slingshot');
-    swingLabel.textContent = mode === 'swing' ? 'HOLD & SWING' : 'PULL DOWN & RELEASE';
     practiceButton.classList.toggle('slingshot', mode === 'slingshot');
+    if (!activeButton) idleLabels();
     modeToggle.textContent = mode === 'swing' ? 'Use touch controls instead' : 'Swing the phone instead';
 
     motionEnable.hidden = false;
@@ -270,8 +328,9 @@ export function initPlayScreen(send: (msg: ClientMessage) => void): { onJoined: 
 
   return {
     onJoined: () => sendAim(),
-    /** A new shot: aim straight at the cup again. */
+    /** A new shot: aim straight ahead again. */
     resetAim: () => {
+      cancelSwing('');
       angle = 0;
       renderAim();
       setMeter(0);
@@ -279,6 +338,19 @@ export function initPlayScreen(send: (msg: ClientMessage) => void): { onJoined: 
       sendAim();
     },
   };
+}
+
+/** Acceleration without gravity, and the gravity direction (both in phone coordinates). */
+function readAccelerations(e: DeviceMotionEvent): Pick<MotionSample, 'acceleration' | 'gravity'> {
+  const a = e.acceleration;
+  const g = e.accelerationIncludingGravity;
+  const acceleration = a && a.x !== null && a.y !== null && a.z !== null ? { x: a.x, y: a.y, z: a.z } : null;
+  const withGravity = g && g.x !== null && g.y !== null && g.z !== null ? { x: g.x, y: g.y, z: g.z } : null;
+  const gravity =
+    withGravity && acceleration
+      ? { x: withGravity.x - acceleration.x, y: withGravity.y - acceleration.y, z: withGravity.z - acceleration.z }
+      : withGravity;
+  return { acceleration, gravity };
 }
 
 function wrapDegrees(deg: number): number {

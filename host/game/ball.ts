@@ -37,3 +37,27 @@ export function applyRollingResistance(ball: RAPIER.RigidBody, dt: number): void
   const scale = Math.max(0, speed - TUNING.ball.rollingResistance * dt) / speed;
   ball.setLinvel({ x: v.x * scale, y: v.y, z: v.z * scale }, true);
 }
+
+/**
+ * How much the ball curves for a phone twisted by `twist` degrees at impact:
+ * a sideways pull, positive = to the left. Small twists do nothing.
+ */
+export function curveFromTwist(twist: number | null): number {
+  const b = TUNING.ball;
+  if (twist === null || Math.abs(twist) <= b.curveDeadzone) return 0;
+  const degrees = Math.min(b.curveMaxDegrees, Math.abs(twist) - b.curveDeadzone);
+  return Math.sign(twist) * degrees * b.curvePerDegree * b.curveSign;
+}
+
+/** Bends a rolling ball sideways. The pull grows with speed, so curves show most on long shots. Call every physics step. */
+export function applyCurve(ball: RAPIER.RigidBody, curve: number, dt: number): void {
+  if (curve === 0) return;
+  const v = ball.linvel();
+  const speed = Math.hypot(v.x, v.z);
+  if (speed < 0.05) return;
+  // Left of the direction of travel (seen from above, y up).
+  const leftX = v.z / speed;
+  const leftZ = -v.x / speed;
+  const push = curve * speed * speed * dt;
+  ball.setLinvel({ x: v.x + leftX * push, y: v.y, z: v.z + leftZ * push }, true);
+}

@@ -108,7 +108,7 @@ function renderReadout(playerId: string): void {
     ? ''
     : stroke.mode === 'slingshot'
       ? 'Touch controls'
-      : `Swing · back ${stroke.backswing}° · speed ${stroke.speed}°/s`;
+      : `Swing · back ${stroke.backswing}° · speed ${stroke.speed}°/s · arc ${stroke.radius ?? '?'} cm · twist ${stroke.twist ?? '?'}°`;
 }
 
 function flash(card: HTMLElement): void {
@@ -140,13 +140,15 @@ function connect(): void {
       if (playing) game?.onPhoneAim(msg.angle);
     } else if (msg.type === 'player_stroke') {
       const { type: _type, playerId, ...stroke } = msg;
-      if (playing) game?.onPhoneStroke(stroke.power, stroke.angle);
+      if (playing) game?.onPhoneStroke(stroke.power, stroke.angle, stroke.twist);
       readoutOf(playerId).stroke = stroke;
       renderReadout(playerId);
       const refs = cards.get(playerId);
       if (refs) flash(refs.card);
     } else if (msg.type === 'player_practice') {
-      if (playing) game?.onPhonePractice(msg.power, msg.angle);
+      if (playing) game?.onPhonePractice(msg.power, msg.angle, msg.twist);
+    } else if (msg.type === 'player_swing_progress') {
+      if (playing) game?.onPhoneSwingProgress(msg);
     }
   });
   ws.addEventListener('close', () => {
@@ -165,6 +167,7 @@ async function startGame(): Promise<void> {
     message: document.getElementById('hud-message')!,
     gauge: document.getElementById('gauge')!,
     gaugeFill: document.getElementById('gauge-fill')!,
+    gaugeKnob: document.getElementById('gauge-knob')!,
     gaugeLabel: document.getElementById('gauge-label')!,
   });
   game.onNewShot = () => send({ type: 'new_shot' });

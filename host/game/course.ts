@@ -13,6 +13,8 @@ export type HoleDef = {
   number: number;
   par: number;
   tee: Point;
+  /** Direction straight down the lane from the tee, in degrees (0 = +z, 90 = +x). */
+  teeYaw: number;
   cup: Point;
   /** Floor areas. The cup gap is cut out automatically. */
   floors: Rect[];
@@ -26,6 +28,7 @@ export const HOLE_1: HoleDef = {
   number: 1,
   par: 3,
   tee: { x: 0, z: 1 },
+  teeYaw: 0,
   cup: { x: 7, z: 8 },
   floors: [
     { x: 0, z: 4.5, w: 2, d: 9 }, // first lane, x -1..1, z 0..9

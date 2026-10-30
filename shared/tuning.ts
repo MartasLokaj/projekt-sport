@@ -21,26 +21,38 @@ export const TUNING = {
     sendIntervalMs: 50,
   },
 
-  // How "HOLD & SWING" turns a real swing into power. Angles in degrees, speeds in degrees per second.
-  // The big screen shows the measured backswing and speed after every swing, which helps to pick these numbers.
+  // How a swing of the phone turns into power. Angles in degrees, speeds in degrees per second.
+  // The big screen shows the measured numbers after every swing, which helps to pick these values.
   // Later sensitivity becomes a per-player setting (Phase 2b). Left and right hands already work the same.
   swing: {
+    /** After the tap, the phone must be this still (turning slower than this)... */
+    stillRate: 20,
+    /** ...for this long before the start point locks (milliseconds). */
+    stillMs: 150,
+    /** A tapped swing is cancelled if nothing happens for this long (milliseconds). */
+    armTimeoutMs: 8000,
     /** The phone must turn this far from the start point before it counts as a swing (ignores hand shake). */
-    startAngle: 3,
+    startAngle: 2,
     /** Turning back towards the start point faster than this starts the forward swing. */
-    reverseSpeed: 30,
-    /** Backswings shorter than this do not hit (the deadzone). */
-    minBackswing: 8,
+    reverseSpeed: 15,
+    /** Backswings shorter than this do not hit (the deadzone). Small = tiny taps are possible. */
+    minBackswing: 3,
     /** Backswing that gives the full backswing share of the power. */
     maxBackswing: 60,
     /** Speed at the start point that gives the full speed share of the power. */
     maxSpeed: 500,
     /** How much of the power comes from the backswing length (0..1). The rest comes from the speed. */
     backswingWeight: 0.6,
-    /** Shape of the power curve: 1 = straight line, below 1 = gentle swings give a bit more power. */
-    curveExponent: 1,
+    /** Shape of the power curve. Above 1 = small swings get finer control for short putts. */
+    curveExponent: 1.6,
     /** Multiplies the final power. 1 = normal, 1.2 = 20 % stronger. */
     sensitivity: 1,
+    /** The swing arc must be at least this wide (radius in metres): a wrist flick is about 0.1, an arm swing 0.5 or more. */
+    minArmRadius: 0.25,
+    /** Only check the arc for swings faster than this; very soft taps are too gentle to measure. */
+    armCheckMinSpeed: 100,
+    /** How often the phone reports the live swing to the big screen (milliseconds). */
+    progressIntervalMs: 50,
     /** How long to wait for the first motion sensor reading before using touch controls (milliseconds). */
     sensorProbeMs: 1000,
   },
@@ -48,7 +60,7 @@ export const TUNING = {
   ball: {
     radius: 0.1,
     /** Ball speed for a 0 % and a 100 % hit (units per second). */
-    minShotSpeed: 0.3,
+    minShotSpeed: 0,
     maxShotSpeed: 9,
     /** Shape of power -> speed. 0.5 makes the rolling distance grow evenly with power. */
     shotCurveExponent: 0.5,
@@ -59,6 +71,14 @@ export const TUNING = {
     angularDamping: 0.3,
     /** How bouncy the ball is (combined with the wall bounce). */
     bounce: 0.4,
+    /** Curve: how strongly a phone turned at impact bends the ball's path (per degree of turn). */
+    curvePerDegree: 0.005,
+    /** Turns smaller than this (degrees) do not curve the ball. */
+    curveDeadzone: 3,
+    /** Turns bigger than this (degrees) curve no more than this. */
+    curveMaxDegrees: 30,
+    /** Set to -1 if the ball curves the wrong way. */
+    curveSign: 1,
     /** The ball counts as stopped below this speed... */
     restSpeed: 0.06,
     /** ...for this long (milliseconds). */
@@ -98,19 +118,20 @@ export const TUNING = {
     smoothing: 3,
   },
 
-  practice: {
-    /** How far ahead the practice swing shows the ball's path (seconds of rolling). Lower = harder. */
-    previewSeconds: 6,
-    /** Distance between the dots of the predicted path. */
-    dotSpacing: 0.18,
+  gauge: {
+    /** Power at the three marks of the swing gauge (percent). */
+    marks: [33, 66, 100],
   },
 
   aimLine: {
-    length: 2.2,
-    dots: 12,
+    /** The white aim line in front of the ball. */
+    length: 2.5,
+    width: 0.05,
+    /** The distance marker ("about this far") simulates this many seconds of rolling at most. */
+    previewSeconds: 6,
     /** Arrow keys on the Mac turn the aim this fast (degrees per second). */
     keyboardDegreesPerSecond: 70,
-    /** Holding Space on the Mac charges a hit from 0 to 100 % in this time (seconds). */
+    /** Holding Space (hit) or P (practice) on the Mac charges from 0 to 100 % in this time (seconds). */
     keyboardChargeTime: 1.5,
   },
 

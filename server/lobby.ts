@@ -83,6 +83,20 @@ export class Lobby {
         if (seat && stroke) this.sendToHosts({ type: 'player_practice', playerId: seat.id, ...stroke });
         return;
       }
+      case 'swing_progress': {
+        const seat = this.seatOf(ws);
+        if (!seat || !Number.isFinite(msg.power) || !Number.isFinite(msg.backswing)) return;
+        const phase = msg.phase === 'ready' || msg.phase === 'swinging' ? msg.phase : 'cancelled';
+        this.sendToHosts({
+          type: 'player_swing_progress',
+          playerId: seat.id,
+          practice: msg.practice === true,
+          phase,
+          backswing: clamp(msg.backswing, 0, 180),
+          power: clamp(msg.power, 0, 100),
+        });
+        return;
+      }
       case 'new_shot':
         if (!this.hosts.has(ws)) return;
         for (const seat of this.seats.values()) if (seat.socket) send(seat.socket, { type: 'aim_reset' });
@@ -172,8 +186,10 @@ function cleanStroke(msg: Stroke): Stroke | null {
     power: clamp(msg.power, 0, 100),
     angle: clamp(msg.angle, -180, 180),
     mode: msg.mode === 'slingshot' ? 'slingshot' : 'swing',
+    twist: Number.isFinite(msg.twist) ? clamp(msg.twist as number, -90, 90) : null,
     backswing: Number.isFinite(msg.backswing) ? msg.backswing : null,
     speed: Number.isFinite(msg.speed) ? msg.speed : null,
+    radius: Number.isFinite(msg.radius) ? msg.radius : null,
   };
 }
 
