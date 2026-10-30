@@ -25,6 +25,32 @@
         border: none; border-radius: 24px; padding: 18px 48px; box-shadow: 0 8px 0 #2b8a00; cursor: pointer;
       }
       #start:active { transform: translateY(6px); box-shadow: 0 2px 0 #2b8a00; }
+      #start:disabled { opacity: 0.5; cursor: default; }
+      #hud-scores {
+        position: absolute; top: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px;
+      }
+      .score-row {
+        display: flex; align-items: center; gap: 10px; background: rgba(255, 255, 255, 0.88);
+        border-radius: 14px; padding: 6px 14px; font-size: 22px; font-weight: 800;
+      }
+      .score-row.current { outline: 4px solid #ffd23f; }
+      .score-row.done { opacity: 0.6; }
+      .score-dot { width: 20px; height: 20px; border-radius: 50%; flex: 0 0 auto; border: 3px solid rgba(0, 0, 0, 0.12); }
+      .score-name { min-width: 120px; }
+      .score-value { margin-left: auto; }
+      #scoreboard {
+        position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+        background: rgba(20, 40, 60, 0.45);
+      }
+      #scoreboard-card {
+        background: #ffffff; border-radius: 32px; padding: 32px 48px; min-width: 420px; text-align: center;
+        box-shadow: 0 14px 0 rgba(0, 0, 0, 0.15);
+      }
+      #scoreboard-card h2 { margin: 0 0 20px; font-size: 44px; }
+      .board-row { display: flex; align-items: center; gap: 14px; font-size: 32px; font-weight: 800; padding: 8px 0; }
+      .board-place { width: 44px; text-align: right; color: var(--soft); }
+      .board-name { flex: 1; text-align: left; }
+      #scoreboard-card p { margin: 20px 0 0; font-size: 20px; color: var(--soft); }
       #game-screen { position: fixed; inset: 0; }
       #game-canvas { position: absolute; inset: 0; }
       #hud-info, #hud-keys {
@@ -122,7 +148,7 @@
       The first time, the phone shows a security warning: tap "Show Details" / "Advanced" and continue to the website.
       If the Mac asks whether "node" may accept incoming connections, click "Allow".
     </div>
-    <button id="start" type="button">Start practice (Enter)</button>
+    <button id="start" type="button" disabled>Start game (Enter)</button>
     </div>
 
     <div id="game-screen" hidden>
@@ -138,8 +164,16 @@
           <div id="gauge-knob"></div>
         </div>
       </div>
+      <div id="hud-scores"></div>
       <div id="hud-message" hidden></div>
-      <div id="hud-keys">Mac keys: ← → aim · hold P for a practice swing · hold Space to hit · R reset ball · Esc back to lobby</div>
+      <div id="hud-keys">Mac keys: ← → aim · hold P for a practice swing · hold Space to hit · Esc back to lobby</div>
+      <div id="scoreboard" hidden>
+        <div id="scoreboard-card">
+          <h2>Hole complete!</h2>
+          <div id="scoreboard-rows"></div>
+          <p>Enter: play again · Esc: back to the lobby</p>
+        </div>
+      </div>
     </div>
     <script type="module" src="/host/main.ts"></script>
   </body>

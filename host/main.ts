@@ -2,6 +2,7 @@ import {
   MAX_PLAYERS,
   WS_PATH,
   type ClientMessage,
+  type GameState,
   type PlayerInfo,
   type ServerMessage,
   type Stroke,
@@ -10,7 +11,8 @@ import { TUNING } from '../shared/tuning.ts';
 import { Game } from './game/Game.ts';
 
 // The big screen. The lobby shows the QR code and the players who joined from their phones,
-// with a live readout of each phone's aim and last hit. "Start practice" opens the graybox hole.
+// with a live readout of each phone's aim and last hit. "Start game" asks the server to start
+// a match; the server's game_state then switches between lobby, playing and the scoreboard.
 
 const qrEl = document.getElementById('qr') as HTMLImageElement;
 const joinUrlEl = document.getElementById('join-url')!;
@@ -21,8 +23,15 @@ const lobbyScreen = document.getElementById('lobby-screen')!;
 const gameScreen = document.getElementById('game-screen')!;
 const startButton = document.getElementById('start') as HTMLButtonElement;
 
+const scoresEl = document.getElementById('hud-scores')!;
+const scoreboardEl = document.getElementById('scoreboard')!;
+const scoreboardRows = document.getElementById('scoreboard-rows')!;
+
 let game: Game | null = null;
+let gameLoading: Promise<Game> | null = null;
 let playing = false;
+let players: PlayerInfo[] = [];
+let lastState: GameState | null = null;
 
 type Readout = { angle: number; stroke: Stroke | null };
 type CardRefs = { card: HTMLElement; arrow: HTMLElement; aimText: HTMLElement; powerFill: HTMLElement; powerText: HTMLElement; detail: HTMLElement };
@@ -133,7 +142,12 @@ function connect(): void {
   ws.addEventListener('message', (event) => {
     const msg = JSON.parse(event.data) as ServerMessage;
     if (msg.type === 'host_info') showHostInfo(msg);
-    else if (msg.type === 'lobby_state') showPlayers(msg.players);
+    else if (msg.type === 'lobby_state') {
+      players = msg.players;
+      showPlayers(players);
+      startButton.disabled = !players.some((p) => p.connected);
+      game?.setPlayers(players);
+    } else if (msg.type === 'game_state') void onGameState(msg);
     else if (msg.type === 'player_aim') {
       readoutOf(msg.playerId).angle = msg.angle;
       renderReadout(msg.playerId);
@@ -159,38 +173,98 @@ function connect(): void {
 
 // ---------- Lobby <-> game ----------
 
-async function startGame(): Promise<void> {
-  if (playing) return;
-  startButton.disabled = true;
-  game ??= await Game.create(document.getElementById('game-canvas')!, {
+function loadGame(): Promise<Game> {
+  gameLoading ??= Game.create(document.getElementById('game-canvas')!, {
     info: document.getElementById('hud-info')!,
     message: document.getElementById('hud-message')!,
     gauge: document.getElementById('gauge')!,
     gaugeFill: document.getElementById('gauge-fill')!,
     gaugeKnob: document.getElementById('gauge-knob')!,
     gaugeLabel: document.getElementById('gauge-label')!,
+  }).then((created) => {
+    created.onBallResult = (result) => send({ type: 'ball_result', result });
+    created.onLocalStroke = () => send({ type: 'host_stroke' });
+    if (import.meta.env.DEV) Object.assign(window, { game: created }); // for debugging in the browser console
+    game = created;
+    return created;
   });
-  game.onNewShot = () => send({ type: 'new_shot' });
-  if (import.meta.env.DEV) Object.assign(window, { game }); // for debugging in the browser console
-  startButton.disabled = false;
-  lobbyScreen.hidden = true;
-  gameScreen.hidden = false;
-  playing = true;
-  game.start();
+  return gameLoading;
 }
 
-function backToLobby(): void {
-  if (!playing) return;
-  playing = false;
-  game?.stop();
-  gameScreen.hidden = true;
-  lobbyScreen.hidden = false;
+async function onGameState(state: GameState): Promise<void> {
+  const previous = lastState;
+  lastState = state;
+  if (state.phase === 'lobby') {
+    game?.syncState(state); // so the next match starts from the tee
+    if (playing) {
+      playing = false;
+      game?.stop();
+      gameScreen.hidden = true;
+      lobbyScreen.hidden = false;
+    }
+    return;
+  }
+  const g = await loadGame();
+  if (lastState !== state) return; // a newer state arrived while loading
+  g.setPlayers(players);
+  if (!playing) {
+    playing = true;
+    lobbyScreen.hidden = true;
+    gameScreen.hidden = false;
+    g.start();
+  }
+  // Tell everyone when a ball was picked up after too many strokes.
+  for (const entry of state.players) {
+    const before = previous?.players.find((p) => p.id === entry.id);
+    if (entry.done === 'picked_up' && before?.done !== 'picked_up') {
+      g.announce(`${nameOf(entry.id)} picks up\nScore ${entry.score}`);
+    }
+  }
+  g.syncState(state);
+  renderScores(state);
 }
 
-startButton.addEventListener('click', () => void startGame());
+function nameOf(id: string): string {
+  return players.find((p) => p.id === id)?.name ?? 'Player';
+}
+
+function colourOf(id: string): string {
+  return players.find((p) => p.id === id)?.colour ?? '#cccccc';
+}
+
+/** Compact scores during the hole, and the big scoreboard when everyone has finished. */
+function renderScores(state: GameState): void {
+  scoresEl.replaceChildren();
+  for (const entry of state.players) {
+    const row = el('div', 'score-row');
+    if (entry.id === state.current) row.classList.add('current');
+    if (entry.done) row.classList.add('done');
+    const dot = el('span', 'score-dot');
+    dot.style.background = colourOf(entry.id);
+    const status = entry.done === 'holed' ? '⛳' : entry.done === 'picked_up' ? '✋' : '';
+    row.append(dot, el('span', 'score-name', nameOf(entry.id)), el('span', 'score-value', `${entry.strokes} ${status}`));
+    scoresEl.append(row);
+  }
+
+  scoreboardEl.hidden = state.phase !== 'hole_end';
+  if (state.phase !== 'hole_end') return;
+  scoreboardRows.replaceChildren();
+  const ranked = [...state.players].sort((a, b) => a.score - b.score);
+  ranked.forEach((entry, i) => {
+    const place = i > 0 && entry.score === ranked[i - 1].score ? '' : `${i + 1}.`;
+    const row = el('div', 'board-row');
+    const dot = el('span', 'score-dot');
+    dot.style.background = colourOf(entry.id);
+    row.append(el('span', 'board-place', place), dot, el('span', 'board-name', nameOf(entry.id)), el('span', 'board-score', String(entry.score)));
+    scoreboardRows.append(row);
+  });
+}
+
+startButton.addEventListener('click', () => send({ type: 'start_game' }));
 window.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !playing) void startGame();
-  else if (e.key === 'Escape') backToLobby();
+  const phase = lastState?.phase ?? 'lobby';
+  if (e.key === 'Enter' && phase !== 'playing') send({ type: 'start_game' });
+  else if (e.key === 'Escape' && phase !== 'lobby') send({ type: 'end_game' });
 });
 
 showPlayers([]);

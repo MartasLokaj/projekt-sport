@@ -18,5 +18,6 @@ Read SPEC.md before starting any work. It is the source of truth for what we are
 - `npm run check` – TypeScript type check.
 - Page code (host/, controller/) reloads by itself. Server code (server/) needs a restart: Ctrl+C, then `npm run dev`. Every restart makes a new room code.
 - The self-signed certificate is created in `certs/` (not in git); delete that folder to force a new one.
+- Server: `server/lobby.ts` (seats, room code, message routing), `server/match.ts` (turns, strokes, scores).
 - Tuning values: `shared/tuning.ts` (aim, swing detection, ball curve, gauge, slingshot). WebSocket messages: `shared/protocol.ts`. Swing detection logic: `controller/swing.ts`.
-- Game (host): `host/game/Game.ts` (rules, camera, aim line), `host/game/course.ts` (graybox holes), `host/game/ball.ts` (ball physics), `host/game/preview.ts` (distance marker estimate). Mac keys in the game: arrows aim, hold P for a practice swing, hold Space to hit, R resets the ball, Esc back to lobby. In dev mode `window.game` is available in the browser console.
+- Game (host): `host/game/Game.ts` (rules, camera, aim line), `host/game/course.ts` (graybox holes), `host/game/ball.ts` (ball physics), `host/game/preview.ts` (distance marker estimate). Mac keys: Enter starts the game / plays again, Esc goes back to the lobby; in the game arrows aim, hold P for a practice swing, hold Space to hit (for the current player). In dev mode `window.game` is available in the browser console.

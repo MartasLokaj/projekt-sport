@@ -11,9 +11,11 @@ import {
   type Stroke,
 } from '../shared/protocol.ts';
 import { TUNING } from '../shared/tuning.ts';
+import { Match } from './match.ts';
 
-// The lobby owns the room code and the player seats. A seat is kept while
+// The lobby owns the room code, the player seats and the match. A seat is kept while
 // the server runs, so a phone that drops (screen lock, Wi-Fi blip) gets it back.
+// During a match only the current player's aim, swings and strokes reach the host.
 
 const ROOM_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I or O, they look like 1 and 0
 
@@ -33,6 +35,8 @@ export class Lobby {
   private hosts = new Set<WebSocket>();
   /** Phones that know the right room code (joined or looking at the join form). */
   private phones = new Set<WebSocket>();
+  private match = new Match();
+  private readonly isConnected = (id: string): boolean => this.seats.get(id)?.socket != null;
 
   constructor(
     readonly room: string,
@@ -45,6 +49,7 @@ export class Lobby {
         this.hosts.add(ws);
         send(ws, this.hostInfo);
         send(ws, this.lobbyState());
+        send(ws, this.gameState());
         return;
       case 'rejoin':
         if (!this.checkRoom(ws, msg.room)) return;
@@ -62,30 +67,34 @@ export class Lobby {
         return;
       case 'aim': {
         const seat = this.seatOf(ws);
-        if (!seat || !Number.isFinite(msg.angle)) return;
+        if (!seat || !this.mayAct(seat) || !Number.isFinite(msg.angle)) return;
         this.sendToHosts({ type: 'player_aim', playerId: seat.id, angle: clamp(msg.angle, -180, 180) });
         return;
       }
       case 'stroke': {
         const seat = this.seatOf(ws);
         const stroke = cleanStroke(msg);
-        if (!seat || !stroke) return;
+        if (!seat || !stroke || !this.mayAct(seat)) return;
         // Safety net for "one swing = one stroke", even if a phone sends twice.
         const now = Date.now();
         if (now - seat.lastStrokeAt < TUNING.network.minStrokeIntervalMs) return;
         seat.lastStrokeAt = now;
         this.sendToHosts({ type: 'player_stroke', playerId: seat.id, ...stroke });
+        if (this.match.playing) {
+          this.match.stroke(seat.id);
+          this.broadcastGame();
+        }
         return;
       }
       case 'practice': {
         const seat = this.seatOf(ws);
         const stroke = cleanStroke(msg);
-        if (seat && stroke) this.sendToHosts({ type: 'player_practice', playerId: seat.id, ...stroke });
+        if (seat && stroke && this.mayAct(seat)) this.sendToHosts({ type: 'player_practice', playerId: seat.id, ...stroke });
         return;
       }
       case 'swing_progress': {
         const seat = this.seatOf(ws);
-        if (!seat || !Number.isFinite(msg.power) || !Number.isFinite(msg.backswing)) return;
+        if (!seat || !this.mayAct(seat) || !Number.isFinite(msg.power) || !Number.isFinite(msg.backswing)) return;
         const phase = msg.phase === 'ready' || msg.phase === 'swinging' ? msg.phase : 'cancelled';
         this.sendToHosts({
           type: 'player_swing_progress',
@@ -97,11 +106,53 @@ export class Lobby {
         });
         return;
       }
-      case 'new_shot':
-        if (!this.hosts.has(ws)) return;
-        for (const seat of this.seats.values()) if (seat.socket) send(seat.socket, { type: 'aim_reset' });
+      case 'start_game': {
+        const fromLeader = this.seatOf(ws)?.id === this.leaderId();
+        if (!this.hosts.has(ws) && !fromLeader) return;
+        if (this.match.playing) return;
+        const players = [...this.seats.values()].filter((s) => s.socket).map((s) => s.id);
+        if (players.length === 0) return;
+        this.match.start(players, this.isConnected);
+        this.broadcastGame();
         return;
+      }
+      case 'end_game':
+        if (!this.hosts.has(ws)) return;
+        this.match.end();
+        this.broadcastGame();
+        return;
+      case 'ball_result':
+        if (!this.hosts.has(ws) || !['rest', 'holed', 'out'].includes(msg.result)) return;
+        this.match.ballResult(msg.result, this.isConnected);
+        this.broadcastGame();
+        return;
+      case 'host_stroke': {
+        const current = this.match.currentPlayer;
+        if (!this.hosts.has(ws) || current === null) return;
+        this.match.stroke(current);
+        this.broadcastGame();
+        return;
+      }
     }
+  }
+
+  /** In the lobby every phone may try its controls; during a match only the current player. */
+  private mayAct(seat: Seat): boolean {
+    return !this.match.playing || this.match.canAct(seat.id);
+  }
+
+  private leaderId(): string | null {
+    for (const seat of this.seats.values()) if (seat.socket) return seat.id;
+    return null;
+  }
+
+  private gameState(): ServerMessage {
+    return { type: 'game_state', ...this.match.state(this.leaderId()) };
+  }
+
+  private broadcastGame(): void {
+    const msg = this.gameState();
+    for (const ws of [...this.hosts, ...this.phones]) send(ws, msg);
   }
 
   private seatOf(ws: WebSocket): Seat | undefined {
@@ -120,6 +171,8 @@ export class Lobby {
       if (seat.socket === ws) {
         seat.socket = null;
         this.broadcastLobby();
+        this.match.skipIfAway(this.isConnected);
+        this.broadcastGame();
       }
     }
   }
@@ -158,6 +211,7 @@ export class Lobby {
     seat.socket = ws;
     send(ws, { type: 'joined', player: toInfo(seat) });
     this.broadcastLobby();
+    this.broadcastGame(); // the leader may have changed
   }
 
   private checkRoom(ws: WebSocket, room: unknown): boolean {

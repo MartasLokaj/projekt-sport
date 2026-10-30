@@ -11,7 +11,16 @@ const MODE_KEY = 'minigolf.controlMode';
 type MotionState = 'checking' | 'ready' | 'needs_permission' | 'denied' | 'unavailable';
 type MotionPermissionApi = { requestPermission?: () => Promise<'granted' | 'denied'> };
 
-export function initPlayScreen(send: (msg: ClientMessage) => void): { onJoined: () => void; resetAim: () => void } {
+export type PlayScreen = {
+  onJoined: () => void;
+  /** A new shot: aim straight ahead again. */
+  resetAim: () => void;
+  /** Stops a tapped swing (e.g. the turn moved on). */
+  cancel: () => void;
+  showStatus: (text: string) => void;
+};
+
+export function initPlayScreen(send: (msg: ClientMessage) => void): PlayScreen {
   const aimPad = document.getElementById('aim-pad')!;
   const aimArrow = document.getElementById('aim-arrow')!;
   const aimValue = document.getElementById('aim-value')!;
@@ -328,7 +337,6 @@ export function initPlayScreen(send: (msg: ClientMessage) => void): { onJoined: 
 
   return {
     onJoined: () => sendAim(),
-    /** A new shot: aim straight ahead again. */
     resetAim: () => {
       cancelSwing('');
       angle = 0;
@@ -336,6 +344,13 @@ export function initPlayScreen(send: (msg: ClientMessage) => void): { onJoined: 
       setMeter(0);
       statusEl.textContent = '';
       sendAim();
+    },
+    cancel: () => {
+      cancelSwing('');
+      endPull(true);
+    },
+    showStatus: (text) => {
+      statusEl.textContent = text;
     },
   };
 }

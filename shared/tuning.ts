@@ -57,6 +57,15 @@ export const TUNING = {
     sensorProbeMs: 1000,
   },
 
+  rules: {
+    /** After this many strokes without holing out, the ball is picked up... */
+    maxStrokes: 6,
+    /** ...and the player scores this. */
+    pickedUpScore: 7,
+    /** How long the hole-in celebration shows before the next turn (milliseconds). */
+    holedPauseMs: 2500,
+  },
+
   ball: {
     radius: 0.1,
     /** Ball speed for a 0 % and a 100 % hit (units per second). */

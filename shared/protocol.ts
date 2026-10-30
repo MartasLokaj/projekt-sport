@@ -40,6 +40,22 @@ export type SwingProgress = {
   power: number;
 };
 
+/** What happened to the ball after a stroke, reported by the host. */
+export type BallResult = 'rest' | 'holed' | 'out';
+
+/** The match, decided by the server. */
+export type GameState = {
+  phase: 'lobby' | 'playing' | 'hole_end';
+  /** The player who may start the game from their phone (the first connected one). */
+  leaderId: string | null;
+  /** Whose turn it is (null when nobody's). */
+  current: string | null;
+  /** Goes up by one at every new turn, so pages can tell a new turn from a repeat. */
+  turn: number;
+  /** Players taking part, in turn order. done: holed out or picked up after too many strokes. */
+  players: { id: string; strokes: number; done: 'holed' | 'picked_up' | null; score: number }[];
+};
+
 /** Why the server refused a phone. */
 export type JoinError =
   | 'wrong_room' // a mistyped code, or an old QR code from a previous game
@@ -61,8 +77,14 @@ export type ClientMessage =
   /** A practice swing: measured like a stroke, but the ball does not move. */
   | ({ type: 'practice' } & Stroke)
   | ({ type: 'swing_progress' } & SwingProgress)
-  /** From the host: a new shot starts, so the phones reset their aim to straight ahead. */
-  | { type: 'new_shot' };
+  /** From the host, or from the leader's phone. */
+  | { type: 'start_game' }
+  /** From the host: back to the lobby. */
+  | { type: 'end_game' }
+  /** From the host: the current player's ball stopped, dropped in or went out of bounds. */
+  | { type: 'ball_result'; result: BallResult }
+  /** From the host: the current player hit with the Mac keyboard (for testing without a phone). */
+  | { type: 'host_stroke' };
 
 /** Sent by the server. */
 export type ServerMessage =
@@ -76,5 +98,5 @@ export type ServerMessage =
   | ({ type: 'player_stroke'; playerId: string } & Stroke)
   | ({ type: 'player_practice'; playerId: string } & Stroke)
   | ({ type: 'player_swing_progress'; playerId: string } & SwingProgress)
-  /** To the phones: set the aim back to 0 (straight ahead). */
-  | { type: 'aim_reset' };
+  /** To everyone, whenever the match changes. */
+  | ({ type: 'game_state' } & GameState);

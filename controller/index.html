@@ -78,6 +78,13 @@
       #play-status { margin: 0 auto; min-height: 1.4em; font-weight: 800; color: var(--ink); }
       #screen-play > .link { margin: 0 auto; }
       #wake-tip { margin: 0 auto; font-size: 15px; }
+      #screen-play { position: relative; }
+      #turn-overlay {
+        position: absolute; left: 0; right: 0; bottom: 0; top: calc(max(24px, env(safe-area-inset-top)) + 52px);
+        display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+        padding: 24px; background: linear-gradient(#d9f2ff, #b8e6ff); border-radius: 28px 28px 0 0;
+      }
+      #turn-overlay[hidden] { display: none; }
       #reconnecting {
         position: fixed; top: 0; left: 0; right: 0; padding: max(10px, env(safe-area-inset-top)) 10px 10px;
         background: #ff5a5f; color: #ffffff; font-size: 18px; font-weight: 800; text-align: center;
@@ -142,6 +149,13 @@
       <p id="play-status"></p>
       <button class="link" id="mode-toggle" type="button">Use touch controls instead</button>
       <p id="wake-tip" hidden>Tip: this phone may lock its screen during the game. You can turn off Auto-Lock in Settings.</p>
+
+      <div id="turn-overlay" hidden>
+        <h1 id="turn-title"></h1>
+        <p id="turn-text"></p>
+        <button class="big" id="turn-button" type="button" hidden></button>
+        <button class="link" id="turn-edit" type="button" hidden>Change name or colour</button>
+      </div>
     </section>
 
     <script type="module" src="/controller/main.ts"></script>

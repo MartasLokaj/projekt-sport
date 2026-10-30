@@ -1,19 +1,35 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
-import type { SwingProgress } from '../../shared/protocol.ts';
+import type { BallResult, GameState, PlayerInfo, SwingProgress } from '../../shared/protocol.ts';
 import { TUNING } from '../../shared/tuning.ts';
 import { applyCurve, applyRollingResistance, createBall, curveFromTwist, shotSpeed } from './ball.ts';
 import { buildCourse, HOLE_1, isInCup, type HoleDef } from './course.ts';
 import { DistancePreview } from './preview.ts';
 
-// Phase 2, step A: one graybox hole for one player. The host owns the ball physics.
-// The phone's aim, live swing, practice swings and strokes come in through the onPhone… methods.
+// Phase 2: one graybox hole for 1–4 players. The host owns the ball physics; the server decides
+// whose turn it is and counts strokes (see syncState). Each player has their own ball: the current
+// player's ball is the physical one, the others wait as see-through "ghost" balls.
+// The current player's aim, live swing, practice swings and strokes come in through the onPhone… methods.
 // Every shot starts aimed straight ahead, where the camera looks (at the tee: down the lane).
 // The phone's aim angle turns it from there. A white line shows the aim; while the player swings,
 // the gauge on the left climbs and the white line stretches to show roughly how far the ball would roll.
-// Mac keyboard for testing: arrow keys aim, hold P for a practice swing, hold Space to hit, R resets the ball.
+// Mac keyboard for testing: arrow keys aim, hold P for a practice swing, hold Space to hit.
 
-type State = 'aiming' | 'rolling' | 'holed';
+/** waiting = between turns (nobody may hit). */
+type State = 'waiting' | 'aiming' | 'rolling' | 'holed';
+
+type PlayerBall = {
+  name: string;
+  colour: string;
+  strokes: number;
+  done: boolean;
+  /** Taking part in the current match (people who joined later only watch). */
+  inMatch: boolean;
+  /** Where the ball rests (null = still on the tee) and which way the camera faced then. */
+  pos: THREE.Vector3 | null;
+  yaw: number | null;
+  ghost: THREE.Mesh;
+};
 type SwingKind = 'hit' | 'practice';
 
 export type GameHud = {
@@ -43,8 +59,12 @@ export class Game {
   private readonly clock = new THREE.Clock();
 
   private hole: HoleDef = HOLE_1;
-  private state: State = 'aiming';
-  private strokes = 0;
+  private state: State = 'waiting';
+  private readonly players = new Map<string, PlayerBall>();
+  /** Whose ball is on the course right now. */
+  private active: string | null = null;
+  private lastTurn = -1;
+  private lastPhase: GameState['phase'] = 'lobby';
   private lastRest = new THREE.Vector3();
   private restTime = 0;
   private stepAccumulator = 0;
@@ -67,8 +87,10 @@ export class Game {
   private estimate: number | null = null;
   private estimateCache = { power: -1, curve: 0, distance: 0 };
 
-  /** Called at the start of every shot, so the phones can reset their aim. */
-  onNewShot: (() => void) | null = null;
+  /** Called when the current player's ball stopped, dropped in or went out of bounds. */
+  onBallResult: ((result: BallResult) => void) | null = null;
+  /** Called when the Mac keyboard hits (testing without a phone). */
+  onLocalStroke: (() => void) | null = null;
 
   private readonly cameraTarget = new THREE.Vector3();
   private readonly followDir = new THREE.Vector3(0, 0, 1);
@@ -126,8 +148,9 @@ export class Game {
     this.aimLine.add(this.aimStripe);
     this.scene.add(this.aimLine);
 
-    this.resetBall(new THREE.Vector3(this.hole.tee.x, 0, this.hole.tee.z));
-    this.beginShot(true);
+    this.resetBall(this.teePosition());
+    this.baseYaw = THREE.MathUtils.degToRad(this.hole.teeYaw);
+    this.followDir.set(Math.sin(this.baseYaw), 0, Math.cos(this.baseYaw));
     this.snapCamera();
   }
 
@@ -145,6 +168,90 @@ export class Game {
     window.removeEventListener('resize', this.onResize);
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
+  }
+
+  /** Names and colours of everyone who joined (from the lobby). */
+  setPlayers(list: PlayerInfo[]): void {
+    for (const info of list) {
+      let player = this.players.get(info.id);
+      if (!player) {
+        const ghost = new THREE.Mesh(
+          new THREE.SphereGeometry(TUNING.ball.radius, 24, 12),
+          new THREE.MeshStandardMaterial({ transparent: true, opacity: 0.55, roughness: 0.4 }),
+        );
+        ghost.visible = false;
+        this.scene.add(ghost);
+        player = { name: info.name, colour: info.colour, strokes: 0, done: false, inMatch: false, pos: null, yaw: null, ghost };
+        this.players.set(info.id, player);
+      }
+      player.name = info.name;
+      player.colour = info.colour;
+      (player.ghost.material as THREE.MeshStandardMaterial).color.set(info.colour);
+    }
+    this.updateGhosts();
+    this.updateInfo();
+  }
+
+  /** The match changed on the server: new round, new turn, strokes or finished players. */
+  syncState(game: GameState): void {
+    if (game.phase === 'playing' && this.lastPhase !== 'playing') this.resetRound();
+    this.lastPhase = game.phase;
+    for (const player of this.players.values()) player.inMatch = false;
+    for (const entry of game.players) {
+      const player = this.players.get(entry.id);
+      if (!player) continue;
+      player.inMatch = true;
+      player.strokes = entry.strokes;
+      player.done = entry.done !== null;
+    }
+    if (game.phase === 'playing' && game.turn !== this.lastTurn && game.current) {
+      this.lastTurn = game.turn;
+      this.startTurn(game.current);
+    } else if (game.phase !== 'playing') {
+      this.lastTurn = game.turn;
+      this.state = 'waiting';
+      this.active = null;
+    }
+    this.updateGhosts();
+    this.updateInfo();
+  }
+
+  /** Everyone back to the tee, before a new round. */
+  private resetRound(): void {
+    for (const player of this.players.values()) {
+      player.pos = null;
+      player.yaw = null;
+      player.done = false;
+      player.strokes = 0;
+    }
+    this.active = null;
+    this.state = 'waiting';
+    this.resetBall(this.teePosition());
+    this.updateGhosts();
+  }
+
+  private startTurn(id: string): void {
+    const player = this.players.get(id);
+    if (!player) return;
+    this.active = id;
+    this.resetBall(player.pos ?? this.teePosition());
+    (this.ballMesh.material as THREE.MeshStandardMaterial).color.set(player.colour);
+    this.ballMesh.visible = true;
+    this.beginShot(player.yaw ?? THREE.MathUtils.degToRad(this.hole.teeYaw));
+  }
+
+  private teePosition(): THREE.Vector3 {
+    return new THREE.Vector3(this.hole.tee.x, 0, this.hole.tee.z);
+  }
+
+  /** See-through balls for everyone who is not playing right now and has not finished. */
+  private updateGhosts(): void {
+    for (const [id, player] of this.players) {
+      const show = player.inMatch && this.lastPhase === 'playing' && id !== this.active && !player.done;
+      player.ghost.visible = show;
+      const at = player.pos ?? this.teePosition();
+      player.ghost.position.set(at.x, TUNING.ball.radius, at.z);
+    }
   }
 
   onPhoneAim(angle: number): void {
@@ -177,17 +284,29 @@ export class Game {
 
   // ---------- Rules ----------
 
-  /** A new shot: aim straight ahead (down the lane at the tee, otherwise where the camera looks). */
-  private beginShot(fromTee = false): void {
+  /** A new shot, aimed straight ahead along `yaw` (down the lane at the tee, else where the camera last looked). */
+  private beginShot(yaw: number): void {
     this.state = 'aiming';
-    this.baseYaw = fromTee ? THREE.MathUtils.degToRad(this.hole.teeYaw) : this.cameraYaw();
+    this.baseYaw = yaw;
     this.phoneAngle = 0;
     this.keyboardOffset = 0;
     this.practiceResult = null;
     this.estimate = null;
     this.hud.gauge.hidden = true;
-    this.onNewShot?.();
     this.updateInfo();
+  }
+
+  /** The ball is done moving: remember where it is and tell the server. */
+  private finishTurn(result: BallResult): void {
+    const player = this.active ? this.players.get(this.active) : undefined;
+    if (player && result !== 'holed') {
+      const p = this.ball.translation();
+      player.pos = new THREE.Vector3(p.x, 0, p.z);
+      player.yaw = this.cameraYaw();
+    }
+    this.state = 'waiting';
+    this.hud.gauge.hidden = true;
+    this.onBallResult?.(result);
   }
 
   private practice(power: number, curve: number): void {
@@ -211,12 +330,10 @@ export class Game {
     this.ball.setLinvel({ x: Math.sin(yaw) * speed, y: 0, z: Math.cos(yaw) * speed }, true);
     this.followDir.set(Math.sin(yaw), 0, Math.cos(yaw));
     this.curve = curve;
-    this.strokes++;
     this.state = 'rolling';
     this.restTime = 0;
     this.estimate = null;
     this.setGauge('Hit', power);
-    this.updateInfo();
   }
 
   private checkBall(dt: number): void {
@@ -227,10 +344,9 @@ export class Game {
       return;
     }
     if (p.y < TUNING.physics.outOfBoundsY) {
-      this.strokes++;
       this.showMessage('Out of bounds! +1', 1800);
       this.resetBall(this.lastRest);
-      this.beginShot();
+      this.finishTurn('out');
       return;
     }
 
@@ -252,7 +368,7 @@ export class Game {
         this.ball.setLinvel({ x: 0, y: 0, z: 0 }, true);
         this.ball.setAngvel({ x: 0, y: 0, z: 0 }, true);
         this.lastRest.set(p.x, 0, p.z);
-        this.beginShot();
+        this.finishTurn('rest');
       }
     } else {
       this.restTime = 0;
@@ -261,18 +377,23 @@ export class Game {
 
   private holed(): void {
     this.state = 'holed';
-    this.updateInfo();
-    const diff = this.strokes - this.hole.par;
+    const player = this.active ? this.players.get(this.active) : undefined;
+    const strokes = player?.strokes ?? 0;
+    const diff = strokes - this.hole.par;
     const name =
-      this.strokes === 1 ? 'HOLE IN ONE!' : ({ [-2]: 'Eagle!', [-1]: 'Birdie!', 0: 'Par', 1: 'Bogey' } as Record<number, string>)[diff];
-    const strokesText = `${this.strokes} stroke${this.strokes === 1 ? '' : 's'}`;
-    this.showMessage(name ? `${name}\n${strokesText}` : `In the hole!\n${strokesText}`, 3000);
+      strokes === 1 ? 'HOLE IN ONE!' : ({ [-2]: 'Eagle!', [-1]: 'Birdie!', 0: 'Par', 1: 'Bogey' } as Record<number, string>)[diff];
+    const strokesText = `${strokes} stroke${strokes === 1 ? '' : 's'}`;
+    const who = player ? `${player.name}: ` : '';
+    this.showMessage(`${who}${name ?? 'In the hole!'}\n${strokesText}`, TUNING.rules.holedPauseMs);
     window.setTimeout(() => {
-      // Practice: start the hole again.
-      this.strokes = 0;
-      this.resetBall(new THREE.Vector3(this.hole.tee.x, 0, this.hole.tee.z));
-      this.beginShot(true);
-    }, 3000);
+      this.ballMesh.visible = false;
+      this.finishTurn('holed');
+    }, TUNING.rules.holedPauseMs);
+  }
+
+  /** Shows a short message, e.g. when the server picked up a player's ball. */
+  announce(text: string): void {
+    this.showMessage(text, 2000);
   }
 
   private resetBall(at: THREE.Vector3): void {
@@ -393,7 +514,10 @@ export class Game {
   // ---------- HUD and input ----------
 
   private updateInfo(): void {
-    this.hud.info.textContent = `Hole ${this.hole.number} · Par ${this.hole.par} · Strokes ${this.strokes}`;
+    const player = this.active ? this.players.get(this.active) : undefined;
+    const turn = player && this.state !== 'waiting' ? ` · ${player.name}: ${player.strokes} stroke${player.strokes === 1 ? '' : 's'}` : '';
+    this.hud.info.textContent = `Hole ${this.hole.number} · Par ${this.hole.par}${turn}`;
+    this.hud.info.style.borderLeft = player ? `10px solid ${player.colour}` : '';
   }
 
   private setGauge(label: string, power: number): void {
@@ -426,9 +550,6 @@ export class Game {
     else if ((e.key === ' ' || e.key === 'p' || e.key === 'P') && this.state === 'aiming') {
       e.preventDefault();
       this.charging = { kind: e.key === ' ' ? 'hit' : 'practice', amount: 0 };
-    } else if ((e.key === 'r' || e.key === 'R') && this.state !== 'holed') {
-      this.resetBall(this.lastRest);
-      this.beginShot();
     }
   };
 
@@ -439,8 +560,12 @@ export class Game {
       this.charging = null;
       if (this.state !== 'aiming') return;
       const power = Math.max(1, Math.round(amount * 100));
-      if (kind === 'hit') this.shoot(power, 0);
-      else this.practice(power, 0);
+      if (kind === 'hit') {
+        this.onLocalStroke?.();
+        this.shoot(power, 0);
+      } else {
+        this.practice(power, 0);
+      }
     }
   };
 }

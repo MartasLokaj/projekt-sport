@@ -4,6 +4,7 @@ import {
   SHIRT_COLOURS,
   WS_PATH,
   type ClientMessage,
+  type GameState,
   type JoinError,
   type PlayerInfo,
   type ServerMessage,
@@ -48,6 +49,9 @@ let stopped = false;
 let joined = false;
 let selectedColour: string = profile.colour;
 let otherPlayers: PlayerInfo[] = [];
+let allPlayers: PlayerInfo[] = [];
+let gameState: GameState | null = null;
+let lastTurn = -1;
 
 // ---------- Screens ----------
 
@@ -82,7 +86,72 @@ function showJoined(player: PlayerInfo): void {
   wakeTip.hidden = 'wakeLock' in navigator;
   show('play');
   play.onJoined();
+  renderTurn();
 }
+
+// ---------- Whose turn ----------
+// The controls are covered by a message unless it is this phone's turn.
+
+const turnOverlay = document.getElementById('turn-overlay')!;
+const turnTitle = document.getElementById('turn-title')!;
+const turnText = document.getElementById('turn-text')!;
+const turnButton = document.getElementById('turn-button') as HTMLButtonElement;
+const turnEdit = document.getElementById('turn-edit')!;
+
+function nameOf(id: string | null): string {
+  return allPlayers.find((p) => p.id === id)?.name ?? 'Someone';
+}
+
+function renderTurn(): void {
+  if (!joined || !gameState) return;
+  const me = profile.playerId;
+  const state = gameState;
+  const mine = state.players.find((p) => p.id === me);
+  const leader = state.leaderId === me;
+  let title = '';
+  let text = '';
+  let button: string | null = null;
+
+  if (state.phase === 'lobby') {
+    title = "You're in!";
+    text = leader ? 'Start the game when everyone has joined.' : `Waiting for ${nameOf(state.leaderId)} or the big screen to start the game…`;
+    button = leader ? 'Start game' : null;
+  } else if (state.phase === 'playing') {
+    if (!mine) {
+      title = 'Game in progress';
+      text = 'You can play in the next game.';
+    } else if (state.current === me) {
+      if (state.turn !== lastTurn) {
+        lastTurn = state.turn;
+        play.resetAim();
+        play.showStatus(mine.strokes === 0 ? 'Your turn! Aim, then swing.' : `Your turn! Stroke ${mine.strokes + 1}.`);
+        if ('vibrate' in navigator) navigator.vibrate([60, 60, 60]);
+      }
+      turnOverlay.hidden = true;
+      return;
+    } else if (mine.done) {
+      title = mine.done === 'holed' ? 'In the hole! ⛳' : 'Ball picked up';
+      text = `Your score: ${mine.score}. Watch the others finish.`;
+    } else {
+      title = `${nameOf(state.current)}'s turn`;
+      text = `You: ${mine.strokes} stroke${mine.strokes === 1 ? '' : 's'} so far.`;
+    }
+  } else {
+    title = 'Hole complete!';
+    text = mine ? `Your score: ${mine.score}. Look at the big screen.` : 'Look at the big screen.';
+    button = leader ? 'Play again' : null;
+  }
+  play.cancel();
+  turnTitle.textContent = title;
+  turnText.textContent = text;
+  turnButton.hidden = button === null;
+  turnButton.textContent = button ?? '';
+  turnEdit.hidden = state.phase !== 'lobby';
+  turnOverlay.hidden = false;
+}
+
+turnButton.addEventListener('click', () => send({ type: 'start_game' }));
+turnEdit.addEventListener('click', () => showJoinForm());
 
 function renderColours(): void {
   const taken = new Set(otherPlayers.map((p) => p.colour));
@@ -155,14 +224,17 @@ function connect(): void {
         showJoined(msg.player);
         break;
       case 'lobby_state':
+        allPlayers = msg.players;
         otherPlayers = msg.players.filter((p) => p.id !== profile.playerId);
         if (!screens.join.hidden) renderColours();
+        renderTurn();
+        break;
+      case 'game_state':
+        gameState = msg;
+        renderTurn();
         break;
       case 'join_error':
         handleJoinError(msg.reason);
-        break;
-      case 'aim_reset':
-        play.resetAim();
         break;
     }
   });
