@@ -386,13 +386,24 @@ export const TUNING = {
     /** Running: normal top speed, and the speed allowed when it is the only way to get there in time (m/s). */
     runSpeed: 5,
     maxRunSpeed: 9,
-    /** How far beside the shuttle the character stands, so the racket meets it (m). */
-    racketReach: 0.55,
-    /** Heights where the racket meets the shuttle: overhead and underhand (m). */
-    overheadHeight: 2.1,
-    underhandHeight: 0.6,
-    /** Overhead contact closer to the net than this is a "high shuttle at the front": a smash is possible (m). */
+    /**
+     * Where the racket meets the shuttle. Like real players, a character takes the shuttle as early as it can:
+     * the first point of the flight in its half that it can reach in time (running at maxRunSpeed after
+     * reactionMs) and that is no higher than reachHeight. Real adults (about 1.75 m) meet clears at about 2.3 m
+     * and smashes at about 2.2 m, so for our 1.6 m chibis reachHeight is about 2.3 m (with a little jump).
+     */
+    reachHeight: 2.3,
+    lowestContact: 0.3,
+    reactionMs: 150,
+    /** Contact height decides the stroke: from overheadFrom up = overhead, from driveFrom up = flat drive, lower = lift (m). */
+    overheadFrom: 1.7,
+    driveFrom: 1.0,
+    /** How far beside the shuttle the character stands for each stroke, so the racket meets it (m). */
+    reach: { overhead: 0.35, smash: 0.35, drive: 0.8, lift: 0.6 },
+    /** Overhead contact closer to the net than this is a "high shuttle at the front": a smash (m). */
     frontZone: 2.2,
+    /** The server holds the shuttle at this height. */
+    serveHeight: 0.9,
 
     // Hitting (timing only decides hit or miss and how good the hit is; the swing direction aims).
     /** A swing this close to the right moment hits (either side, milliseconds). */
@@ -414,9 +425,11 @@ export const TUNING = {
 
     // Shots. depth = landing distance from the net (min at 0 % power, max at 100 %), apex = extra height of the arc (m),
     // seconds = flight time (slow at 0 % power, fast at 100 %), drag = how much the shuttle slows down in flight.
+    /** The serve always goes diagonally into the receiver's service court (between the centre line and the sideline). */
     serve: { depth: [5.2, 6.3], apex: 3.2, seconds: [2.0, 1.6], drag: 2.2 },
     clear: { depth: [5.0, 6.3], apex: 3.4, seconds: [2.0, 1.5], drag: 2.4 },
     lift: { depth: [4.8, 6.2], apex: 3.6, seconds: [2.1, 1.6], drag: 2.2 },
+    drive: { depth: [4.6, 6.0], apex: 0.4, seconds: [1.2, 0.85], drag: 1.4 },
     smash: { depth: [2.6, 4.2], apex: 0, seconds: [0.95, 0.6], drag: 0.6 },
     /** Every shot clears the net by at least this much (m). */
     netClearance: 0.35,
@@ -435,6 +448,8 @@ export const TUNING = {
     cameraBack: 5.0,
     cameraLookAt: -3,
     cameraFov: 50,
+    /** The shuttle is drawn this much bigger than real, so it is easy to follow from the sofa. */
+    shuttleScale: 1.6,
     /** Look: sand, court, lines, sky. */
     sandColour: '#ecd3a0',
     courtColour: '#e3bf85',

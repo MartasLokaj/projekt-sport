@@ -137,7 +137,13 @@ running log of where we are, what the user decided, and what comes next).
   `hitWindowMs + lateGraceMs`. CPU: `cpu.hitChance` etc. Rally scoring to 11, winner serves (player serves by
   swinging). Plays the first connected phone; Mac Space = swing (← → aim). Character got `armPose`, `handArm` and a
   `putter: false` option. Tested in the dev browser with a scripted player (rallies, misses, scoring, Esc).
-  - Next: user test on the TV with a phone → tune feel (timing window, shot speeds, CPU) → B3 split screen 1v1.
+  - **User test 1: "good"**, but asked for (done): hit the shuttle early in the air like real badminton (research:
+    real contact ~2.3 m clears / ~2.2 m smashes for adults) → `findContact` takes the first reachable point at
+    `runSpeed` (fallback `maxRunSpeed`) below `reachHeight` 2.3; stroke from contact height (`overheadFrom` 1.7 →
+    overhead/smash, `driveFrom` 1.0 → new flat `drive` shot, lower → lift); serve only diagonal into the service
+    court; shuttle glowing red, `shuttleScale` 1.6. Scripted test: clears met at 2.25–2.3 m, smashes defended at
+    0.85–1.15 m around 2–3 m from the net.
+  - Next: user test 2 → tune → B3 split screen 1v1.
 
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.

@@ -173,6 +173,9 @@ Status: decisions so far are recorded here. Do not start building Badminton unti
 
 - **Shot type comes from the court position, not from the phone (user, 2026-10-30, after Swing Lab test 2 showed the phone cannot tell overhead from underhand reliably):** a character at the back of the court plays overhead; a character at the front plays underhand, unless a smash is possible (shuttle high enough near the net). The phone only gives: a swing happened, its power and its exact time.
 - **Aiming (user, 2026-10-30):** the direction of the swing aims: swinging more to the left sends the shuttle left, more to the right sends it right. Timing only decides whether the shuttle is hit and how well (a "Perfect" hit is faster and more precise); a swing too early or too late misses. (Measured on the phone as the turn around the vertical axis during the swing, so it works for any grip and either hand.)
+- **Hit early, in the air (user, 2026-10-30, based on research of real contact heights):** a character meets the shuttle at the first point of its flight it can reach in time at a normal run and that is not higher than it can reach (real adults meet clears at ~2.3 m, smashes at ~2.2 m; scaled to our chibis). Contact height picks the stroke: high = overhead (clear/smash; smash near the net), chest height = flat drive, low = underhand lift.
+- **Serve (user, 2026-10-30):** always diagonally into the receiver's service court (right court on an even score, left on odd), never straight.
+- **Shuttle:** bright glowing red and drawn bigger than real, so it is easy to follow.
 - **Shot depth (user, 2026-10-30):** for now every shot flies to the back of the court. Later the phone gets a big button that means "play a short shot" (drop).
 
 **OPEN**

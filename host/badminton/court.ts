@@ -59,11 +59,10 @@ export function buildCourt(): THREE.Group {
 /** The shuttle, built pointing along +y (cork at the origin, feathers above). */
 export function buildShuttle(): THREE.Group {
   const shuttle = new THREE.Group();
-  const cork = new THREE.Mesh(new THREE.SphereGeometry(0.045, 14, 10), new THREE.MeshStandardMaterial({ color: '#ff8a3d', roughness: 0.6 }));
-  const skirt = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.075, 0.03, 0.11, 14, 1, true),
-    new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.5, side: THREE.DoubleSide }),
-  );
+  // Glowing red, so it is easy to follow against the sky and the sand.
+  const red = new THREE.MeshStandardMaterial({ color: '#ff1a1a', emissive: '#ff0000', emissiveIntensity: 0.7, roughness: 0.5, side: THREE.DoubleSide });
+  const cork = new THREE.Mesh(new THREE.SphereGeometry(0.05, 14, 10), red);
+  const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.03, 0.12, 14, 1, true), red);
   skirt.position.y = 0.075;
   shuttle.add(cork, skirt);
   shuttle.traverse((o) => (o.castShadow = true));

@@ -44,6 +44,13 @@ export type BadmintonHud = {
 type Phase = 'serve' | 'rally' | 'point' | 'over';
 
 const READY_POSE = { x: -0.5, z: -0.35 };
+/** Racket arm while the shuttle comes: up and back for overhead, back and low for a lift, out to the side for a drive. */
+const WINDUP: Record<Stroke, { x: number; z: number }> = {
+  overhead: { x: -3.4, z: -0.3 },
+  smash: { x: -3.4, z: -0.3 },
+  drive: { x: 0.9, z: -1.3 },
+  lift: { x: 1.0, z: -0.3 },
+};
 
 export class Badminton {
   private readonly renderer: THREE.WebGLRenderer;
@@ -101,6 +108,8 @@ export class Badminton {
       new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.25 }),
     );
     this.shadow.rotation.x = -Math.PI / 2;
+    this.shuttle.scale.setScalar(cfg.shuttleScale);
+    this.shadow.scale.setScalar(cfg.shuttleScale);
     this.scene.add(this.shuttle, this.shadow);
 
     this.player = this.makeAthlete(1, { shirt: '#ff5a5f', skin: SKIN_TONES[1], handedness: 'right' });
@@ -194,9 +203,13 @@ export class Badminton {
   }
 
   private serve(server: Athlete, now: number, power: number, aim: number): void {
-    const from = this.handPosition(server, TUNING.badminton.underhandHeight + 0.3);
+    const cfg = TUNING.badminton;
+    const from = this.handPosition(server, cfg.serveHeight);
     server.swing = { stroke: 'serve', start: now };
-    this.launch(makeShot('serve', from, server.side, aim, power / 100, 0.7, now), server.side);
+    // Diagonally across: into the receiver's service court on the other side of the centre line.
+    const across = -Math.sign(server.target.x || 1);
+    const range: [number, number] = across > 0 ? [0.25, cfg.courtHalfWidth - 0.25] : [-cfg.courtHalfWidth + 0.25, -0.25];
+    this.launch(makeShot('serve', from, server.side, aim, power / 100, 0.7, now, range), server.side);
     this.hud.message.hidden = true;
     this.phase = 'rally';
   }
@@ -206,7 +219,11 @@ export class Badminton {
     const cfg = TUNING.badminton;
     const contact = this.contact!;
     const kind: ShotKind =
-      contact.stroke === 'lift' ? 'lift' : contact.stroke === 'smash' || power >= cfg.smashPower ? 'smash' : 'clear';
+      contact.stroke === 'lift' || contact.stroke === 'drive'
+        ? contact.stroke
+        : contact.stroke === 'smash' || power >= cfg.smashPower
+          ? 'smash'
+          : 'clear';
     this.decided = true;
     this.launch(makeShot(kind, contact.position, athlete.side, aim, power / 100, quality, contact.time), athlete.side);
     return kind;
@@ -217,12 +234,12 @@ export class Badminton {
     const cfg = TUNING.badminton;
     this.flight = flight;
     this.receiver = -hitter as Side;
-    this.contact = findContact(flight, this.receiver);
+    const receiver = this.athlete(this.receiver);
+    this.contact = findContact(flight, this.receiver, receiver.wrapper.position, Date.now());
     this.decided = false;
     this.timeShift = 0;
-    const receiver = this.athlete(this.receiver);
     const spot = this.contact.position.clone();
-    spot.x -= receiver.handSign * cfg.racketReach;
+    spot.x -= receiver.handSign * cfg.reach[this.contact.stroke];
     spot.y = 0;
     this.moveTo(receiver, spot, this.contact.time - 120);
     const hitterAthlete = this.athlete(hitter);
@@ -311,7 +328,7 @@ export class Badminton {
     let position: THREE.Vector3;
     let direction: THREE.Vector3;
     if (this.phase === 'serve' || !this.flight) {
-      position = this.handPosition(this.athlete(this.server), TUNING.badminton.underhandHeight + 0.3);
+      position = this.handPosition(this.athlete(this.server), TUNING.badminton.serveHeight);
       direction = new THREE.Vector3(0, 1, 0);
     } else {
       const u = Math.min(1, this.flight.progressAt(this.displayTime(now)));
@@ -344,13 +361,14 @@ export class Badminton {
     let pose = READY_POSE;
     if (a.swing && now - a.swing.start < 450) {
       const t = Math.min(1, (now - a.swing.start) / 140);
-      const [from, to] = a.swing.stroke === 'lift' || a.swing.stroke === 'serve' ? [1.0, -2.3] : [-3.4, -0.4];
-      pose = { x: from + (to - from) * easeOut(t), z: -0.3 };
+      const stroke = a.swing.stroke;
+      const [from, to] = stroke === 'lift' || stroke === 'serve' ? [1.0, -2.3] : stroke === 'drive' ? [0.9, -1.5] : [-3.4, -0.4];
+      pose = { x: from + (to - from) * easeOut(t), z: stroke === 'drive' ? -1.3 : -0.3 };
       a.pose = pose;
     } else {
       if (a.swing) a.swing = null;
       const waiting = this.phase === 'rally' && !this.decided && this.contact && this.receiver === a.side;
-      if (waiting && this.contact!.time - now < 600) pose = this.contact!.stroke === 'lift' ? { x: 1.0, z: -0.3 } : { x: -3.4, z: -0.3 };
+      if (waiting && this.contact!.time - now < 600) pose = WINDUP[this.contact!.stroke];
       else if (this.phase === 'serve' && this.server === a.side) pose = { x: 0.9, z: -0.3 };
       const k = Math.min(1, dt * 12);
       a.pose = { x: a.pose.x + (pose.x - a.pose.x) * k, z: a.pose.z + (pose.z - a.pose.z) * k };
@@ -458,7 +476,7 @@ export class Badminton {
 }
 
 function shotName(kind: ShotKind): string {
-  return { serve: 'Serve', clear: 'Clear', lift: 'Lift', smash: 'Smash!' }[kind];
+  return { serve: 'Serve', clear: 'Clear', lift: 'Lift', drive: 'Drive', smash: 'Smash!' }[kind];
 }
 
 function easeOut(t: number): number {
