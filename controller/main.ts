@@ -1,5 +1,6 @@
 import {
   NAME_MAX_LENGTH,
+  ROOM_CODE_LENGTH,
   SHIRT_COLOURS,
   WS_PATH,
   type ClientMessage,
@@ -10,21 +11,26 @@ import {
 import { TUNING } from '../shared/tuning.ts';
 
 // Phase 1a: join the game from the phone and stay joined through screen locks and Wi-Fi blips.
+// The room code comes from the QR code link, or the player types it in.
 
 type Profile = { playerId: string; name: string; colour: string };
 
 const PROFILE_KEY = 'minigolf.profile';
 
-const room = new URLSearchParams(location.search).get('room')?.toUpperCase() ?? null;
+let room = new URLSearchParams(location.search).get('room')?.toUpperCase() ?? null;
 const profile = loadProfile();
 
 const screens = {
   message: document.getElementById('screen-message')!,
+  room: document.getElementById('screen-room')!,
   join: document.getElementById('screen-join')!,
   joined: document.getElementById('screen-joined')!,
 };
 const messageTitle = document.getElementById('message-title')!;
 const messageText = document.getElementById('message-text')!;
+const roomForm = document.getElementById('room-form') as HTMLFormElement;
+const roomInput = document.getElementById('room-code') as HTMLInputElement;
+const roomError = document.getElementById('room-error')!;
 const joinForm = document.getElementById('join-form') as HTMLFormElement;
 const nameInput = document.getElementById('name') as HTMLInputElement;
 const coloursEl = document.getElementById('colours')!;
@@ -36,7 +42,7 @@ const reconnecting = document.getElementById('reconnecting')!;
 
 let ws: WebSocket | null = null;
 let reconnectTimer: number | undefined;
-/** Set when reconnecting would not help (old QR code, game opened in another tab). */
+/** Set when reconnecting would not help (game opened in another tab). */
 let stopped = false;
 let joined = false;
 let selectedColour: string = profile.colour;
@@ -52,6 +58,12 @@ function showMessage(title: string, text = ''): void {
   messageTitle.textContent = title;
   messageText.textContent = text;
   show('message');
+}
+
+function showRoomForm(error = ''): void {
+  joined = false;
+  roomError.textContent = error;
+  show('room');
 }
 
 function showJoinForm(error = ''): void {
@@ -101,8 +113,7 @@ function handleJoinError(reason: JoinError): void {
       showJoinForm();
       break;
     case 'wrong_room':
-      stopped = true;
-      showMessage('This game has ended', 'Scan the new QR code on the big screen to join.');
+      showRoomForm(`There is no game with the code ${room}. Check the code on the big screen.`);
       break;
     case 'replaced':
       stopped = true;
@@ -128,7 +139,7 @@ function connect(): void {
   ws = socket;
   socket.addEventListener('open', () => {
     reconnecting.hidden = true;
-    send({ type: 'rejoin', room: room!, playerId: profile.playerId });
+    if (room) send({ type: 'rejoin', room, playerId: profile.playerId });
   });
   socket.addEventListener('message', (event) => {
     const msg = JSON.parse(event.data) as ServerMessage;
@@ -157,6 +168,25 @@ function connect(): void {
   });
 }
 
+roomInput.addEventListener('input', () => {
+  roomInput.value = roomInput.value.toUpperCase().replace(/[^A-Z]/g, '');
+});
+
+roomForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  const code = roomInput.value.trim().toUpperCase();
+  if (code.length !== ROOM_CODE_LENGTH) {
+    roomError.textContent = `The code has ${ROOM_CODE_LENGTH} letters.`;
+    return;
+  }
+  roomInput.blur();
+  room = code;
+  history.replaceState(null, '', `/play?room=${code}`); // a reload keeps the room
+  showMessage('Connecting…');
+  if (ws?.readyState === WebSocket.OPEN) send({ type: 'rejoin', room, playerId: profile.playerId });
+  else connect();
+});
+
 joinForm.addEventListener('submit', (event) => {
   event.preventDefault();
   nameInput.blur();
@@ -166,7 +196,8 @@ joinForm.addEventListener('submit', (event) => {
     return;
   }
   void keepScreenAwake(); // must start from a tap
-  send({ type: 'join', room: room!, playerId: profile.playerId, name, colour: selectedColour });
+  if (!room) return;
+  send({ type: 'join', room, playerId: profile.playerId, name, colour: selectedColour });
 });
 
 document.getElementById('change-profile')!.addEventListener('click', () => showJoinForm());
@@ -221,8 +252,5 @@ function saveProfile(next: Profile): void {
 
 // ---------- Start ----------
 
-if (room) {
-  connect();
-} else {
-  showMessage('Scan the QR code', 'Scan the QR code on the big screen to join the game.');
-}
+if (room) connect();
+else showRoomForm();

@@ -14,7 +14,7 @@ function showHostInfo(msg: Extract<ServerMessage, { type: 'host_info' }>): void 
   if (msg.qrDataUrl && msg.joinUrl) {
     qrEl.src = msg.qrDataUrl;
     qrEl.hidden = false;
-    joinUrlEl.textContent = msg.joinUrl;
+    joinUrlEl.textContent = `or open ${msg.joinUrl.split('?')[0]} and type the code`;
   } else {
     qrEl.hidden = true;
     joinUrlEl.textContent = 'This computer is not connected to a Wi-Fi network, so phones cannot join.';

@@ -2,6 +2,7 @@ import type { WebSocket } from 'ws';
 import {
   MAX_PLAYERS,
   NAME_MAX_LENGTH,
+  ROOM_CODE_LENGTH,
   SHIRT_COLOURS,
   type ClientMessage,
   type JoinError,
@@ -13,7 +14,6 @@ import {
 // the server runs, so a phone that drops (screen lock, Wi-Fi blip) gets it back.
 
 const ROOM_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I or O, they look like 1 and 0
-const ROOM_CODE_LENGTH = 4;
 
 type Seat = { id: string; name: string; colour: string; socket: WebSocket | null };
 
