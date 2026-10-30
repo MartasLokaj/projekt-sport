@@ -13,7 +13,9 @@ npm run dev      # starts everything and prints the URLs
 ```
 
 - **Big screen:** open `https://localhost:8443/` in Chrome or Safari on the Mac.
-- **Phone:** open the printed `https://<mac-ip>:8443/play` address (QR code comes in Phase 1).
+- **Phone:** scan the QR code on the big screen (or open the printed `https://<mac-ip>:8443/play?room=<code>` address).
+
+Every start creates a new room code, so phones need to scan the new QR code after a restart.
 
 The phone and the Mac must be on the same Wi-Fi.
 

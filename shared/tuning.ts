@@ -4,10 +4,11 @@
 export const TUNING = {
   network: {
     /** How long a page waits before trying to reconnect (milliseconds). */
-    reconnectDelayMs: 2000,
-  },
-  demoCube: {
-    /** Rotation speed of the Phase 0 test cube (radians per second). */
-    spinSpeed: 0.8,
+    reconnectDelayMs: 1500,
+    /**
+     * How often the server checks that each phone is still there (milliseconds).
+     * A phone that misses one check is marked as disconnected.
+     */
+    heartbeatIntervalMs: 3000,
   },
 } as const;

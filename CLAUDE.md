@@ -16,5 +16,6 @@ Read SPEC.md before starting any work. It is the source of truth for what we are
 - `npm install` – install packages (first time only).
 - `npm run dev` – starts everything (HTTPS server + Vite + WebSocket hub on port 8443) and prints the URLs. Big screen: `https://localhost:8443/`, phone: `https://<lan-ip>:8443/play`.
 - `npm run check` – TypeScript type check.
+- Page code (host/, controller/) reloads by itself. Server code (server/) needs a restart: Ctrl+C, then `npm run dev`. Every restart makes a new room code.
 - The self-signed certificate is created in `certs/` (not in git); delete that folder to force a new one.
 - Tuning values: `shared/tuning.ts`. WebSocket messages: `shared/protocol.ts`.

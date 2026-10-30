@@ -1,57 +1,69 @@
-import * as THREE from 'three';
-import { WS_PATH, type ClientMessage, type ServerMessage } from '../shared/protocol.ts';
+import { MAX_PLAYERS, WS_PATH, type ClientMessage, type PlayerInfo, type ServerMessage } from '../shared/protocol.ts';
 import { TUNING } from '../shared/tuning.ts';
 
-// Phase 0: a spinning cube proves Three.js works, and the label proves the server connection.
+// Phase 1a: the lobby. Shows the QR code and the players who joined from their phones.
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(window.devicePixelRatio);
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
+const qrEl = document.getElementById('qr') as HTMLImageElement;
+const joinUrlEl = document.getElementById('join-url')!;
+const roomCodeEl = document.getElementById('room-code')!;
+const playersEl = document.getElementById('players')!;
+const offlineBanner = document.getElementById('offline-banner')!;
 
-const scene = new THREE.Scene();
-scene.background = new THREE.Color('#8fd3ff');
-const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
-camera.position.set(0, 1.5, 5);
-camera.lookAt(0, 0, 0);
+function showHostInfo(msg: Extract<ServerMessage, { type: 'host_info' }>): void {
+  roomCodeEl.textContent = msg.room;
+  if (msg.qrDataUrl && msg.joinUrl) {
+    qrEl.src = msg.qrDataUrl;
+    qrEl.hidden = false;
+    joinUrlEl.textContent = msg.joinUrl;
+  } else {
+    qrEl.hidden = true;
+    joinUrlEl.textContent = 'This computer is not connected to a Wi-Fi network, so phones cannot join.';
+  }
+}
 
-scene.add(new THREE.HemisphereLight('#ffffff', '#88aa66', 1.5));
-const sun = new THREE.DirectionalLight('#fff4e0', 2);
-sun.position.set(3, 5, 2);
-scene.add(sun);
-
-const cube = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 1.5), new THREE.MeshStandardMaterial({ color: '#5bc85b' }));
-scene.add(cube);
-
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
-
-const clock = new THREE.Clock();
-renderer.setAnimationLoop(() => {
-  const dt = clock.getDelta();
-  cube.rotation.y += TUNING.demoCube.spinSpeed * dt;
-  cube.rotation.x += TUNING.demoCube.spinSpeed * 0.5 * dt;
-  renderer.render(scene, camera);
-});
-
-const statusEl = document.getElementById('status')!;
+function showPlayers(players: PlayerInfo[]): void {
+  playersEl.replaceChildren();
+  for (let i = 0; i < MAX_PLAYERS; i++) {
+    const player = players[i];
+    const card = document.createElement('div');
+    const dot = document.createElement('div');
+    const label = document.createElement('div');
+    card.className = 'player';
+    dot.className = 'dot';
+    if (player) {
+      dot.style.background = player.colour;
+      label.textContent = player.name;
+      const state = document.createElement('span');
+      state.className = 'state';
+      state.textContent = player.connected ? 'Ready' : 'Phone disconnected…';
+      label.append(state);
+      if (!player.connected) card.classList.add('offline');
+    } else {
+      card.classList.add('empty');
+      label.textContent = 'Waiting for player…';
+    }
+    card.append(dot, label);
+    playersEl.append(card);
+  }
+}
 
 function connect(): void {
   const ws = new WebSocket(`wss://${location.host}${WS_PATH}`);
   ws.addEventListener('open', () => {
-    const hello: ClientMessage = { type: 'hello', role: 'host' };
+    offlineBanner.hidden = true;
+    const hello: ClientMessage = { type: 'host_hello' };
     ws.send(JSON.stringify(hello));
   });
   ws.addEventListener('message', (event) => {
     const msg = JSON.parse(event.data) as ServerMessage;
-    if (msg.type === 'status') statusEl.textContent = `Server connected · Phones: ${msg.controllers}`;
+    if (msg.type === 'host_info') showHostInfo(msg);
+    else if (msg.type === 'lobby_state') showPlayers(msg.players);
   });
   ws.addEventListener('close', () => {
-    statusEl.textContent = 'Server disconnected. Reconnecting…';
+    offlineBanner.hidden = false;
     setTimeout(connect, TUNING.network.reconnectDelayMs);
   });
 }
+
+showPlayers([]);
 connect();

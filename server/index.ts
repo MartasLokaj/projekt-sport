@@ -1,8 +1,11 @@
 import { createServer } from 'node:https';
+import QRCode from 'qrcode';
 import { createServer as createViteServer } from 'vite';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { WS_PATH, type ClientMessage, type ClientRole, type ServerMessage } from '../shared/protocol.ts';
+import { WS_PATH, type ClientMessage } from '../shared/protocol.ts';
+import { TUNING } from '../shared/tuning.ts';
 import { ensureCertificate } from './cert.ts';
+import { Lobby, makeRoomCode } from './lobby.ts';
 import { getLanAddresses } from './network.ts';
 
 const PORT = Number(process.env.PORT ?? 8443);
@@ -29,16 +32,25 @@ server.on('request', (req, res) => {
   vite.middlewares(req, res);
 });
 
+// Every game gets a room code, so an old phone tab cannot join the wrong game.
+const room = makeRoomCode();
+const joinUrl = lanAddresses.length > 0 ? `https://${lanAddresses[0]}:${PORT}/play?room=${room}` : null;
+const qrDataUrl = joinUrl ? await QRCode.toDataURL(joinUrl, { margin: 1, width: 512 }) : null;
+const lobby = new Lobby(room, { type: 'host_info', room, joinUrl, qrDataUrl });
+
 // WebSocket hub. Vite has its own WebSocket for reloading, so only take ours.
 const wss = new WebSocketServer({ noServer: true });
-const roles = new Map<WebSocket, ClientRole>();
 
 server.on('upgrade', (req, socket, head) => {
   if (new URL(req.url ?? '/', 'https://localhost').pathname !== WS_PATH) return;
   wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
 });
 
+const alive = new WeakMap<WebSocket, boolean>();
+
 wss.on('connection', (ws) => {
+  alive.set(ws, true);
+  ws.on('pong', () => alive.set(ws, true));
   ws.on('message', (data) => {
     let msg: ClientMessage;
     try {
@@ -46,27 +58,23 @@ wss.on('connection', (ws) => {
     } catch {
       return;
     }
-    if (msg.type === 'hello' && (msg.role === 'host' || msg.role === 'controller')) {
-      roles.set(ws, msg.role);
-      broadcastStatus();
-    }
+    lobby.handle(ws, msg);
   });
-  ws.on('close', () => {
-    roles.delete(ws);
-    broadcastStatus();
-  });
+  ws.on('close', () => lobby.handleClose(ws));
 });
 
-function broadcastStatus(): void {
-  const roleList = [...roles.values()];
-  const msg: ServerMessage = {
-    type: 'status',
-    hosts: roleList.filter((r) => r === 'host').length,
-    controllers: roleList.filter((r) => r === 'controller').length,
-  };
-  const text = JSON.stringify(msg);
-  for (const client of roles.keys()) client.send(text);
-}
+// A locked phone often disappears without saying goodbye. Ping everyone
+// regularly and drop the ones that did not answer the previous ping.
+setInterval(() => {
+  for (const ws of wss.clients) {
+    if (!alive.get(ws)) {
+      ws.terminate();
+      continue;
+    }
+    alive.set(ws, false);
+    ws.ping();
+  }
+}, TUNING.network.heartbeatIntervalMs);
 
 server.on('error', (err: NodeJS.ErrnoException) => {
   if (err.code === 'EADDRINUSE') {
@@ -83,8 +91,9 @@ server.listen(PORT, '0.0.0.0', () => {
   if (lanAddresses.length === 0) {
     console.log('  No Wi-Fi network found, so phones cannot connect. Join a Wi-Fi network and restart.');
   }
-  for (const address of lanAddresses) {
-    console.log(`  Phone controller:               https://${address}:${PORT}/play`);
+  if (joinUrl) {
+    console.log(`  Phones (or scan the QR code):   ${joinUrl}`);
   }
+  console.log(`  Room code:                      ${room}`);
   console.log('\nPress Ctrl+C to stop.\n');
 });
