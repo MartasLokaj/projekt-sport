@@ -423,8 +423,6 @@ export const TUNING = {
     perfectMs: 100,
     /** After the right moment, wait this much longer for the phone's message before calling it a miss (Wi-Fi delay). */
     lateGraceMs: 300,
-    /** While waiting for the phone, the shuttle creeps on at this share of its speed. */
-    waitSlowdown: 0.25,
     /** Power at or above this (percent) makes an overhead shot a smash. */
     smashPower: 70,
     /** Aim -1..1 moves the target this far sideways, as a share of the half width (1 = to the sideline). */
@@ -435,13 +433,14 @@ export const TUNING = {
     keyPower: 60,
 
     // Shots. depth = landing distance from the net (min at 0 % power, max at 100 %), apex = extra height of the arc (m),
-    // seconds = flight time (slow at 0 % power, fast at 100 %), drag = how much the shuttle slows down in flight.
+    // seconds = flight time (slow at 0 % power, fast at 100 %), drag = how much the shuttle slows down in flight
+    // (a real shuttle slows down a lot; the user wants it slow, steady and easy to predict, so drag is kept low).
     /** The serve always goes diagonally into the receiver's service court (between the centre line and the sideline). */
-    serve: { depth: [5.2, 6.3], apex: 3.2, seconds: [2.0, 1.6], drag: 2.2 },
-    clear: { depth: [5.0, 6.3], apex: 3.4, seconds: [2.0, 1.5], drag: 2.4 },
-    lift: { depth: [4.8, 6.2], apex: 3.6, seconds: [2.1, 1.6], drag: 2.2 },
-    drive: { depth: [4.6, 6.0], apex: 0.4, seconds: [1.2, 0.85], drag: 1.4 },
-    smash: { depth: [2.6, 4.2], apex: 0, seconds: [0.95, 0.6], drag: 0.6 },
+    serve: { depth: [5.2, 6.3], apex: 3.2, seconds: [2.8, 2.3], drag: 1.0 },
+    clear: { depth: [5.0, 6.3], apex: 3.4, seconds: [2.8, 2.2], drag: 1.1 },
+    lift: { depth: [4.8, 6.2], apex: 3.6, seconds: [2.9, 2.3], drag: 1.0 },
+    drive: { depth: [4.6, 6.0], apex: 0.4, seconds: [1.7, 1.3], drag: 0.6 },
+    smash: { depth: [2.6, 4.2], apex: 0, seconds: [1.4, 1.0], drag: 0.3 },
     /** Every shot clears the net by at least this much (m). */
     netClearance: 0.35,
     /** A Perfect hit flies this much faster. */

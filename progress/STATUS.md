@@ -148,7 +148,11 @@ running log of where we are, what the user decided, and what comes next).
     (natural forehand sweep). **Done:** `reachHeight` 3.0 with a jump above `standingReach` 1.8 (racket top
     standing), `jumpRiseMs`; asymmetric window `hitWindowEarlyMs` 350 / `hitWindowMs` 250; `aimGain` 1.0 and
     `aimAutoCenter` 0.15 (the phone learns the player's usual direction as straight).
-  - Next: user test 3 → tune → B3 split screen 1v1.
+  - **User test 3: "I hit well, this is top, keep it"** (jump smash, timing window, aim centring approved).
+    Then asked: shuttle slower and predictable, no slowing down near the player. **Done:** flight times ×~1.4,
+    drag lowered (steadier speed), `waitSlowdown` removed — a late-arriving swing starts the return from where the
+    shuttle is by then. Later (B5): make shot speeds visually distinct.
+  - Next: user test 4 (speed feel) → B3 split screen 1v1.
 
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.

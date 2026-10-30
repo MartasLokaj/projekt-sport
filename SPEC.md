@@ -176,7 +176,8 @@ Status: decisions so far are recorded here. Do not start building Badminton unti
 - **Hit early, in the air (user, 2026-10-30, based on research of real contact heights):** a character meets the shuttle at the first point of its flight it can reach in time at a normal run and that is not higher than it can reach (real adults meet clears at ~2.3 m, smashes at ~2.2 m; scaled to our chibis). Contact height picks the stroke: high = overhead (clear/smash; smash near the net), chest height = flat drive, low = underhand lift.
 - **Jump smash, cartoon height (user, 2026-10-30):** overhead shots are met much higher than in real life, like in party sports games: the character jumps (about its own height's worth) to meet a high shuttle at up to ~3 m.
 - **Serve (user, 2026-10-30):** always diagonally into the receiver's service court (right court on an even score, left on odd), never straight.
-- **Shuttle:** bright glowing red and drawn bigger than real, so it is easy to follow.
+- **Shuttle:** bright glowing red and drawn bigger than real, so it is easy to follow. It flies slower than a real one, at a steady, predictable pace, and never slows down near the player (user, 2026-10-30).
+- **Later (user):** make the shot speeds easy to tell apart visually (e.g. a trail or effect that shows a fast smash vs a slow clear) — design phase (B5).
 - **Shot depth (user, 2026-10-30):** for now every shot flies to the back of the court. Later the phone gets a big button that means "play a short shot" (drop).
 
 **OPEN**

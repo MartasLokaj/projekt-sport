@@ -75,8 +75,6 @@ export class Badminton {
   private contact: Contact | null = null;
   /** The receiver's hit has been decided (hit, or missed). */
   private decided = false;
-  /** After a miss the shuttle keeps falling from where it was shown: display time = now - timeShift. */
-  private timeShift = 0;
   private pointEndsAt = 0;
   private cpuServeAt = 0;
   private feedbackUntil = 0;
@@ -192,7 +190,6 @@ export class Badminton {
     this.flight = null;
     this.contact = null;
     this.decided = false;
-    this.timeShift = 0;
     const serverScore = this.server === 1 ? this.score.player : this.score.cpu;
     // Even score: serve from the right service court, odd: from the left (right = +x for the player, -x for the computer).
     const x = this.server * (serverScore % 2 === 0 ? 1 : -1) * 0.9;
@@ -228,7 +225,12 @@ export class Badminton {
           ? 'smash'
           : 'clear';
     this.decided = true;
-    this.launch(makeShot(kind, contact.position, athlete.side, aim, power / 100, quality, contact.time), athlete.side);
+    // The shuttle never slows down to wait for the phone: when the swing's message arrives a moment after
+    // the hit, the return shot starts from where the shuttle is by then.
+    const now = Date.now();
+    const late = this.flight !== null && now > contact.time;
+    const from = late ? this.flight!.positionAt(this.flight!.progressAt(now)) : contact.position;
+    this.launch(makeShot(kind, from, athlete.side, aim, power / 100, quality, late ? now : contact.time), athlete.side);
     return kind;
   }
 
@@ -240,7 +242,6 @@ export class Badminton {
     const receiver = this.athlete(this.receiver);
     this.contact = findContact(flight, this.receiver, receiver.wrapper.position, Date.now());
     this.decided = false;
-    this.timeShift = 0;
     const spot = this.contact.position.clone();
     spot.x -= receiver.handSign * cfg.reach[this.contact.stroke];
     spot.y = 0;
@@ -251,10 +252,8 @@ export class Badminton {
     this.moveTo(hitterAthlete, new THREE.Vector3(0, 0, hitter * cfg.homeDepth), null);
   }
 
+  /** Nobody hits it: the shuttle just flies on and lands. */
   private miss(): void {
-    // Keep falling from where the shuttle is shown now.
-    const now = Date.now();
-    this.timeShift = now - this.displayTime(now);
     this.decided = true;
     this.contact = null;
   }
@@ -291,13 +290,6 @@ export class Badminton {
     this.athlete(-winner as Side).character.play('slump');
   }
 
-  /** The shuttle's time on the flight: normal, slowed while waiting for the phone, or shifted after a miss. */
-  private displayTime(now: number): number {
-    const cfg = TUNING.badminton;
-    if (this.decided || !this.contact || this.receiver !== 1 || now <= this.contact.time) return now - this.timeShift;
-    return this.contact.time + (now - this.contact.time) * cfg.waitSlowdown;
-  }
-
   // ---------- Frame ----------
 
   private frame(): void {
@@ -317,7 +309,7 @@ export class Badminton {
         }
       }
       // The shuttle hit the ground: the receiver missed it.
-      if (this.decided && !this.contact && this.flight.progressAt(this.displayTime(now)) >= 1) this.pointTo(-this.receiver as Side);
+      if (this.decided && !this.contact && this.flight.progressAt(now) >= 1) this.pointTo(-this.receiver as Side);
     } else if (this.phase === 'point' && now >= this.pointEndsAt) {
       this.startServe();
     }
@@ -336,7 +328,7 @@ export class Badminton {
       position = this.handPosition(this.athlete(this.server), TUNING.badminton.serveHeight);
       direction = new THREE.Vector3(0, 1, 0);
     } else {
-      const u = Math.min(1, this.flight.progressAt(this.displayTime(now)));
+      const u = Math.min(1, this.flight.progressAt(now));
       position = this.flight.positionAt(u);
       direction = position.clone().sub(this.flight.positionAt(u - 0.01));
       if (u >= 1) direction.set(1, -0.2, 0); // lying on the sand
