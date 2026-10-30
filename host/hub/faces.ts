@@ -9,43 +9,36 @@ import type { Forest } from '../game/vegetation.ts';
 
 export type FaceKit = { windmill: GLTF; flag: GLTF; forest: Forest };
 
-/** The games on the four sides of the cube, in order going round (left/right arrows). */
-export const FACES = [
-  { id: 'minigolf', title: 'Minigolf', description: 'Putt across tiny islands with your phone as the club', players: '1–4 players', available: true },
-  { id: 'badminton', title: 'Badminton', description: 'Smash the shuttlecock over the net', players: '2–4 players', available: false },
-  { id: 'mystery-1', title: 'Mystery game', description: 'Something fun is being built here', players: '', available: false },
-  { id: 'mystery-2', title: 'Mystery game', description: 'Something fun is being built here', players: '', available: false },
-] as const;
+type Vec = readonly [number, number, number];
 
-export type FaceInfo = (typeof FACES)[number];
+export type FaceInfo = {
+  id: string;
+  title: string;
+  description: string;
+  players: string;
+  available: boolean;
+  normal: Vec;
+  forward: Vec;
+};
+
+/**
+ * The games on the cube's six sides. normal: which way the side faces on the cube; forward: the
+ * direction on that side that points towards the camera once the side has turned up.
+ */
+export const FACES: readonly FaceInfo[] = [
+  { id: 'minigolf', title: 'Minigolf', description: 'Putt across tiny islands with your phone as the club', players: '1–4 players', available: true, normal: [0, 0, 1], forward: [0, -1, 0] },
+  { id: 'badminton', title: 'Badminton', description: 'Smash the shuttlecock over the net', players: '2–4 players', available: false, normal: [1, 0, 0], forward: [0, 0, 1] },
+  { id: 'mystery-1', title: 'Mystery game', description: 'Something fun is being built here', players: '', available: false, normal: [0, 1, 0], forward: [0, 0, 1] },
+  { id: 'mystery-2', title: 'Mystery game', description: 'Something fun is being built here', players: '', available: false, normal: [-1, 0, 0], forward: [0, 0, 1] },
+  { id: 'mystery-3', title: 'Mystery game', description: 'Something fun is being built here', players: '', available: false, normal: [0, 0, -1], forward: [0, 1, 0] },
+  { id: 'mystery-4', title: 'Mystery game', description: 'Something fun is being built here', players: '', available: false, normal: [0, -1, 0], forward: [0, 0, -1] },
+];
+
 
 export function buildFace(face: FaceInfo, kit: FaceKit, size: number): THREE.Group {
   if (face.id === 'minigolf') return minigolfWorld(kit, size);
   if (face.id === 'badminton') return badmintonWorld(size);
-  return constructionWorld(face.id === 'mystery-1' ? 1 : 2, size);
-}
-
-/** The top of the cube, where the players' characters stand: a round meadow with a few bushes. */
-export function buildPlaza(kit: FaceKit, size: number): THREE.Group {
-  const g = new THREE.Group();
-  const meadow = new THREE.Mesh(new THREE.CylinderGeometry(size * 0.42, size * 0.44, 0.24, 48), mat('#7ccf4a', 0.9));
-  meadow.position.y = 0.1;
-  meadow.receiveShadow = true;
-  g.add(meadow);
-  const names = ['Bush_1_B', 'Bush_2_A', 'Bush_4_A', 'Grass_1_B', 'Grass_2_B'];
-  for (let k = 0; k < 14; k++) {
-    const a = (k / 14) * Math.PI * 2 + 0.2;
-    // Keep the front open, where the characters stand.
-    if (Math.sin(a) > 0.55) continue;
-    const name = names[k % names.length];
-    const m = new THREE.Mesh(kit.forest.geometries.get(name)!, kit.forest.material);
-    m.scale.setScalar(name.startsWith('Bush') ? 0.28 : 0.4);
-    m.position.set(Math.cos(a) * size * 0.36, 0.2, Math.sin(a) * size * 0.36);
-    m.rotation.y = a * 5;
-    m.castShadow = true;
-    g.add(m);
-  }
-  return g;
+  return constructionWorld(FACES.indexOf(face), size);
 }
 
 /** The minigolf side: tiny islands in a cute sea, flags, a windmill and trees. */

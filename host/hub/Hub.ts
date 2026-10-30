@@ -9,17 +9,21 @@ import type { PlayerInfo } from '../../shared/protocol.ts';
 import { TUNING } from '../../shared/tuning.ts';
 import { Character } from '../game/character.ts';
 import { loadForest } from '../game/vegetation.ts';
-import { buildFace, buildPlaza, canvasTexture, FACES, seededRandom, type FaceInfo, type FaceKit } from './faces.ts';
+import { buildFace, canvasTexture, FACES, seededRandom, type FaceInfo, type FaceKit } from './faces.ts';
 
-// Cube World: the lobby is a cute cube floating in starry space. Each of its four sides is a little
-// world for one game; the arrows (or a click) turn the cube to another side. The players who joined
-// stand on top of the cube as their chibi characters, with their names above their heads.
+// Cube World: the lobby is a cute cube floating in starry space, one little world per side for each
+// game. Drag it with the mouse to spin it round. Click a side (or use the arrows) to choose that game:
+// its side turns up towards you, the game's card appears, and the players' chibi characters pop up on it.
+// Click into empty space (or press Esc) to let the cube go again.
 
-type Guest = { character: Character; tag: HTMLElement; age: number; hitUntil: number; hitText: string; label: string };
+type Guest = { player: PlayerInfo; character: Character; tag: HTMLElement; age: number; hitUntil: number; hitText: string };
+
+const UP = new THREE.Vector3(0, 1, 0);
+const SIDE = new THREE.Vector3(1, 0, 0);
 
 export class Hub {
-  /** Called whenever another side of the cube comes to the front. */
-  onSelect: (face: FaceInfo) => void = () => {};
+  /** Called when a game is chosen (its side turns up) or let go (null). */
+  onSelect: (face: FaceInfo | null) => void = () => {};
 
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
@@ -30,12 +34,17 @@ export class Hub {
   private readonly halo: THREE.Sprite;
   private readonly stars: THREE.Points;
   private readonly faces: THREE.Group[] = [];
+  /** For every side: the cube's pose that puts that side up, tipped towards the camera. */
+  private readonly poses: THREE.Quaternion[] = [];
   private readonly guests = new Map<string, Guest>();
   /** Name tags are plain page elements over the 3D view, so they stay sharp and don't glow. */
   private readonly tagLayer = document.createElement('div');
   private readonly clock = new THREE.Clock();
-  private index = 0;
-  private targetAngle = 0;
+  private players: PlayerInfo[] = [];
+  private chosen = -1;
+  /** Spin left over after a drag (radians per second around the screen's up and side axes). */
+  private readonly spin = new THREE.Vector2();
+  private drag: { x: number; y: number; moved: number; time: number } | null = null;
   private time = 0;
   private running = false;
 
@@ -59,14 +68,15 @@ export class Hub {
     this.renderer.shadowMap.enabled = true;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = c.exposure;
+    this.renderer.domElement.style.cursor = 'grab';
+    this.renderer.domElement.style.touchAction = 'none';
     container.appendChild(this.renderer.domElement);
     this.tagLayer.style.cssText = 'position:absolute;inset:0;pointer-events:none;overflow:hidden';
     container.appendChild(this.tagLayer);
 
     this.camera = new THREE.PerspectiveCamera(c.cameraFov, 1, 0.1, 400);
     this.camera.position.set(0, c.cameraHeight, c.cameraDistance);
-    this.camera.position.x = c.cameraSideShift;
-    this.camera.lookAt(c.cameraSideShift, -0.4, 0);
+    this.camera.lookAt(0, 0, 0);
 
     this.scene.add(makeSky());
     this.stars = makeStars();
@@ -87,7 +97,6 @@ export class Hub {
     this.scene.add(sun);
 
     // The cube: a rounded block that turns (spinner) inside a group that floats (planet).
-    // The meadow on top stays put while the cube turns underneath, so the characters keep facing us.
     const size = c.cubeSize;
     const body = new THREE.Mesh(
       new RoundedBoxGeometry(size, size, size, 6, c.cubeRounding),
@@ -95,19 +104,25 @@ export class Hub {
     );
     body.receiveShadow = true;
     this.spinner.add(body);
+    const tilt = new THREE.Quaternion().setFromAxisAngle(SIDE, THREE.MathUtils.degToRad(c.chosenTiltDegrees));
     FACES.forEach((face, i) => {
+      const normal = new THREE.Vector3(...face.normal);
+      const forward = new THREE.Vector3(...face.forward);
+      // The side's own axes on the cube: x to its right, y out of the cube, z towards the viewer once it is up.
+      const basis = new THREE.Matrix4().makeBasis(new THREE.Vector3().crossVectors(normal, forward), normal, forward);
       const world = buildFace(face, kit, size);
-      // Side i faces outwards at i quarter turns: 0 = towards the camera, 1 = right, 2 = back, 3 = left.
-      const normal = new THREE.Vector3(Math.sin((i * Math.PI) / 2), 0, Math.cos((i * Math.PI) / 2));
-      world.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+      world.quaternion.setFromRotationMatrix(basis);
       world.position.copy(normal).multiplyScalar(size / 2 + 0.1);
       world.userData.face = i;
       this.faces.push(world);
       this.spinner.add(world);
+      // Turning the cube by the opposite of that puts the side up, facing us; then tip it towards us.
+      this.poses.push(tilt.clone().multiply(world.quaternion.clone().invert()));
     });
-    const plaza = buildPlaza(kit, size);
-    plaza.position.y = size / 2 - 0.02;
-    this.planet.add(this.spinner, plaza);
+    this.spinner.quaternion.setFromEuler(
+      new THREE.Euler(THREE.MathUtils.degToRad(c.startTiltDegrees), THREE.MathUtils.degToRad(c.startTurnDegrees), 0),
+    );
+    this.planet.add(this.spinner);
     this.scene.add(this.planet);
 
     this.composer = new EffectComposer(this.renderer);
@@ -116,12 +131,13 @@ export class Hub {
     this.composer.addPass(new OutputPass());
 
     window.addEventListener('resize', () => this.resize());
-    this.renderer.domElement.addEventListener('click', (e) => this.clickAt(e.clientX, e.clientY));
+    this.listenToPointer();
     this.resize();
   }
 
-  get selected(): FaceInfo {
-    return FACES[this.index];
+  /** The chosen game, or null while the cube floats freely. */
+  get selected(): FaceInfo | null {
+    return this.chosen < 0 ? null : FACES[this.chosen];
   }
 
   start(): void {
@@ -138,55 +154,32 @@ export class Hub {
     this.renderer.setAnimationLoop(null);
   }
 
-  /** Turns the cube by whole sides: +1 brings the right-hand side to the front, -1 the left-hand one. */
-  turn(steps: number): void {
-    this.index = (((this.index + steps) % FACES.length) + FACES.length) % FACES.length;
-    this.targetAngle -= (steps * Math.PI) / 2;
+  /** Chooses a game by id (its side turns up and the characters pop up on it), or lets go with null. */
+  select(id: string | null): void {
+    const index = id === null ? -1 : FACES.findIndex((f) => f.id === id);
+    if (index === this.chosen) return;
+    this.chosen = index;
+    this.spin.set(0, 0);
+    this.clearGuests();
+    this.addGuests();
     this.onSelect(this.selected);
   }
 
-  /** Turns the cube so this game's side faces the camera (the short way round). */
-  show(id: string): void {
-    const target = FACES.findIndex((f) => f.id === id);
-    if (target < 0) return;
-    let steps = target - this.index;
-    if (steps > 2) steps -= 4;
-    if (steps < -2) steps += 4;
-    if (steps !== 0) this.turn(steps);
-    else this.onSelect(this.selected);
+  /** The arrows: choose the next or previous game going round the list. */
+  cycle(steps: number): void {
+    const from = this.chosen < 0 ? (steps > 0 ? -1 : 0) : this.chosen;
+    this.select(FACES[(((from + steps) % FACES.length) + FACES.length) % FACES.length].id);
   }
 
-  /** The players who joined: new ones pop in on top of the cube and wave, players who left disappear. */
+  /** The players who joined. While a game is chosen, new ones pop up on its side and players who left disappear. */
   setPlayers(players: PlayerInfo[]): void {
+    this.players = players;
     for (const [id, guest] of this.guests) {
       if (players.some((p) => p.id === id)) continue;
-      this.planet.remove(guest.character.root);
-      guest.tag.remove();
+      this.removeGuest(guest);
       this.guests.delete(id);
     }
-    players.forEach((player, i) => {
-      let guest = this.guests.get(player.id);
-      if (!guest) {
-        const character = new Character({ shirt: player.colour, skin: player.skinTone, handedness: player.handedness });
-        guest = { character, tag: makeTag(), age: 0, hitUntil: 0, hitText: '', label: '' };
-        character.root.scale.setScalar(0.001);
-        character.play('cheer');
-        this.guests.set(player.id, guest);
-        this.planet.add(character.root);
-        this.tagLayer.append(guest.tag);
-      } else {
-        guest.character.setLook({ shirt: player.colour, skin: player.skinTone, handedness: player.handedness });
-      }
-      const c = TUNING.hub;
-      const x = (i - (players.length - 1) / 2) * c.characterSpacing;
-      const spot = new THREE.Vector3(x, c.cubeSize / 2 + 0.22, 1.1 - Math.abs(x) * 0.15);
-      const yaw = -x * 0.12;
-      if (guest.age === 0) guest.character.place(spot, yaw);
-      else guest.character.setTarget(spot, yaw);
-      guest.label = player.connected ? player.name : `${player.name} (away)`;
-      (guest.tag.firstChild as HTMLElement).style.background = player.colour;
-      guest.tag.style.opacity = player.connected ? '1' : '0.6';
-    });
+    this.addGuests();
   }
 
   /** A player hit from their phone while waiting: their character jumps and shows the power. */
@@ -198,26 +191,33 @@ export class Hub {
     guest.hitUntil = this.time + 2.5;
   }
 
-  /** For checks in the browser console. */
+  /** One frame. Public for checks in the browser console. */
   frame(dt = Math.min(this.clock.getDelta(), 0.05)): void {
     const c = TUNING.hub;
     this.time += dt;
-    // Turn towards the chosen side, then float and sway gently.
-    this.spinner.rotation.y += (this.targetAngle - this.spinner.rotation.y) * (1 - Math.exp(-c.turnSpeed * dt));
+    if (this.chosen >= 0) {
+      // Turn the chosen side up towards us.
+      this.spinner.quaternion.slerp(this.poses[this.chosen], 1 - Math.exp(-c.turnSpeed * dt));
+    } else if (!this.drag) {
+      // Let go: keep spinning a little after a drag, slowing down, then drift slowly round by itself.
+      this.spin.multiplyScalar(Math.exp(-c.spinFriction * dt));
+      if (this.spin.length() < c.idleSpin) this.spin.x += (c.idleSpin - this.spin.x) * Math.min(1, dt);
+      this.turnBy(this.spin.x * dt, this.spin.y * dt);
+    }
     this.planet.position.y = Math.sin(this.time * c.bobSpeed) * c.bobHeight;
-    this.planet.rotation.y = Math.sin(this.time * 0.3) * THREE.MathUtils.degToRad(c.swayDegrees);
-    this.planet.rotation.x = Math.sin(this.time * 0.23) * THREE.MathUtils.degToRad(c.swayDegrees * 0.3);
     this.halo.position.copy(this.planet.position).add(new THREE.Vector3(0, 0, -c.cubeSize));
     this.stars.rotation.y += dt * 0.01;
 
-    for (const guest of this.guests.values()) {
-      guest.age += dt;
-      const pop = easeOutBack(Math.min(1, guest.age / c.popInSeconds));
-      guest.character.root.scale.setScalar(Math.max(0.001, pop * c.characterScale));
+    // Characters wait until their side has (nearly) turned up, then pop up one after another.
+    const settled = this.chosen >= 0 && this.spinner.quaternion.angleTo(this.poses[this.chosen]) < 0.2;
+    [...this.guests.values()].forEach((guest, i) => {
+      if (settled || guest.age > 0) guest.age += dt;
+      const t = Math.max(0, guest.age - i * c.popInStagger) / c.popInSeconds;
+      guest.character.root.scale.setScalar(Math.max(0.001, easeOutBack(Math.min(1, t)) * c.characterScale));
       guest.character.update(dt);
       // Now and then somebody waves.
-      if (Math.random() < dt * 0.12) guest.character.play('cheer');
-    }
+      if (t >= 1 && Math.random() < dt * 0.12) guest.character.play('cheer');
+    });
     this.composer.render();
     this.placeTags();
   }
@@ -231,16 +231,97 @@ export class Hub {
     this.camera.updateProjectionMatrix();
   }
 
-  /** Clicking a side of the cube turns it to the front. */
+  /** Turns the cube around the screen's up axis (yaw) and side axis (pitch), like grabbing it. */
+  private turnBy(yaw: number, pitch: number): void {
+    const q = new THREE.Quaternion().setFromAxisAngle(UP, yaw).multiply(new THREE.Quaternion().setFromAxisAngle(SIDE, pitch));
+    this.spinner.quaternion.premultiply(q).normalize();
+  }
+
+  /** Drag to spin the cube; a click (no drag) on a side chooses that game, a click into space lets go. */
+  private listenToPointer(): void {
+    const canvas = this.renderer.domElement;
+    canvas.addEventListener('pointerdown', (e) => {
+      canvas.setPointerCapture(e.pointerId);
+      canvas.style.cursor = 'grabbing';
+      this.drag = { x: e.clientX, y: e.clientY, moved: 0, time: performance.now() };
+      this.spin.set(0, 0);
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      if (!this.drag) return;
+      const dx = e.clientX - this.drag.x;
+      const dy = e.clientY - this.drag.y;
+      this.drag.moved += Math.hypot(dx, dy);
+      if (this.drag.moved < 6) return;
+      // Grabbing the cube lets go of the chosen game.
+      if (this.chosen >= 0) this.select(null);
+      const speed = TUNING.hub.dragSpeed;
+      const seconds = Math.max(0.008, (performance.now() - this.drag.time) / 1000);
+      this.turnBy(dx * speed, dy * speed);
+      this.spin.set((dx * speed) / seconds, (dy * speed) / seconds);
+      Object.assign(this.drag, { x: e.clientX, y: e.clientY, time: performance.now() });
+    });
+    const release = (e: PointerEvent): void => {
+      if (!this.drag) return;
+      const click = this.drag.moved < 6;
+      // A drag that stopped before letting go doesn't keep spinning.
+      if (performance.now() - this.drag.time > 80) this.spin.set(0, 0);
+      this.drag = null;
+      canvas.style.cursor = 'grab';
+      if (click) this.clickAt(e.clientX, e.clientY);
+    };
+    canvas.addEventListener('pointerup', release);
+    canvas.addEventListener('pointercancel', release);
+  }
+
   private clickAt(clientX: number, clientY: number): void {
     const rect = this.renderer.domElement.getBoundingClientRect();
     const pointer = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
     const ray = new THREE.Raycaster();
     ray.setFromCamera(pointer, this.camera);
-    const hit = ray.intersectObjects(this.faces, true)[0];
-    let object: THREE.Object3D | null = hit?.object ?? null;
+    const hit = ray.intersectObjects([...this.faces, this.spinner], true)[0];
+    if (!hit) return this.select(null);
+    let object: THREE.Object3D | null = hit.object;
     while (object && object.userData.face === undefined) object = object.parent;
-    if (object) this.show(FACES[object.userData.face as number].id);
+    if (object) this.select(FACES[object.userData.face as number].id);
+  }
+
+  // ---------- Characters on the chosen side ----------
+
+  /** Puts every player who has no character yet on the chosen side, in a row facing the camera. */
+  private addGuests(): void {
+    if (this.chosen < 0) return;
+    const c = TUNING.hub;
+    const side = this.faces[this.chosen];
+    this.players.forEach((player, i) => {
+      let guest = this.guests.get(player.id);
+      if (!guest) {
+        const character = new Character({ shirt: player.colour, skin: player.skinTone, handedness: player.handedness });
+        guest = { player, character, tag: makeTag(), age: 0, hitUntil: 0, hitText: '' };
+        character.root.scale.setScalar(0.001);
+        character.play('cheer');
+        this.guests.set(player.id, guest);
+        side.add(character.root);
+        this.tagLayer.append(guest.tag);
+      }
+      guest.player = player;
+      guest.character.setLook({ shirt: player.colour, skin: player.skinTone, handedness: player.handedness });
+      const x = (i - (this.players.length - 1) / 2) * c.characterSpacing;
+      const spot = new THREE.Vector3(x, 0.12, c.characterForward - Math.abs(x) * 0.12);
+      if (guest.age === 0) guest.character.place(spot, -x * 0.1);
+      else guest.character.setTarget(spot, -x * 0.1);
+      (guest.tag.firstChild as HTMLElement).style.background = player.colour;
+      guest.tag.style.opacity = player.connected ? '1' : '0.6';
+    });
+  }
+
+  private clearGuests(): void {
+    for (const guest of this.guests.values()) this.removeGuest(guest);
+    this.guests.clear();
+  }
+
+  private removeGuest(guest: Guest): void {
+    guest.character.root.removeFromParent();
+    guest.tag.remove();
   }
 
   /** Keeps every name tag just above its character's head on screen. */
@@ -250,11 +331,12 @@ export class Hub {
     const height = this.tagLayer.clientHeight;
     [...this.guests.values()].forEach((guest, i) => {
       const head = guest.character.root.localToWorld(new THREE.Vector3(0, TUNING.character.height + 0.02, 0)).project(this.camera);
-      const pop = Math.min(1, guest.age / c.popInSeconds);
+      const pop = THREE.MathUtils.clamp((guest.age - i * c.popInStagger) / c.popInSeconds, 0, 1);
       // Every second tag sits a step higher, so long names next to each other don't overlap.
       const lift = i % 2 === 1 ? '- 115%' : '- 0%';
       guest.tag.style.transform = `translate(${((head.x + 1) / 2) * width}px, calc(${((1 - head.y) / 2) * height}px ${lift})) translate(-50%, -100%) scale(${pop})`;
-      const text = this.time < guest.hitUntil ? guest.hitText : guest.label;
+      const label = guest.player.connected ? guest.player.name : `${guest.player.name} (away)`;
+      const text = this.time < guest.hitUntil ? guest.hitText : label;
       const name = guest.tag.lastChild as HTMLElement;
       if (name.textContent !== text) name.textContent = text;
     });

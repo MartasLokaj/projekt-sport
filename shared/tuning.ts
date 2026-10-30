@@ -290,24 +290,34 @@ export const TUNING = {
     skyTop: '#0b0f2e',
     skyBottom: '#3a1f5c',
     stars: 1500,
-    /** Camera: distance, height and field of view (degrees). */
-    cameraDistance: 18,
-    cameraHeight: 10,
-    /** Moves the view sideways so the cube sits a little left of centre, clear of the game panel on the right. */
-    cameraSideShift: 2.2,
-    cameraFov: 38,
+    /** Camera: distance from the cube, height and field of view (degrees). Closer = bigger cube. */
+    cameraDistance: 16.5,
+    cameraHeight: 3.5,
+    cameraFov: 40,
+    /** Dragging with the mouse: how far the cube turns per pixel, and how long it keeps spinning after letting go. */
+    dragSpeed: 0.008,
+    spinFriction: 3,
+    /** While nobody touches it, the cube turns slowly by itself (radians per second). */
+    idleSpin: 0.12,
+    /** The cube's starting pose (degrees): tipped towards us and turned, so three sides show. */
+    startTiltDegrees: 22,
+    startTurnDegrees: -32,
+    /** A chosen game's side turns up, then tips this far towards us so its little world is easy to see (degrees). */
+    chosenTiltDegrees: 36,
     /** How quickly the cube turns to the chosen side (bigger = snappier). */
     turnSpeed: 5,
-    /** The gentle idle float: up-down distance and speed, and a small sway (degrees). */
+    /** The gentle idle float: up-down distance and speed. */
     bobHeight: 0.15,
     bobSpeed: 0.8,
-    swayDegrees: 6,
-    /** Characters on top of the cube: their size and the spacing between them. */
+    /** Characters on the chosen side: their size, the spacing between them, and how far forward they stand. */
     characterScale: 1.35,
-    characterSpacing: 1.6,
-    /** How long a character takes to pop in when its player joins (seconds). */
+    characterSpacing: 1.3,
+    characterForward: 1.5,
+    /** How long a character takes to pop in, and the pause between one character and the next (seconds). */
     popInSeconds: 0.5,
+    popInStagger: 0.15,
     exposure: 1.05,
     bloomStrength: 0.55,
   },
+
 } as const;

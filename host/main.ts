@@ -18,6 +18,8 @@ const startButton = document.getElementById('start') as HTMLButtonElement;
 const pickTitle = document.getElementById('pick-title')!;
 const pickDescription = document.getElementById('pick-description')!;
 const pickPlayers = document.getElementById('pick-players')!;
+const pickCard = document.getElementById('pick')!;
+const joinedList = document.getElementById('joined')!;
 
 const scoresEl = document.getElementById('hud-scores')!;
 const scoreboardEl = document.getElementById('scoreboard')!;
@@ -52,8 +54,10 @@ function el(tag: string, className: string, text = ''): HTMLElement {
   return element;
 }
 
-/** The game on the front of the cube, and whether it can be played yet. */
-function showPick(face: FaceInfo): void {
+/** The chosen game's card (it slides away while no game is chosen). */
+function showPick(face: FaceInfo | null): void {
+  pickCard.classList.toggle('away', !face);
+  if (!face) return;
   pickTitle.textContent = face.title;
   pickDescription.textContent = face.description;
   const ready = players.filter((p) => p.connected).length;
@@ -64,8 +68,21 @@ function showPick(face: FaceInfo): void {
   startButton.disabled = !face.available || ready === 0;
 }
 
+/** Who has joined, under the QR code. */
+function showJoined(): void {
+  joinedList.replaceChildren(
+    ...players.map((p) => {
+      const item = el('li', p.connected ? '' : 'away');
+      const dot = el('span', 'dot');
+      dot.style.background = p.colour;
+      item.append(dot, document.createTextNode(p.connected ? p.name : `${p.name} (away)`));
+      return item;
+    }),
+  );
+}
+
 function startSelected(): void {
-  if (hub?.selected.available && players.some((p) => p.connected)) send({ type: 'start_game' });
+  if (hub?.selected?.available && players.some((p) => p.connected)) send({ type: 'start_game' });
 }
 
 let socket: WebSocket | null = null;
@@ -87,6 +104,7 @@ function connect(): void {
     else if (msg.type === 'lobby_state') {
       players = msg.players;
       hub?.setPlayers(players);
+      showJoined();
       if (hub) showPick(hub.selected);
       game?.setPlayers(players);
     } else if (msg.type === 'game_state') void onGameState(msg);
@@ -139,7 +157,7 @@ async function onGameState(state: GameState): Promise<void> {
       lobbyScreen.hidden = false;
       // Back to the cube, with the game we just played in front.
       hub?.start();
-      hub?.show('minigolf');
+      hub?.select('minigolf');
     }
     return;
   }
@@ -219,14 +237,18 @@ function renderScores(state: GameState): void {
 }
 
 startButton.addEventListener('click', startSelected);
-document.getElementById('turn-left')!.addEventListener('click', () => hub?.turn(-1));
-document.getElementById('turn-right')!.addEventListener('click', () => hub?.turn(1));
+document.getElementById('turn-left')!.addEventListener('click', () => hub?.cycle(-1));
+document.getElementById('turn-right')!.addEventListener('click', () => hub?.cycle(1));
 window.addEventListener('keydown', (e) => {
   const phase = lastState?.phase ?? 'lobby';
   if (phase === 'lobby' && !playing) {
-    if (e.key === 'ArrowLeft') hub?.turn(-1);
-    else if (e.key === 'ArrowRight') hub?.turn(1);
-    else if (e.key === 'Enter') startSelected();
+    if (e.key === 'ArrowLeft') hub?.cycle(-1);
+    else if (e.key === 'ArrowRight') hub?.cycle(1);
+    else if (e.key === 'Escape') hub?.select(null);
+    else if (e.key === 'Enter') {
+      if (hub?.selected) startSelected();
+      else hub?.select('minigolf');
+    }
     return;
   }
   if (e.key === 'Enter' && phase === 'hole_end') send({ type: 'next_hole' });

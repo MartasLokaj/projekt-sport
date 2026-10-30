@@ -76,6 +76,12 @@ running log of where we are, what the user decided, and what comes next).
     (QR card top-left, game card on the right with ‹ Play ›, "Cube World" title at the bottom), wiring in
     `host/main.ts` (arrows/Enter/click; the old per-phone aim/power readout cards are gone — a swing in the lobby
     makes that character jump and shows the power in its name tag). Tuning: `TUNING.hub`. CPU ~1.6 ms/frame.
+    **2a redo (user: "pecka", then asked for):** cube centred and bigger; **drag with the mouse to spin it freely**
+    (keeps spinning a little, then drifts slowly by itself); **click a side** (or ← →) to choose a game: that side
+    turns **up** (tipped towards us), the game card slides in on the right and the players' chibis **pop up on that
+    side** one after another. Click into space / drag / Esc lets go (card slides away, characters vanish). The cube now
+    has 6 sides (`FACES` in `faces.ts` with `normal` + `forward`): Minigolf, Badminton, 4 mystery building sites.
+    Who has joined is listed under the QR code. Enter with nothing chosen picks Minigolf, Enter again plays.
   - 2b Game registry (`shared/games.ts` + host side), server remembers the selected game (`select_game`), phones
     show it; leader swipes left/right and taps Play.
   - 2c Juice: dive-into-the-face transition, sparkles, pop-in, 60 fps check.
