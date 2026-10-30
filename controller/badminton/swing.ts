@@ -48,6 +48,8 @@ export class BadmintonSwingDetector {
   /** A finished softer swing waiting to see whether a faster one follows. */
   private candidate: { peak: Point; until: number } | null = null;
   private quietUntil = 0;
+  /** This player's usual swing direction, counted as straight (see aimAutoCenter). */
+  private aimBias = 0;
 
   /** Speed of the latest reading, for the live meter. */
   get liveSpeed(): number {
@@ -110,7 +112,9 @@ export class BadmintonSwingDetector {
       (p) => Math.abs(p.t - peak.t) <= cfg.aimWindowMs && p.speed >= peak.speed * 0.5 && p.spin !== null,
     );
     const share = fast.length ? fast.reduce((sum, p) => sum + p.spin! / p.speed, 0) / fast.length : 0;
-    const aim = Math.max(-1, Math.min(1, -share * cfg.aimGain * cfg.aimSign));
+    const raw = -share * cfg.aimGain * cfg.aimSign;
+    const aim = Math.max(-1, Math.min(1, raw - this.aimBias));
+    if (!ignored) this.aimBias += (raw - this.aimBias) * cfg.aimAutoCenter;
     return {
       ignored,
       speed: Math.round(peak.speed),

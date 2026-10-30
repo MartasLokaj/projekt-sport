@@ -143,7 +143,12 @@ running log of where we are, what the user decided, and what comes next).
     overhead/smash, `driveFrom` 1.0 → new flat `drive` shot, lower → lift); serve only diagonal into the service
     court; shuttle glowing red, `shuttleScale` 1.6. Scripted test: clears met at 2.25–2.3 m, smashes defended at
     0.85–1.15 m around 2–3 m from the net.
-  - Next: user test 2 → tune → B3 split screen 1v1.
+  - **User test 2:** wanted a jump smash at cartoon height ("like the big party sports games") and "I don't hit at
+    all — Too early". Log (`logs/badminton-swings-game1.jsonl`, 60 swings) showed almost every aim read as right
+    (natural forehand sweep). **Done:** `reachHeight` 3.0 with a jump above `standingReach` 1.8 (racket top
+    standing), `jumpRiseMs`; asymmetric window `hitWindowEarlyMs` 350 / `hitWindowMs` 250; `aimGain` 1.0 and
+    `aimAutoCenter` 0.15 (the phone learns the player's usual direction as straight).
+  - Next: user test 3 → tune → B3 split screen 1v1.
 
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.

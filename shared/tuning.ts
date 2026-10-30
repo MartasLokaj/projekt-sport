@@ -362,7 +362,12 @@ export const TUNING = {
      * Measured over this many milliseconds around the fastest moment. Below `aimDeadzone` counts as straight.
      * aimSign: -1 swaps left and right, in case a phone reports it the other way round.
      */
-    aimGain: 1.5,
+    aimGain: 1.0,
+    /**
+     * Most people's natural swing goes a little to one side. The phone keeps learning a player's usual
+     * direction and counts it as straight: each swing moves the learned "straight" this much (0 = off).
+     */
+    aimAutoCenter: 0.15,
     aimWindowMs: 120,
     aimDeadzone: 0.15,
     aimSign: 1,
@@ -388,11 +393,16 @@ export const TUNING = {
     maxRunSpeed: 9,
     /**
      * Where the racket meets the shuttle. Like real players, a character takes the shuttle as early as it can:
-     * the first point of the flight in its half that it can reach in time (running at maxRunSpeed after
-     * reactionMs) and that is no higher than reachHeight. Real adults (about 1.75 m) meet clears at about 2.3 m
-     * and smashes at about 2.2 m, so for our 1.6 m chibis reachHeight is about 2.3 m (with a little jump).
+     * the first point of the flight in its half that it can reach in time (at runSpeed, or maxRunSpeed if it
+     * must, after reactionMs) and that is no higher than reachHeight. Real adults (about 1.75 m) meet clears at
+     * about 2.3 m and smashes at about 2.2 m; we go much higher, like a cartoon sports game: above standingReach
+     * the character jumps to meet the shuttle (a jump smash), up to reachHeight.
      */
-    reachHeight: 2.3,
+    reachHeight: 3.0,
+    /** How high the racket reaches with the arm up, standing (our chibis are small: about 1.8 m). */
+    standingReach: 1.8,
+    /** A jump takes this long to go up (and the same to come down, milliseconds). */
+    jumpRiseMs: 320,
     lowestContact: 0.3,
     reactionMs: 150,
     /** Contact height decides the stroke: from overheadFrom up = overhead, from driveFrom up = flat drive, lower = lift (m). */
@@ -406,7 +416,8 @@ export const TUNING = {
     serveHeight: 0.9,
 
     // Hitting (timing only decides hit or miss and how good the hit is; the swing direction aims).
-    /** A swing this close to the right moment hits (either side, milliseconds). */
+    /** A swing this close to the right moment hits: this much too early, or this much too late (milliseconds). */
+    hitWindowEarlyMs: 350,
     hitWindowMs: 250,
     /** This close is "Perfect": the shot is as fast and as precise as it gets. */
     perfectMs: 100,

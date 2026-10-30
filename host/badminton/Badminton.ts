@@ -30,6 +30,8 @@ type Athlete = {
   /** World x of the racket hand relative to the body: +1 or -1. */
   handSign: number;
   runPhase: number;
+  /** A jump to meet a high shuttle: how high (m) and when it peaks (host clock). */
+  jump: { height: number; peak: number } | null;
   /** Swing animation: which stroke and when it started. */
   swing: { stroke: Stroke | 'serve'; start: number } | null;
   pose: { x: number; z: number };
@@ -166,7 +168,7 @@ export class Badminton {
     if (this.phase !== 'rally' || this.receiver !== 1 || this.decided || !this.contact) return;
     const off = at - this.contact.time;
     this.player.swing = { stroke: this.contact.stroke, start: now };
-    if (off < -cfg.hitWindowMs) {
+    if (off < -cfg.hitWindowEarlyMs) {
       this.showFeedback(`Too early! (${Math.round(-off)} ms)`);
       return;
     }
@@ -176,7 +178,8 @@ export class Badminton {
       return;
     }
     const size = Math.abs(off);
-    const quality = size <= cfg.perfectMs ? 1 : 1 - (size - cfg.perfectMs) / (cfg.hitWindowMs - cfg.perfectMs);
+    const window = off < 0 ? cfg.hitWindowEarlyMs : cfg.hitWindowMs;
+    const quality = size <= cfg.perfectMs ? 1 : 1 - (size - cfg.perfectMs) / (window - cfg.perfectMs);
     const kind = this.hit(this.player, power, aim, quality);
     const verdict = quality >= 1 ? 'Perfect!' : `Good · ${Math.round(size)} ms ${off < 0 ? 'early' : 'late'}`;
     this.showFeedback(`${shotName(kind)} · ${verdict}`);
@@ -241,7 +244,9 @@ export class Badminton {
     const spot = this.contact.position.clone();
     spot.x -= receiver.handSign * cfg.reach[this.contact.stroke];
     spot.y = 0;
-    this.moveTo(receiver, spot, this.contact.time - 120);
+    this.moveTo(receiver, spot, this.contact.time - cfg.jumpRiseMs - 60);
+    const jump = this.contact.position.y - cfg.standingReach;
+    receiver.jump = jump > 0 ? { height: jump, peak: this.contact.time } : null;
     const hitterAthlete = this.athlete(hitter);
     this.moveTo(hitterAthlete, new THREE.Vector3(0, 0, hitter * cfg.homeDepth), null);
   }
@@ -356,6 +361,14 @@ export class Badminton {
     } else {
       a.bob.position.y *= 0.8;
     }
+    // Jumping up to meet a high shuttle: up, at the top when the racket meets it, then down.
+    let lift = 0;
+    if (a.jump) {
+      const t = (now - a.jump.peak) / cfg.jumpRiseMs;
+      if (t > 1) a.jump = null;
+      else if (t > -1) lift = a.jump.height * (1 - t * t);
+    }
+    a.wrapper.position.y = lift;
 
     // Racket arm: swing animation, or winding up while the shuttle comes, or ready.
     let pose = READY_POSE;
@@ -410,6 +423,7 @@ export class Badminton {
       // The character's right hand is on its local -x side: +x in the world when facing -z, -x when facing +z.
       handSign: side === 1 ? 1 : -1,
       runPhase: 0,
+      jump: null,
       swing: null,
       pose: { ...READY_POSE },
     };
