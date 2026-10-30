@@ -25,6 +25,9 @@ running log of where we are, what the user decided, and what comes next).
   - **Step 1 — done** (commit `d833ac2`): curve-based rounded lanes + turf bumpers (look and physics from the same
     mesh), bright turf, matte grass, grassy islands with soft sand beach, island ground follows the lane (hole 2 is a
     grassy hill), bigger/faster waves, sky with sun, puffy clouds.
+  - **Step 1b — done** (commit `b385609`): on the user's request (photo with red marks) the bumpers' outer side is a
+    wide soft slope sinking into the island ground (`bumperSlope`, `bumperSlopeDepth` in `TUNING.course`); the island
+    ground near the lane now sits at lane height − `groundDepth`.
   - **Step 2 — next:** dense, natural-looking vegetation on the islands ("so you can't tell the trees are made in
     code"), island grass + "other things". The user allowed downloading more CC0 assets, **but always state file
     name, source and exact size and get a yes before downloading**.
@@ -32,6 +35,10 @@ running log of where we are, what the user decided, and what comes next).
       tree_small_02 101 MB) — not usable on a MacBook Air. Light enough: `shrub_02` 2.0 MB, `shrub_03` 1.6 MB,
       `shrub_04` 1.9 MB, `fern_02` 1.1 MB, `grass_bermuda_01` 1.5 MB, `flower_gazania` 2.8 MB (gltf 1k totals,
       via `https://api.polyhaven.com/files/<id>`).
+    - User wants **cute, "pixelated" (low-poly, simple texture) trees**. Proposed: KayKit Forest (Kay Lousberg, CC0,
+      itch.io, free tier 6.1 MB, 100+ trees/rocks/bushes/grass, glTF). Alternatives: Kenney Nature Kit (CC0, ~10.5 MB
+      zip on OpenGameArt), Quaternius Stylized Nature MegaKit (CC0, 99 MB zip). Waiting for the user's choice.
+    - **Wind** (swaying trees/grass) — the user wants it in 4c.
     - Still need a **light CC0 tree source** (e.g. Quaternius stylized nature packs, or another CC0 set). Propose
       options with sizes to the user. Use instancing; keep 60 fps.
 - **4c Juice — not started:** hole intro fly-over with "Hole N · Par P", confetti on hole-in (+ special hole-in-one
