@@ -1,6 +1,7 @@
 # Projekt-sport — project instructions
 
 Read SPEC.md before starting any work. It is the source of truth for what we are building.
+Then read progress/STATUS.md: where the project is, what the user decided, and what to do next. Keep it up to date after each milestone.
 
 ## Working with the user
 - The user is not a programmer. Talk to them in Czech, in plain words. Explain any technical term in one short sentence.
