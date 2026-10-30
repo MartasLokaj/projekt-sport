@@ -89,6 +89,10 @@ export type BuiltHole = {
   cupRadius: number;
   /** Moves the obstacles (windmill blades). Call every physics step, before stepping the world. */
   update: (dt: number) => void;
+  /** The floor's collider, for finding the ground height (e.g. to lay the aim line on a slope). */
+  floorCollider: RAPIER.Collider;
+  /** Big pieces that may hide the ball from the camera; the game fades them out when they do. */
+  occluders: THREE.Object3D[];
 };
 
 export async function loadKit(): Promise<Kit> {
@@ -116,6 +120,7 @@ export function buildHole(def: HoleDef, kit: Kit, origin: THREE.Vector3, world: 
   const walls = new TriangleSoup();
   let cup: THREE.Vector3 | null = null;
   const updates: ((dt: number) => void)[] = [];
+  const occluders: THREE.Object3D[] = [];
 
   for (const piece of def.pieces) {
     const source = kit.get(piece.name);
@@ -150,14 +155,31 @@ export function buildHole(def: HoleDef, kit: Kit, origin: THREE.Vector3, world: 
       (normal.normalize().y > 0.5 ? floor : walls).add(a, b, c);
     });
 
-    if (blades) updates.push(addWindmillBlades(model, blades, world, R));
+    if (blades) {
+      updates.push(addWindmillBlades(model, blades, world, R));
+      // Its own copies of the materials, so it can be faded out without fading the other pieces.
+      model.traverse((o) => {
+        if (o instanceof THREE.Mesh) o.material = (o.material as THREE.Material).clone();
+      });
+      occluders.push(model);
+      // A plain lane underneath, so the grass stays visible while the windmill is faded out.
+      const lane = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.8 * S, S),
+        new THREE.MeshStandardMaterial({ color: TUNING.course.laneColour, roughness: 0.9 }),
+      );
+      lane.rotation.x = -Math.PI / 2;
+      lane.rotation.z = model.rotation.y;
+      lane.position.set(model.position.x, model.position.y + (KIT_FLOOR - 0.002) * S, model.position.z);
+      lane.receiveShadow = true;
+      group.add(lane);
+    }
   }
   if (!cup) throw new Error(`Hole ${def.number} has no cup`);
 
   const cfg = TUNING.course;
   const fixed = world.createRigidBody(R.RigidBodyDesc.fixed());
   const floorMesh = floor.build();
-  world.createCollider(
+  const floorCollider = world.createCollider(
     R.ColliderDesc.trimesh(floorMesh.vertices, floorMesh.indices, R.TriMeshFlags.FIX_INTERNAL_EDGES)
       .setFriction(cfg.floorFriction)
       .setRestitution(0),
@@ -188,6 +210,8 @@ export function buildHole(def: HoleDef, kit: Kit, origin: THREE.Vector3, world: 
     cup,
     cupRadius,
     update: (dt) => updates.forEach((u) => u(dt)),
+    floorCollider,
+    occluders,
   };
 }
 

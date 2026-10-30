@@ -157,12 +157,21 @@ export class Game {
     this.ballMesh.add(dot);
     this.scene.add(this.ballMesh);
 
-    // White aim line: a flat stripe from the ball straight ahead. Its length is set every frame.
+    // White aim line: a strip from the ball straight ahead, laid on the ground every frame (so it climbs ramps).
+    const stripGeometry = new THREE.BufferGeometry();
+    const segments = TUNING.aimLine.segments;
+    stripGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array((segments + 1) * 2 * 3), 3));
+    const stripIndices: number[] = [];
+    for (let i = 0; i < segments; i++) {
+      const a = i * 2;
+      stripIndices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+    }
+    stripGeometry.setIndex(stripIndices);
     this.aimStripe = new THREE.Mesh(
-      new THREE.PlaneGeometry(TUNING.aimLine.width, 1),
-      new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.9 }),
+      stripGeometry,
+      new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.9, side: THREE.DoubleSide }),
     );
-    this.aimStripe.rotation.x = -Math.PI / 2;
+    this.aimStripe.frustumCulled = false;
     this.aimLine.add(this.aimStripe);
     this.scene.add(this.aimLine);
 
@@ -588,6 +597,7 @@ export class Game {
 
     this.updateAimLine();
     this.updateCharacters(dt);
+    this.updateOccluders(dt);
     this.updateCamera(dt);
     this.renderer.render(this.scene, this.camera);
   }
@@ -596,15 +606,68 @@ export class Game {
     const aiming = this.state === 'aiming';
     const yaw = this.aimYaw();
     this.aimLine.visible = aiming;
+    if (!aiming) return;
     const ball = this.ballMesh.position;
-    this.aimLine.position.set(ball.x, ball.y - TUNING.ball.radius, ball.z);
+    const groundY = ball.y - TUNING.ball.radius;
+    this.aimLine.position.set(ball.x, groundY, ball.z);
     this.aimLine.rotation.y = yaw;
+
     // The line starts just in front of the ball and is as long as the rough rolling distance.
+    // Each point sits on the floor below it, so the line shows ramps and bumps.
+    const { width, segments } = TUNING.aimLine;
     const start = TUNING.ball.radius * 1.6;
     const length = Math.max(0.05, (this.estimate ?? TUNING.aimLine.length) - start);
-    this.aimStripe.scale.y = length;
-    this.aimStripe.position.set(0, 0.012, start + length / 2);
+    const dirX = Math.sin(yaw);
+    const dirZ = Math.cos(yaw);
+    const positions = this.aimStripe.geometry.getAttribute('position') as THREE.BufferAttribute;
+    let height = 0;
+    for (let i = 0; i <= segments; i++) {
+      const along = start + (length * i) / segments;
+      const floor = this.floorHeight(ball.x + dirX * along, ball.z + dirZ * along, ball.y + 1.5);
+      if (floor !== null) height = floor - groundY;
+      positions.setXYZ(i * 2, -width / 2, height + 0.015, along);
+      positions.setXYZ(i * 2 + 1, width / 2, height + 0.015, along);
+    }
+    positions.needsUpdate = true;
   }
+
+  /** Height of the floor at (x, z), looking down from `fromY`, or null where there is no floor. */
+  private floorHeight(x: number, z: number, fromY: number): number | null {
+    const floor = this.hole.floorCollider;
+    const ray = new RAPIER.Ray({ x, y: fromY, z }, { x: 0, y: -1, z: 0 });
+    const hit = this.world.castRay(ray, fromY + 2, true, undefined, undefined, undefined, undefined, (c) => c === floor);
+    return hit ? fromY - hit.timeOfImpact : null;
+  }
+
+  /** Fades out big pieces (the windmill) while they stand between the camera and the ball or the aim. */
+  private updateOccluders(dt: number): void {
+    const occluders = this.hole.occluders;
+    if (occluders.length === 0) return;
+    const targets = [this.ballMesh.position.clone()];
+    if (this.state === 'aiming') {
+      const yaw = this.aimYaw();
+      const reach = Math.max(1.5, this.estimate ?? TUNING.aimLine.length);
+      targets.push(this.ballMesh.position.clone().add(new THREE.Vector3(Math.sin(yaw) * reach, 0, Math.cos(yaw) * reach)));
+    }
+    const raycaster = new THREE.Raycaster();
+    for (const occluder of occluders) {
+      const blocking = targets.some((target) => {
+        const toTarget = target.clone().sub(this.camera.position);
+        raycaster.set(this.camera.position, toTarget.clone().normalize());
+        raycaster.far = toTarget.length();
+        return raycaster.intersectObject(occluder, true).length > 0;
+      });
+      const goal = blocking ? TUNING.aimLine.occluderOpacity : 1;
+      occluder.traverse((o) => {
+        if (!(o instanceof THREE.Mesh)) return;
+        const material = o.material as THREE.MeshStandardMaterial;
+        material.opacity += (goal - material.opacity) * Math.min(1, dt * 8);
+        material.transparent = material.opacity < 0.99;
+        material.depthWrite = !material.transparent;
+      });
+    }
+  }
+
 
   /** Sets the aim line to roughly how far a shot with this power and curve would roll (on open ground, ignoring walls). */
   private showEstimate(power: number, curve: number): void {

@@ -111,6 +111,8 @@ export const TUNING = {
     bladeScale: 1.5,
     /** How fast the windmill turns (degrees per second). */
     windmillDegreesPerSecond: 50,
+    /** Grass colour of the plain lane drawn under the windmill (seen while it is faded out). */
+    laneColour: '#6db27a',
     /** The holes are built side by side, this far apart. */
     holeSpacing: 60,
   },
@@ -161,9 +163,13 @@ export const TUNING = {
   },
 
   aimLine: {
-    /** The white aim line in front of the ball. */
+    /** The white aim line in front of the ball. It follows the ground, so slopes show. */
     length: 2.5,
     width: 0.05,
+    /** How many pieces the line is made of (more = smoother over bumps and ramps). */
+    segments: 48,
+    /** Pieces that hide the ball from the camera (the windmill) fade to this see-through level. */
+    occluderOpacity: 0.25,
     /** The distance marker ("about this far") simulates this many seconds of rolling at most. */
     previewSeconds: 6,
     /** Arrow keys on the Mac turn the aim this fast (degrees per second). */
