@@ -3,7 +3,7 @@ import { TUNING } from '../../shared/tuning.ts';
 
 // Badminton Swing Lab on the big screen (phase B1): a test bench, not the game.
 // A shuttle drops to the hit line again and again; players swing their phones when it gets there.
-// Each player's card shows the last swing (overhead/underhand, power, timing) and a graph of the motion,
+// Each player's card shows the last swing (power, timing) and a graph of the motion,
 // so we can see on real phones whether the detection is right and tune it.
 
 type SwingMsg = BadmintonSwing & { playerId: string; receivedAt: number };
@@ -71,16 +71,15 @@ export class Lab {
     if (!card) return;
     const cfg = TUNING.badmintonSwing;
     if (msg.ignored) {
-      card.detail.textContent = `Ignored a turn the other way (racket going back or up, ${msg.speed}°/s)`;
+      card.detail.textContent = `Ignored a slow turn (reaching or getting ready, ${msg.speed}°/s)`;
       return;
     }
     card.swings.push(msg);
     card.flash = performance.now();
 
     const band = msg.power < cfg.softBelow ? 'soft' : msg.power >= cfg.hardFrom ? 'hard' : 'medium';
-    const shot = msg.kind === 'overhead' ? (band === 'hard' ? 'Smash' : 'Clear') : 'Lift';
-    card.shot.textContent = `${msg.kind === 'overhead' ? 'OVERHEAD' : 'UNDERHAND'} · ${band} ${Math.round(msg.power)} % → ${shot}`;
-    card.shot.className = `lab-shot ${msg.kind}`;
+    card.shot.textContent = `HIT · ${band} ${Math.round(msg.power)} %`;
+    card.shot.className = `lab-shot ${band}`;
 
     const off = this.timingOf(msg.at);
     if (off === null) {
@@ -97,14 +96,13 @@ export class Lab {
     }
 
     card.detail.textContent =
-      `${msg.speed}°/s · top ${Math.abs(msg.tilt)}° ${msg.tilt >= 0 ? 'up' : 'down'} before the hit · ` +
+      `${msg.speed}°/s · ` +
       `arrived ${Math.max(0, msg.receivedAt - msg.at)} ms after the hit · ${msg.fused ? 'orientation sensor' : 'gravity only'}`;
 
-    const overhead = card.swings.filter((s) => s.kind === 'overhead').length;
     const judged = card.timings.slice(-10);
     const avg = judged.length ? Math.round(judged.reduce((a, b) => a + Math.abs(b), 0) / judged.length) : null;
     card.stats.textContent =
-      `${card.swings.length} swings · ${overhead} overhead · ${card.swings.length - overhead} underhand` +
+      `${card.swings.length} swings` +
       (avg === null ? '' : ` · timing off by ${avg} ms on average (last ${judged.length})`);
     this.drawGraph(card, msg);
   }
@@ -146,7 +144,7 @@ export class Lab {
     return card;
   }
 
-  /** Speed (orange) and tilt of the top of the phone (blue) before the fastest moment (the dashed line). */
+  /** Speed (orange, dashed line = slowest hit) and tilt of the top of the phone (blue) around the fastest moment. */
   private drawGraph(card: Card, msg: SwingMsg): void {
     const cfg = TUNING.badmintonSwing;
     const c = card.graph.getContext('2d')!;
@@ -165,10 +163,8 @@ export class Lab {
     c.beginPath();
     c.moveTo(x(0), 0);
     c.lineTo(x(0), h);
-    c.moveTo(0, yTilt(cfg.overheadMinTilt));
-    c.lineTo(w, yTilt(cfg.overheadMinTilt));
-    c.moveTo(0, ySpeed(cfg.triggerSpeed));
-    c.lineTo(w, ySpeed(cfg.triggerSpeed));
+    c.moveTo(0, ySpeed(cfg.minHitSpeed));
+    c.lineTo(w, ySpeed(cfg.minHitSpeed));
     c.stroke();
     c.setLineDash([]);
 

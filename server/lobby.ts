@@ -315,7 +315,6 @@ function cleanBadmintonSwing(msg: BadmintonSwing): BadmintonSwing | null {
         .filter((p) => Array.isArray(p) && p.length >= 3 && p.length <= 6 && p.every(Number.isFinite))
     : [];
   return {
-    kind: msg.kind === 'overhead' ? 'overhead' : 'underhand',
     ignored: msg.ignored === true,
     speed: clamp(msg.speed, 0, 5000),
     power: clamp(msg.power, 0, 100),

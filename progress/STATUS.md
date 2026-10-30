@@ -111,7 +111,17 @@ running log of where we are, what the user decided, and what comes next).
     overhead = highest tilt in `overheadLookbackMs` before the peak ≥ `overheadMinTilt` (45), `maxSpeed` 2000,
     hit line moved to the middle of the drill. Trace now also has the gyro x/y/z. Cost: report ~330 ms after the peak
     (hit time stays exact). Backhand swings would turn "the other way" and be ignored — fine for now, revisit in B2.
-  - Next: user tests again (ideally 10 overhead, pause, 10 underhand, so the log can be checked) → tune → B2.
+  - **Test 2 (60 swings, `logs/badminton-swings-session2.jsonl`):** user: "it does not tell underhand from overhead
+    at all, but that's fine" → **decision: shot type from court position** (back = overhead, front = underhand unless
+    a smash is possible; SPEC §13). Data: real swings 780–2100°/s (gyro tops out ~2000, many hard swings hit it),
+    reaching/getting ready 380–730°/s; the learned-direction filter wrongly ignored ~7 fast real swings (probably the
+    underhand ones turn the other way); confirm wait made every report ~360 ms late; timing spread vs. the drill
+    ~±130 ms median (clock sync works).
+    **Changes:** no overhead/underhand and no direction learning; `minHitSpeed` 750 (slower = ignored, still logged);
+    swings ≥ `instantSpeed` 1100 are sent at once (~50 ms after the peak), softer ones wait `confirmMs`;
+    power from 750..1800°/s.
+  - Next: user test 3 (does every real swing count once, are reaches ignored, does power feel right, does the
+    timing verdict feel fair) → then B1 is done → B2 (graybox rally vs CPU, hit window ~±200–250 ms).
 
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.

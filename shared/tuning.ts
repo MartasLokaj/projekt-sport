@@ -326,40 +326,34 @@ export const TUNING = {
 
   // Badminton swing detection (Swing Lab, phase B1). The phone is held like a racket handle,
   // with the top of the phone where the racket head would be. No button: a fast enough turn is a swing.
+  // Overhead or underhand is not read from the phone (test 2 showed it is unreliable): the game picks it
+  // from where the character stands (back of the court = overhead, front = underhand unless a smash is possible).
   // Speeds in degrees per second, times in milliseconds. Every swing is saved to logs/badminton-swings.jsonl.
   badmintonSwing: {
-    /** The phone must turn faster than this to count as a swing (ignores walking around and small waves). */
+    /** Turns faster than this are looked at (and logged); slower ones are just moving around. */
     triggerSpeed: 350,
+    /**
+     * A swing must be faster than this to be a hit. Slower turns are reaching for the shuttle or getting
+     * ready (shown as "ignored"). In test 2 reaching peaked at 380–730, real swings at 780–2100.
+     */
+    minHitSpeed: 750,
+    /** Swings faster than this are sent at once; slower ones wait `confirmMs` first. */
+    instantSpeed: 1100,
     /** The swing is sent as soon as the turn slows below this share of its fastest moment (0..1). */
     releaseRatio: 0.75,
     /** ...or at the latest this long after it started. */
     maxSwingMs: 250,
     /**
-     * After the turn slows down, wait this long in case a faster swing follows (reaching back with the
+     * After a slower swing, wait this long in case a faster one follows (reaching back with the
      * racket comes just before the real swing). Adds to the delay, but the hit time is still exact.
      */
     confirmMs: 280,
     /** After a swing, ignore motion for this long (the arm coming back is not a new swing). */
     cooldownMs: 450,
-    /** The phone learns which way this player's real swings turn, from swings faster than this... */
-    learnSpeed: 900,
-    /** ...each strong swing moves what it learned this much (0..1). */
-    learnRate: 0.3,
-    /**
-     * A turn pointing the other way than the learned swings (below this, -1 = exactly opposite, 0 = sideways)
-     * is the racket going back or up, e.g. reaching for the shuttle. Ignored.
-     */
-    backwardDot: -0.3,
-    /** Speed for 0 % and 100 % power, and the curve between them (1 = straight). */
-    minSpeed: 350,
-    maxSpeed: 2000,
+    /** Speed for 0 % and 100 % power, and the curve between them (1 = straight). The iPhone gyro tops out near 2000. */
+    minSpeed: 750,
+    maxSpeed: 1800,
     curveExponent: 1,
-    /**
-     * Overhead when the top of the phone pointed higher than this above the horizon (degrees) at some point
-     * in the `overheadLookbackMs` before the fastest moment (the racket was up, then swung forward).
-     */
-    overheadMinTilt: 45,
-    overheadLookbackMs: 350,
     /** Power bands shown in the lab: soft below the first, hard from the second (percent). */
     softBelow: 35,
     hardFrom: 70,

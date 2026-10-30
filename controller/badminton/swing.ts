@@ -3,31 +3,29 @@ import { TUNING } from '../../shared/tuning.ts';
 // Instant badminton swing detection. Unlike the minigolf putt there is no button and no waiting:
 // the phone listens all the time and a fast enough turn is a swing.
 //
-// 1. A swing starts when the phone turns faster than `triggerSpeed`. Its fastest moment is remembered:
-//    the time (for judging early/late), the speed (power) and which way the phone turned.
-// 2. When the turn slows down, the swing waits `confirmMs`: reaching back with the racket is often
-//    followed straight away by the real, faster swing, which then replaces it.
-// 3. The phone learns which way this player's real swings turn (from their strong swings). A turn the
-//    other way is the racket going back or up (reaching for the shuttle, the arm coming back): ignored.
-// 4. Overhead = the top of the phone (the racket head) pointed high just before the fastest moment.
-//    At the fastest moment itself the racket already swings forward, so that moment alone does not tell.
+// 1. A turn faster than `triggerSpeed` is looked at. Its fastest moment is remembered:
+//    the time (for judging early/late) and the speed (power).
+// 2. Slower than `minHitSpeed` it is no hit, just reaching for the shuttle or getting ready ("ignored").
+// 3. A strong swing is sent as soon as the turn slows down. A softer one waits `confirmMs` first:
+//    reaching back with the racket is often followed straight away by the real, faster swing,
+//    which then replaces it.
+// Overhead or underhand is not read from the phone: the game picks it from where the character stands.
 
 export type BadmintonSample = {
   /** Phone clock, milliseconds since 1970. */
   t: number;
   /** Gyroscope, degrees per second, around the phone's x, y and z axes. */
   rate: [number, number, number];
-  /** Angle of the top of the phone above the horizon (degrees), or null when unknown. */
+  /** Angle of the top of the phone above the horizon (degrees), or null when unknown. Only logged. */
   tilt: number | null;
 };
 
 export type DetectedSwing = {
-  kind: 'overhead' | 'underhand';
-  /** True when it turned the wrong way (racket going back or up), so it is not a hit. */
+  /** True when it was too slow to be a hit (reaching for the shuttle, getting ready). */
   ignored: boolean;
   speed: number;
   power: number;
-  /** Highest tilt of the top of the phone just before the fastest moment (degrees). */
+  /** Tilt of the top of the phone at the fastest moment (degrees). */
   tilt: number;
   /** Phone clock time of the fastest moment. */
   at: number;
@@ -35,28 +33,20 @@ export type DetectedSwing = {
   trace: number[][];
 };
 
-type Vec = [number, number, number];
-type Point = { t: number; speed: number; tilt: number | null; rate: Vec };
+type Point = { t: number; speed: number; tilt: number | null; rate: [number, number, number] };
 
 export class BadmintonSwingDetector {
   /** This player's own sensitivity (1 = 100 %), set from their profile. */
   playerSensitivity = 1;
   private recent: Point[] = [];
   private swing: { start: number; peak: Point } | null = null;
-  /** A finished swing waiting to see whether a faster one follows. */
+  /** A finished softer swing waiting to see whether a faster one follows. */
   private candidate: { peak: Point; until: number } | null = null;
-  /** Which way this player's real swings turn (unit vector), learned from strong swings. */
-  private forward: Vec | null = null;
   private quietUntil = 0;
 
   /** Speed of the latest reading, for the live meter. */
   get liveSpeed(): number {
     return this.recent.at(-1)?.speed ?? 0;
-  }
-
-  /** True once the phone knows which way this player swings. */
-  get learned(): boolean {
-    return this.forward !== null;
   }
 
   sample(s: BadmintonSample): DetectedSwing | null {
@@ -90,49 +80,28 @@ export class BadmintonSwingDetector {
     if (point.speed > this.swing.peak.speed) this.swing.peak = point;
     const slowed = point.speed < this.swing.peak.speed * cfg.releaseRatio;
     if (!slowed && s.t - this.swing.start < cfg.maxSwingMs) return null;
-    this.candidate = { peak: this.swing.peak, until: s.t + cfg.confirmMs };
+    const peak = this.swing.peak;
     this.swing = null;
+    if (peak.speed >= cfg.instantSpeed) return this.finish(peak, s.t);
+    this.candidate = { peak, until: s.t + cfg.confirmMs };
     return null;
   }
 
   private finish(peak: Point, now: number): DetectedSwing {
     const cfg = TUNING.badmintonSwing;
-    const direction = normalize(peak.rate);
-    const ignored = this.forward !== null && dot(direction, this.forward) < cfg.backwardDot;
-    if (!ignored) {
-      this.quietUntil = now + cfg.cooldownMs;
-      if (peak.speed >= cfg.learnSpeed) {
-        this.forward = this.forward ? normalize(mix(this.forward, direction, cfg.learnRate)) : direction;
-      }
-    }
-
-    const before = this.recent.filter((p) => p.t >= peak.t - cfg.overheadLookbackMs && p.t <= peak.t && p.tilt !== null);
-    const tilt = before.length ? Math.max(...before.map((p) => p.tilt!)) : 0;
+    const ignored = peak.speed < cfg.minHitSpeed;
+    if (!ignored) this.quietUntil = now + cfg.cooldownMs;
     const t = Math.min(1, Math.max(0, (peak.speed - cfg.minSpeed) / (cfg.maxSpeed - cfg.minSpeed)));
-    const power = Math.min(100, Math.round(Math.pow(t, cfg.curveExponent) * this.playerSensitivity * 1000) / 10);
+    const power = ignored ? 0 : Math.min(100, Math.max(1, Math.round(Math.pow(t, cfg.curveExponent) * this.playerSensitivity * 1000) / 10));
     return {
-      kind: tilt >= cfg.overheadMinTilt ? 'overhead' : 'underhand',
       ignored,
       speed: Math.round(peak.speed),
       power,
-      tilt: Math.round(tilt),
+      tilt: Math.round(peak.tilt ?? 0),
       at: Math.round(peak.t),
       trace: this.recent
         .filter((p) => p.t >= peak.t - cfg.traceBeforeMs)
         .map((p) => [Math.round(p.t - peak.t), Math.round(p.speed), Math.round(p.tilt ?? 0), ...p.rate.map(Math.round)]),
     };
   }
-}
-
-function dot(a: Vec, b: Vec): number {
-  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-}
-
-function normalize(v: Vec): Vec {
-  const len = Math.hypot(...v) || 1;
-  return [v[0] / len, v[1] / len, v[2] / len];
-}
-
-function mix(a: Vec, b: Vec, t: number): Vec {
-  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 }
