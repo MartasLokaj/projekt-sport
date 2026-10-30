@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import type { BallResult, GameState, PlayerInfo, SwingProgress } from '../../shared/protocol.ts';
 import { TUNING } from '../../shared/tuning.ts';
 import { applyCurve, applyRollingResistance, createBall, curveFromTwist, shotSpeed } from './ball.ts';
+import { ADDRESS_DISTANCE, Character } from './character.ts';
 import { buildCourse, HOLE_1, isInCup, type HoleDef } from './course.ts';
 import { DistancePreview } from './preview.ts';
 
@@ -10,6 +11,8 @@ import { DistancePreview } from './preview.ts';
 // whose turn it is and counts strokes (see syncState). Each player has their own ball: the current
 // player's ball is the physical one, the others wait as see-through "ghost" balls.
 // The current player's aim, live swing, practice swings and strokes come in through the onPhone… methods.
+// Every player also has a chibi character: the current player addresses the ball and swings along
+// with the real swing, the others watch from the side and react to the shot.
 // Every shot starts aimed straight ahead, where the camera looks (at the tee: down the lane).
 // The phone's aim angle turns it from there. A white line shows the aim; while the player swings,
 // the gauge on the left climbs and the white line stretches to show roughly how far the ball would roll.
@@ -29,6 +32,8 @@ type PlayerBall = {
   pos: THREE.Vector3 | null;
   yaw: number | null;
   ghost: THREE.Mesh;
+  character: Character;
+  handedness: PlayerInfo['handedness'];
 };
 type SwingKind = 'hit' | 'practice';
 
@@ -65,6 +70,11 @@ export class Game {
   private active: string | null = null;
   private lastTurn = -1;
   private lastPhase: GameState['phase'] = 'lobby';
+  /** Where the current turn's ball started, and the direction straight ahead then (for placing the watchers). */
+  private readonly turnStart = new THREE.Vector3();
+  private turnYaw = 0;
+  /** Where the golfer stands while the ball rolls (frozen at the stroke). */
+  private golferSpot: { position: THREE.Vector3; yaw: number } | null = null;
   private lastRest = new THREE.Vector3();
   private restTime = 0;
   private stepAccumulator = 0;
@@ -181,11 +191,29 @@ export class Game {
         );
         ghost.visible = false;
         this.scene.add(ghost);
-        player = { name: info.name, colour: info.colour, strokes: 0, done: false, inMatch: false, pos: null, yaw: null, ghost };
+        const look = { shirt: info.colour, skin: info.skinTone, handedness: info.handedness };
+        const character = new Character(look);
+        character.place(this.teePosition().add(new THREE.Vector3(1, 0, -0.5)), 0);
+        character.root.visible = false;
+        this.scene.add(character.root);
+        player = {
+          name: info.name,
+          colour: info.colour,
+          strokes: 0,
+          done: false,
+          inMatch: false,
+          pos: null,
+          yaw: null,
+          ghost,
+          character,
+          handedness: info.handedness,
+        };
         this.players.set(info.id, player);
       }
       player.name = info.name;
       player.colour = info.colour;
+      player.handedness = info.handedness;
+      player.character.setLook({ shirt: info.colour, skin: info.skinTone, handedness: info.handedness });
       (player.ghost.material as THREE.MeshStandardMaterial).color.set(info.colour);
     }
     this.updateGhosts();
@@ -238,6 +266,79 @@ export class Game {
     (this.ballMesh.material as THREE.MeshStandardMaterial).color.set(player.colour);
     this.ballMesh.visible = true;
     this.beginShot(player.yaw ?? THREE.MathUtils.degToRad(this.hole.teeYaw));
+    this.turnStart.copy(player.pos ?? this.teePosition());
+    this.turnYaw = this.baseYaw;
+    this.golferSpot = null;
+    for (const [pid, other] of this.players) other.character.setStance(pid === id ? 'address' : 'stand');
+  }
+
+  // ---------- Characters ----------
+
+  /** Where a golfer stands to address a ball at `ball`, aiming along `yaw`: beside the ball, side-on to the aim line. */
+  private addressSpot(ball: THREE.Vector3, yaw: number, handedness: PlayerInfo['handedness']): { position: THREE.Vector3; yaw: number } {
+    const scale = TUNING.character.height / 0.9;
+    // The golfer faces across the aim line; right-handers have the target on their left.
+    const face = new THREE.Vector3(-Math.cos(yaw), 0, Math.sin(yaw));
+    const side = handedness === 'left' ? 1 : -1;
+    return {
+      position: ball.clone().setY(0).addScaledVector(face, side * ADDRESS_DISTANCE * scale),
+      yaw: Math.atan2(face.x, face.z),
+    };
+  }
+
+  private updateCharacters(dt: number): void {
+    const activePlayer = this.active ? this.players.get(this.active) : undefined;
+    const watchers: PlayerBall[] = [];
+    for (const [id, player] of this.players) {
+      const show = player.inMatch && this.lastPhase !== 'lobby';
+      player.character.root.visible = show;
+      if (show && id !== this.active) watchers.push(player);
+    }
+
+    if (activePlayer) {
+      if (this.state === 'aiming') {
+        const spot = this.addressSpot(this.ballMesh.position, this.aimYaw(), activePlayer.handedness);
+        activePlayer.character.setTarget(spot.position, spot.yaw);
+      } else if (this.golferSpot) {
+        activePlayer.character.setTarget(this.golferSpot.position, this.golferSpot.yaw);
+      }
+    }
+
+    // Watchers line up beside and a little ahead of the ball, on the side away from the golfer, facing the ball.
+    const c = TUNING.character;
+    const ahead = new THREE.Vector3(Math.sin(this.turnYaw), 0, Math.cos(this.turnYaw));
+    const awayFromGolfer = new THREE.Vector3(-Math.cos(this.turnYaw), 0, Math.sin(this.turnYaw));
+    if (activePlayer?.handedness === 'left') awayFromGolfer.negate();
+    watchers.forEach((player, i) => {
+      const spot = this.turnStart
+        .clone()
+        .addScaledVector(awayFromGolfer, c.spectatorSide)
+        .addScaledVector(ahead, c.spectatorAhead + i * c.spectatorSpacing);
+      const look = this.state === 'rolling' || this.state === 'holed' ? this.ballMesh.position : this.turnStart;
+      player.character.setTarget(spot, Math.atan2(look.x - spot.x, look.z - spot.z));
+    });
+
+    for (const player of this.players.values()) if (player.character.root.visible) player.character.update(dt);
+  }
+
+  /** How the golfer (and the others) react to where the ball ended up. */
+  private react(result: BallResult): void {
+    const golfer = this.active ? this.players.get(this.active)?.character : undefined;
+    if (!golfer) return;
+    if (result === 'holed') {
+      golfer.play('jump');
+      for (const [id, player] of this.players) if (id !== this.active && player.inMatch) player.character.play('clap');
+    } else if (result === 'out') {
+      golfer.play('scratch');
+    } else {
+      const p = this.ball.translation();
+      const cup = this.hole.cup;
+      const after = Math.hypot(cup.x - p.x, cup.z - p.z);
+      const before = Math.hypot(cup.x - this.turnStart.x, cup.z - this.turnStart.z);
+      if (after < TUNING.character.goodShotDistance) golfer.play('cheer');
+      else if (after > before - 0.5) golfer.play('slump');
+      else golfer.setStance('stand');
+    }
   }
 
   private teePosition(): THREE.Vector3 {
@@ -261,6 +362,7 @@ export class Game {
   /** The phone is in the middle of a swing: move the gauge and the line's length live. */
   onPhoneSwingProgress(progress: SwingProgress): void {
     if (this.state !== 'aiming') return;
+    this.golfer()?.setSwing(progress.phase === 'swinging' ? progress.backswing : 0);
     if (progress.phase === 'cancelled') {
       this.showPracticeResult();
       return;
@@ -280,6 +382,10 @@ export class Game {
     if (this.state !== 'aiming') return;
     this.phoneAngle = angle;
     this.shoot(power, curveFromTwist(twist));
+  }
+
+  private golfer(): Character | undefined {
+    return this.active ? this.players.get(this.active)?.character : undefined;
   }
 
   // ---------- Rules ----------
@@ -304,12 +410,14 @@ export class Game {
       player.pos = new THREE.Vector3(p.x, 0, p.z);
       player.yaw = this.cameraYaw();
     }
+    if (result !== 'holed') this.react(result); // a hole-in reacts at once, see holed()
     this.state = 'waiting';
     this.hud.gauge.hidden = true;
     this.onBallResult?.(result);
   }
 
   private practice(power: number, curve: number): void {
+    this.golfer()?.strike(power);
     this.practiceResult = { power, curve };
     this.showPracticeResult();
   }
@@ -330,6 +438,11 @@ export class Game {
     this.ball.setLinvel({ x: Math.sin(yaw) * speed, y: 0, z: Math.cos(yaw) * speed }, true);
     this.followDir.set(Math.sin(yaw), 0, Math.cos(yaw));
     this.curve = curve;
+    const player = this.active ? this.players.get(this.active) : undefined;
+    if (player) {
+      this.golferSpot = this.addressSpot(this.ballMesh.position, yaw, player.handedness);
+      player.character.strike(power);
+    }
     this.state = 'rolling';
     this.restTime = 0;
     this.estimate = null;
@@ -385,6 +498,7 @@ export class Game {
     const strokesText = `${strokes} stroke${strokes === 1 ? '' : 's'}`;
     const who = player ? `${player.name}: ` : '';
     this.showMessage(`${who}${name ?? 'In the hole!'}\n${strokesText}`, TUNING.rules.holedPauseMs);
+    this.react('holed');
     window.setTimeout(() => {
       this.ballMesh.visible = false;
       this.finishTurn('holed');
@@ -428,6 +542,7 @@ export class Game {
         const power = Math.round(this.charging.amount * 100);
         this.setGauge(this.charging.kind === 'hit' ? 'Swing' : 'Practice', power);
         this.showEstimate(power, 0);
+        this.golfer()?.setSwing(this.charging.amount * 60);
       }
     }
 
@@ -447,6 +562,7 @@ export class Game {
     this.ballMesh.quaternion.set(q.x, q.y, q.z, q.w);
 
     this.updateAimLine();
+    this.updateCharacters(dt);
     this.updateCamera(dt);
     this.renderer.render(this.scene, this.camera);
   }
@@ -481,9 +597,12 @@ export class Game {
     if (this.state === 'aiming') {
       const yaw = this.aimYaw();
       const dir = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+      // Look slightly towards the golfer's side so the character is in the picture.
+      const golferSide = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+      if (this.active && this.players.get(this.active)?.handedness === 'left') golferSide.negate();
       return {
         position: ball.clone().addScaledVector(dir, -c.aimDistance).addScaledVector(UP, c.aimHeight),
-        look: ball.clone().addScaledVector(dir, 1.5),
+        look: ball.clone().addScaledVector(dir, 1.5).addScaledVector(golferSide, c.aimSideShift),
       };
     }
     // Follow the ball from behind its direction of travel, turning gently.

@@ -122,13 +122,34 @@ export const TUNING = {
 
   camera: {
     /** While aiming: distance behind the ball and height above it. */
-    aimDistance: 3.2,
-    aimHeight: 1.7,
+    aimDistance: 3.4,
+    aimHeight: 1.8,
+    /** While aiming the camera looks a little towards the golfer's side, so the character is in view. */
+    aimSideShift: 0.25,
     /** While the ball rolls: distance and height. */
     followDistance: 3.6,
     followHeight: 2.4,
     /** How quickly the camera catches up (bigger = snappier). */
     smoothing: 3,
+  },
+
+  character: {
+    /** Height of a character (the ball is 0.2 wide). */
+    height: 0.9,
+    /** The character's putter never swings further back or through than this (degrees). */
+    maxBackswing: 70,
+    /** Further away than this, a character hops to its spot instead of shuffling. */
+    hopDistance: 0.35,
+    /** Hopping speed (units per second), hops per second and hop height. */
+    hopSpeed: 2.2,
+    hopsPerSecond: 3,
+    hopHeight: 0.12,
+    /** Waiting players stand this far to the side of the ball and this far ahead of it, in a row going forward. */
+    spectatorSide: 0.75,
+    spectatorAhead: 0.6,
+    spectatorSpacing: 0.55,
+    /** A shot that stops this close to the cup gets a little cheer. */
+    goodShotDistance: 1.0,
   },
 
   gauge: {

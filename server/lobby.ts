@@ -7,6 +7,7 @@ import {
   SENSITIVITY_MAX,
   SENSITIVITY_MIN,
   SHIRT_COLOURS,
+  SKIN_TONES,
   type ClientMessage,
   type Handedness,
   type JoinError,
@@ -27,6 +28,7 @@ type Seat = {
   id: string;
   name: string;
   colour: string;
+  skinTone: string;
   handedness: Handedness;
   sensitivity: number;
   socket: WebSocket | null;
@@ -206,11 +208,21 @@ export class Lobby {
     let seat = this.seats.get(msg.playerId);
     if (!seat) {
       if (this.seats.size >= MAX_PLAYERS) return refuse(ws, 'game_full');
-      seat = { id: msg.playerId, name, colour, handedness: 'right', sensitivity: SENSITIVITY_DEFAULT, socket: null, lastStrokeAt: 0 };
+      seat = {
+        id: msg.playerId,
+        name,
+        colour,
+        skinTone: SKIN_TONES[0],
+        handedness: 'right',
+        sensitivity: SENSITIVITY_DEFAULT,
+        socket: null,
+        lastStrokeAt: 0,
+      };
       this.seats.set(seat.id, seat);
     }
     seat.name = name;
     seat.colour = colour;
+    seat.skinTone = (SKIN_TONES as readonly string[]).includes(msg.skinTone) ? msg.skinTone : SKIN_TONES[0];
     seat.handedness = msg.handedness === 'left' ? 'left' : 'right';
     seat.sensitivity = Number.isFinite(msg.sensitivity)
       ? Math.round(clamp(msg.sensitivity, SENSITIVITY_MIN, SENSITIVITY_MAX))
@@ -272,6 +284,7 @@ function toInfo(seat: Seat): PlayerInfo {
     id: seat.id,
     name: seat.name,
     colour: seat.colour,
+    skinTone: seat.skinTone,
     connected: seat.socket !== null,
     handedness: seat.handedness,
     sensitivity: seat.sensitivity,

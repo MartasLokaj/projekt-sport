@@ -7,6 +7,8 @@ export const ROOM_CODE_LENGTH = 4;
 export const NAME_MAX_LENGTH = 12;
 export const SHIRT_COLOURS = ['#ff5a5f', '#ffb400', '#3ec300', '#00a6ed', '#9b5cff', '#ff7ac6'] as const;
 
+export const SKIN_TONES = ['#ffe0c7', '#f3c79a', '#dba571', '#b67b4c', '#8d5a34', '#5e3b22'] as const;
+
 /** Per-player swing sensitivity in percent: the swing's power is multiplied by it. */
 export const SENSITIVITY_MIN = 50;
 export const SENSITIVITY_MAX = 150;
@@ -18,6 +20,7 @@ export type PlayerInfo = {
   id: string;
   name: string;
   colour: string;
+  skinTone: string;
   connected: boolean;
   /** Which way the player putts. Swing detection works the same for both; the character will stand mirrored (Phase 3). */
   handedness: Handedness;
@@ -92,6 +95,7 @@ export type ClientMessage =
       playerId: string;
       name: string;
       colour: string;
+      skinTone: string;
       handedness: Handedness;
       sensitivity: number;
     }

@@ -5,6 +5,7 @@ import {
   SENSITIVITY_MAX,
   SENSITIVITY_MIN,
   SHIRT_COLOURS,
+  SKIN_TONES,
   WS_PATH,
   type ClientMessage,
   type GameState,
@@ -19,7 +20,14 @@ import { initPlayScreen } from './play.ts';
 // The phone controller: join the game (room code from the QR code link, or typed in),
 // stay joined through screen locks and Wi-Fi blips, then aim and hit on the play screen.
 
-type Profile = { playerId: string; name: string; colour: string; handedness: Handedness; sensitivity: number };
+type Profile = {
+  playerId: string;
+  name: string;
+  colour: string;
+  skinTone: string;
+  handedness: Handedness;
+  sensitivity: number;
+};
 
 const PROFILE_KEY = 'minigolf.profile';
 
@@ -39,6 +47,7 @@ const roomInput = document.getElementById('room-code') as HTMLInputElement;
 const roomError = document.getElementById('room-error')!;
 const joinForm = document.getElementById('join-form') as HTMLFormElement;
 const nameInput = document.getElementById('name') as HTMLInputElement;
+const skinsEl = document.getElementById('skins')!;
 const handButtons = [...document.querySelectorAll<HTMLButtonElement>('#hands button')];
 const sensitivityInput = document.getElementById('sensitivity') as HTMLInputElement;
 const sensitivityValue = document.getElementById('sensitivity-value')!;
@@ -56,6 +65,7 @@ let stopped = false;
 let joined = false;
 let selectedColour: string = profile.colour;
 let selectedHand: Handedness = profile.handedness;
+let selectedSkin: string = profile.skinTone;
 let otherPlayers: PlayerInfo[] = [];
 let allPlayers: PlayerInfo[] = [];
 let gameState: GameState | null = null;
@@ -83,6 +93,7 @@ function showJoinForm(error = ''): void {
   joined = false;
   if (!nameInput.value) nameInput.value = profile.name;
   selectedHand = profile.handedness;
+  selectedSkin = profile.skinTone;
   sensitivityInput.value = String(profile.sensitivity);
   renderSettings();
   joinError.textContent = error;
@@ -165,6 +176,20 @@ turnButton.addEventListener('click', () => send({ type: 'start_game' }));
 turnEdit.addEventListener('click', () => showJoinForm());
 
 function renderSettings(): void {
+  skinsEl.replaceChildren();
+  for (const tone of SKIN_TONES) {
+    const swatch = document.createElement('button');
+    swatch.type = 'button';
+    swatch.className = 'swatch';
+    swatch.style.background = tone;
+    swatch.classList.toggle('selected', tone === selectedSkin);
+    swatch.setAttribute('aria-label', `Skin tone ${tone}`);
+    swatch.addEventListener('click', () => {
+      selectedSkin = tone;
+      renderSettings();
+    });
+    skinsEl.append(swatch);
+  }
   for (const button of handButtons) button.classList.toggle('selected', button.dataset.hand === selectedHand);
   sensitivityValue.textContent = `${sensitivityInput.value} %`;
 }
@@ -244,6 +269,7 @@ function connect(): void {
       case 'joined':
         profile.name = msg.player.name;
         profile.colour = msg.player.colour;
+        profile.skinTone = msg.player.skinTone;
         profile.handedness = msg.player.handedness;
         profile.sensitivity = msg.player.sensitivity;
         saveProfile(profile);
@@ -309,6 +335,7 @@ joinForm.addEventListener('submit', (event) => {
     playerId: profile.playerId,
     name,
     colour: selectedColour,
+    skinTone: selectedSkin,
     handedness: selectedHand,
     sensitivity: Number(sensitivityInput.value),
   });
@@ -346,6 +373,7 @@ function loadProfile(): Profile {
         playerId: saved.playerId,
         name: typeof saved.name === 'string' ? saved.name : '',
         colour: typeof saved.colour === 'string' ? saved.colour : SHIRT_COLOURS[0],
+        skinTone: typeof saved.skinTone === 'string' ? saved.skinTone : SKIN_TONES[1],
         handedness: saved.handedness === 'left' ? 'left' : 'right',
         sensitivity:
           typeof saved.sensitivity === 'number'
@@ -360,6 +388,7 @@ function loadProfile(): Profile {
     playerId: crypto.randomUUID(),
     name: '',
     colour: SHIRT_COLOURS[0],
+    skinTone: SKIN_TONES[1],
     handedness: 'right',
     sensitivity: SENSITIVITY_DEFAULT,
   };

@@ -36,6 +36,8 @@
       input[type='range'] { width: 100%; max-width: 320px; accent-color: #ff8a3d; height: 32px; }
       .hint { font-size: 16px; margin: 4px auto 0; }
       #colours { display: grid; grid-template-columns: repeat(3, 64px); gap: 14px; justify-content: center; }
+      #skins { display: grid; grid-template-columns: repeat(6, 44px); gap: 8px; justify-content: center; }
+      #skins .swatch { width: 44px; height: 44px; border-width: 4px; }
       .swatch { width: 64px; height: 64px; border-radius: 50%; border: 5px solid #ffffff; padding: 0; }
       .swatch.selected { box-shadow: 0 0 0 5px var(--ink); }
       .swatch:disabled { opacity: 0.25; }
@@ -125,6 +127,8 @@
         <input id="name" maxlength="12" enterkeyhint="done" autocapitalize="words" spellcheck="false" />
         <label>Shirt colour</label>
         <div id="colours"></div>
+        <label>Skin tone</label>
+        <div id="skins"></div>
         <label>Putting hand</label>
         <div id="hands" class="toggle">
           <button type="button" data-hand="right">Right-handed</button>
