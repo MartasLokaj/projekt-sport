@@ -35,7 +35,7 @@ running log of where we are, what the user decided, and what comes next).
       tree_small_02 101 MB) — not usable on a MacBook Air. Light enough: `shrub_02` 2.0 MB, `shrub_03` 1.6 MB,
       `shrub_04` 1.9 MB, `fern_02` 1.1 MB, `grass_bermuda_01` 1.5 MB, `flower_gazania` 2.8 MB (gltf 1k totals,
       via `https://api.polyhaven.com/files/<id>`).
-    - **Done (waiting for the user's look test):** user chose **KayKit Forest Nature Pack** (Kay Lousberg, CC0, free
+    - **Done, approved by the user ("Stromy vypadají skvěle"):** user chose **KayKit Forest Nature Pack** (Kay Lousberg, CC0, free
       tier). 24 models copied to `host/assets/forest/` (500 KB, licence included, credited in README).
       `host/game/vegetation.ts` plants groves of trees (bigger further from the lane), bushes at tree feet and along
       the bumpers, grass tufts everywhere; one InstancedMesh per model. Keeps clear of the lane and the camera's view
@@ -53,6 +53,22 @@ running log of where we are, what the user decided, and what comes next).
   playful open-licence font stored locally (e.g. Fredoka, OFL — ask before download).
 - **Done when (SPEC):** looks good enough to show friends and runs at 60 fps on the MacBook Air (**fps on the real
   MacBook Air not verified yet**; in the dev browser a frame takes < 1–3 ms of CPU).
+
+### Cube World hub (SPEC §12) — started 2026-10-30, before 4c
+- The user added SPEC §12: the lobby becomes a floating rounded cube, one small world per face (Minigolf playable,
+  Badminton teaser, other faces "under construction"), players' chibis on the cube, game registry architecture.
+- **Step 1 — visual concepts (done, waiting for the user's pick):** throwaway prototype `host/concepts/cube.html` +
+  `cube.ts` (not the real hub). Open `https://localhost:8443/host/concepts/cube.html?v=sky|space|sunset`
+  (buttons A/B/C top right):
+  - **A · Dreamy sky — grassy block:** blue sky, puffy clouds, sandy cube with grass caps on every face.
+  - **B · Starry space — toy planet:** dark purple space, stars, distant planets, lavender cube with a cyan glow halo.
+  - **C · Sunset above the clouds:** purple-orange sunset, a sea of clouds below, cream cube.
+  Each shows the Minigolf face (sea, 3 islands, windmill, flags, KayKit trees), the Badminton face (court, net,
+  blue tarp with shuttlecock, "Badminton coming soon"), construction faces (cones, crates, scaffolding, glowing "?",
+  fog puffs), 3 waving chibis on top, room/QR panel and a "Minigolf · Play" panel.
+- **Next:** the user picks a look (or mixes), then plan the real hub: game registry, cube scene in `host/`, face
+  rotation with arrows/Enter/click and phone swipe, dive transition into the game, "Back to Cube". Plan first, list
+  files, wait for OK.
 
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.
@@ -109,5 +125,5 @@ running log of where we are, what the user decided, and what comes next).
 - Turf brightness/tint can still be tuned (`turfTint`, `bumperTint`, `islandGrassTint`).
 
 ## Next action
-Get the user's feedback on the trees (density, size, colour) and tune `TUNING.vegetation`. Then 4c (juice, incl.
-**wind**: trees and grass swaying), then ask the user to approve Phase 4.
+Cube World: get the user's choice among concepts A/B/C, then plan and build the real hub (SPEC §12).
+After that 4c (juice, incl. **wind**: trees and grass swaying), then ask the user to approve Phase 4.

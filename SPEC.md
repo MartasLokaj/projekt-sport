@@ -121,5 +121,61 @@ Work in this order. Each phase ends with the user testing on real phones and app
 - Playtest with friends and fix the top issues.
 
 ## 11. Out of scope for now
-Online play over the internet, accounts, other sports, app stores, monetisation.
+Online play over the internet, accounts, app stores, monetisation. Other sports only as specified in this file (Badminton is next; its spec will be added as its own section).
 Keep the architecture open for adding badminton or tennis later: the lobby, phone controller and characters should be reusable.
+
+## 12. Cube World hub (game-selection lobby)
+
+The lobby becomes a big floating "planet" shaped like a **cube**: the hub of the whole game collection.
+Each of the six faces is a small world for one game. For now only the **Minigolf** face is playable; the other faces are teasers.
+
+**Look and feel**
+- A chunky cube with soft rounded edges, floating in a dreamy sky (also try a starry space version and let the user pick), idling with a slow gentle rotation/bob.
+- Each face is a little diorama. **Minigolf face:** the same look as our minigolf (tiny islands in a cute sea, flags, windmill, trees).
+- Other faces: intentional, appealing "under construction" dioramas (scaffolding, cones, crates, a big glowing "?", soft fog). One of them hints at **Badminton** (the next game: a net and a shuttlecock under a tarp).
+- Players' chibi characters appear on the cube as they join (name and colour), wave when they arrive and idle around.
+- QR code and room code stay visible in a UI panel, as now.
+- Same art style as the games: soft light, bloom, toon-ish materials, lots of juice (pop-in, sparkles, smooth easing).
+
+**Interaction**
+- Choose a game from the host (arrow keys + Enter, or click a face) or from the first player's phone (swipe left/right to rotate the cube, tap "Play").
+- The cube rotates smoothly to the chosen face and shows its title (e.g. "Minigolf"), a one-line description and the player count. Locked faces show "Coming soon".
+- Start: the camera dives into the face and transitions (zoom/fade) into the game. After a match, "Back to Cube" returns to the hub with the last game's face in front.
+- Phones show the lobby state: which game is selected and who has joined.
+
+**Architecture**
+- Add a small **game registry**: each game is a module with id, title, face diorama builder, min/max players, phone controller mode, host scene and server match logic. Minigolf is the first entry.
+- Make adding Badminton easy: the lobby, seats, phone connection, characters, handedness and sensitivity are shared by all games.
+- The hub must stay light: 60 fps on the MacBook Air.
+
+**Process**
+- Do this after the open Phase 4b step (the user's feedback on the trees). It may come before 4c.
+- Before building it fully, show the user 2–3 visual concept options (quick renders/screenshots in the browser) and let them choose. The user gives visual direction with reference images.
+- Done when: players join on the cube, pick Minigolf from the cube, play a match and return to the cube; the locked faces look intentional and inviting.
+
+## 13. Badminton (next game) — DRAFT, still being designed with the user
+
+Status: decisions so far are recorded here. Do not start building Badminton until the user says so (Cube World hub and the Minigolf phases come first). Open questions are marked **OPEN**.
+
+**Decided**
+- **Automatic movement:** characters run to the shuttle on their own (like classic motion-control tennis games). The player only swings the phone. There is no manual movement control.
+- **Split screen:** the screen splits vertically into a left and a right half. Each side gets its own camera from behind its own character, so the shuttle flies towards the player. 1v1: one half per player. 2v2: one half per team (both teammates visible). 1 player vs CPU: full screen.
+- Keep the badminton scene lighter than minigolf, because split screen renders the scene twice. Target 60 fps on the MacBook Air.
+- Reuse everything shared: Cube World lobby, phone connection, seats, chibi characters, handedness and per-player swing sensitivity.
+
+**Proposed (user agreed in principle, details to tune)**
+- Modes: 1v1, 2v2 and 1 player vs CPU (CPU difficulty levels).
+- Shot type comes from the swing: overhead swing = clear; fast overhead swing = smash; underhand swing = lift or drop. Hitting early/late sends the shuttle left/right. Serve = underhand swing.
+- Short party matches: rally scoring to 11 points.
+- The shuttle is slow, so Wi-Fi delay matters less than in tennis. Badminton needs **instant** swing detection, unlike minigolf's "wait until still" flow. Use a generous, tunable hit window and compensate for network delay (timestamps).
+
+**OPEN**
+- Setting and look of the court (to be chosen by the user).
+- Exact swing-to-shot mapping, after testing on real phones.
+
+**Phase plan (when the user starts Badminton)**
+- B1: swing-type detection prototype on real phones (overhead vs underhand, swing speed, timing). Highest risk, do first.
+- B2: graybox rally vs CPU with automatic movement and the hit window.
+- B3: split screen 1v1, scoring to 11.
+- B4: 2v2.
+- B5: art and juice, plus the Badminton face on the Cube World hub.
