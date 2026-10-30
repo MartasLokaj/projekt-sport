@@ -36,9 +36,17 @@
         display: flex; align-items: center; gap: 20px; font-size: clamp(22px, 2.4vw, 34px); font-weight: 800;
         box-shadow: 0 10px 0 rgba(0, 0, 0, 0.08); transition: opacity 0.3s, filter 0.3s;
       }
-      .player > div:last-child { min-width: 0; overflow-wrap: anywhere; }
+      .player .info { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+      .player .aim { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 22px; }
+      .player .arrow { display: inline-block; font-size: 26px; transition: transform 0.06s linear; }
+      .player .power-bar { position: relative; height: 30px; border-radius: 15px; background: #e8eef4; overflow: hidden; margin-top: 10px; }
+      .player .power-fill { height: 100%; width: 0; background: linear-gradient(90deg, #3ec300, #ffb400 60%, #ff5a5f); transition: width 0.3s; }
+      .player .power-text { position: absolute; inset: 0; display: flex; align-items: center; padding-left: 12px; font-size: 18px; }
+      .player .detail { font-size: 15px; font-weight: 600; color: var(--soft); margin-top: 6px; min-height: 1.2em; }
+      .player.hit { animation: hit 0.5s ease-out; }
+      @keyframes hit { 0% { transform: scale(1.06); box-shadow: 0 0 0 8px #ffb400; } 100% { transform: scale(1); } }
       .player .dot { width: 64px; height: 64px; border-radius: 50%; flex: 0 0 auto; border: 5px solid rgba(0, 0, 0, 0.12); }
-      .player .state { display: block; font-size: 18px; font-weight: 600; color: var(--soft); }
+      .player .state { font-size: 18px; font-weight: 600; color: var(--soft); }
       .player.empty { background: rgba(255, 255, 255, 0.45); color: var(--soft); font-weight: 600; font-size: 24px; box-shadow: none; }
       .player.empty .dot { background: rgba(255, 255, 255, 0.6); border-style: dashed; }
       .player.offline { opacity: 0.55; filter: grayscale(0.8); }

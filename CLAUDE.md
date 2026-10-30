@@ -18,4 +18,4 @@ Read SPEC.md before starting any work. It is the source of truth for what we are
 - `npm run check` – TypeScript type check.
 - Page code (host/, controller/) reloads by itself. Server code (server/) needs a restart: Ctrl+C, then `npm run dev`. Every restart makes a new room code.
 - The self-signed certificate is created in `certs/` (not in git); delete that folder to force a new one.
-- Tuning values: `shared/tuning.ts`. WebSocket messages: `shared/protocol.ts`.
+- Tuning values: `shared/tuning.ts` (aim, swing detection, slingshot). WebSocket messages: `shared/protocol.ts`. Swing detection logic: `controller/swing.ts`.

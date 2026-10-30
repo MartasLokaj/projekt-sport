@@ -9,9 +9,10 @@ import {
   type ServerMessage,
 } from '../shared/protocol.ts';
 import { TUNING } from '../shared/tuning.ts';
+import { initPlayScreen } from './play.ts';
 
-// Phase 1a: join the game from the phone and stay joined through screen locks and Wi-Fi blips.
-// The room code comes from the QR code link, or the player types it in.
+// The phone controller: join the game (room code from the QR code link, or typed in),
+// stay joined through screen locks and Wi-Fi blips, then aim and hit on the play screen.
 
 type Profile = { playerId: string; name: string; colour: string };
 
@@ -24,7 +25,7 @@ const screens = {
   message: document.getElementById('screen-message')!,
   room: document.getElementById('screen-room')!,
   join: document.getElementById('screen-join')!,
-  joined: document.getElementById('screen-joined')!,
+  play: document.getElementById('screen-play')!,
 };
 const messageTitle = document.getElementById('message-title')!;
 const messageText = document.getElementById('message-text')!;
@@ -79,7 +80,8 @@ function showJoined(player: PlayerInfo): void {
   meDot.style.background = player.colour;
   meName.textContent = player.name;
   wakeTip.hidden = 'wakeLock' in navigator;
-  show('joined');
+  show('play');
+  play.onJoined();
 }
 
 function renderColours(): void {
@@ -132,6 +134,8 @@ function handleJoinError(reason: JoinError): void {
 function send(msg: ClientMessage): void {
   if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
 }
+
+const play = initPlayScreen(send);
 
 function connect(): void {
   clearTimeout(reconnectTimer);

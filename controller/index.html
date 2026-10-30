@@ -41,7 +41,35 @@
       .error { color: #d93a3f; font-weight: 700; min-height: 1.4em; }
       input.code { font-size: 44px; letter-spacing: 12px; text-transform: uppercase; }
       input.code::placeholder { color: #c9d6e2; }
-      #me-dot { width: 120px; height: 120px; border-radius: 50%; border: 8px solid #ffffff; margin-bottom: 20px; }
+      #screen-play { justify-content: flex-start; align-items: stretch; gap: 12px; height: 100%; }
+      #play-header { display: flex; align-items: center; gap: 12px; font-size: 24px; font-weight: 900; }
+      #play-header .link { margin: 0 0 0 auto; }
+      #me-dot { width: 36px; height: 36px; border-radius: 50%; border: 4px solid #ffffff; flex: 0 0 auto; }
+      #aim-pad {
+        flex: 1 1 0; min-height: 150px; border-radius: 28px; background: rgba(255, 255, 255, 0.7);
+        display: flex; flex-direction: column; align-items: center; justify-content: center; touch-action: none;
+      }
+      #aim-arrow { font-size: 72px; line-height: 1; color: var(--ink); }
+      #aim-value { font-size: 28px; font-weight: 900; margin-top: 6px; }
+      #aim-pad .hint { font-size: 17px; color: var(--soft); margin-top: 4px; }
+      #power { position: relative; height: 34px; border-radius: 17px; background: rgba(255, 255, 255, 0.7); overflow: hidden; }
+      #power-fill { height: 100%; width: 0; background: linear-gradient(90deg, #3ec300, #ffb400 60%, #ff5a5f); transition: width 0.05s; }
+      #power-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 900; }
+      #swing-area { flex: 1.3 1 0; min-height: 190px; display: flex; flex-direction: column; justify-content: center; }
+      #swing-button {
+        flex: 1; width: 100%; border: none; border-radius: 32px; background: #ff8a3d; color: #ffffff;
+        font: inherit; font-size: 34px; font-weight: 900; box-shadow: 0 10px 0 #c95f1a;
+        touch-action: none; -webkit-touch-callout: none; transform: translateY(var(--pull, 0px));
+      }
+      #swing-button[hidden] { display: none; }
+      #swing-button.held { background: #ff6a1a; box-shadow: 0 3px 0 #c95f1a; }
+      #swing-button.slingshot { background: #00a6ed; box-shadow: 0 10px 0 #0077aa; }
+      #swing-button.slingshot.held { box-shadow: 0 3px 0 #0077aa; }
+      #motion-panel { display: flex; flex-direction: column; align-items: center; }
+      #motion-panel[hidden] { display: none; }
+      #play-status { margin: 0 auto; min-height: 1.4em; font-weight: 800; color: var(--ink); }
+      #screen-play > .link { margin: 0 auto; }
+      #wake-tip { margin: 0 auto; font-size: 15px; }
       #reconnecting {
         position: fixed; top: 0; left: 0; right: 0; padding: max(10px, env(safe-area-inset-top)) 10px 10px;
         background: #ff5a5f; color: #ffffff; font-size: 18px; font-weight: 800; text-align: center;
@@ -79,12 +107,32 @@
       </form>
     </section>
 
-    <section id="screen-joined" hidden>
-      <div id="me-dot"></div>
-      <h1 id="me-name"></h1>
-      <p>You're in! Look at the big screen.</p>
+    <section id="screen-play" hidden>
+      <header id="play-header">
+        <span id="me-dot"></span>
+        <span id="me-name"></span>
+        <button class="link" id="change-profile" type="button">Edit</button>
+      </header>
+
+      <div id="aim-pad">
+        <div id="aim-arrow">▲</div>
+        <div id="aim-value">0°</div>
+        <div class="hint">Drag left or right to aim</div>
+      </div>
+
+      <div id="power"><div id="power-fill"></div><span id="power-text">0%</span></div>
+
+      <div id="swing-area">
+        <button id="swing-button" type="button"><span id="swing-label">HOLD &amp; SWING</span></button>
+        <div id="motion-panel" hidden>
+          <p id="motion-text"></p>
+          <button class="big" id="motion-enable" type="button">Enable motion</button>
+        </div>
+      </div>
+
+      <p id="play-status"></p>
+      <button class="link" id="mode-toggle" type="button">Use touch controls instead</button>
       <p id="wake-tip" hidden>Tip: this phone may lock its screen during the game. You can turn off Auto-Lock in Settings.</p>
-      <button class="link" id="change-profile" type="button">Change name or colour</button>
     </section>
 
     <script type="module" src="/controller/main.ts"></script>

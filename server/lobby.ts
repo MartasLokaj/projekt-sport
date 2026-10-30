@@ -9,13 +9,14 @@ import {
   type PlayerInfo,
   type ServerMessage,
 } from '../shared/protocol.ts';
+import { TUNING } from '../shared/tuning.ts';
 
 // The lobby owns the room code and the player seats. A seat is kept while
 // the server runs, so a phone that drops (screen lock, Wi-Fi blip) gets it back.
 
 const ROOM_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I or O, they look like 1 and 0
 
-type Seat = { id: string; name: string; colour: string; socket: WebSocket | null };
+type Seat = { id: string; name: string; colour: string; socket: WebSocket | null; lastStrokeAt: number };
 
 export function makeRoomCode(): string {
   let code = '';
@@ -58,7 +59,40 @@ export class Lobby {
         if (!this.checkRoom(ws, msg.room)) return;
         this.join(ws, msg);
         return;
+      case 'aim': {
+        const seat = this.seatOf(ws);
+        if (!seat || !Number.isFinite(msg.angle)) return;
+        this.sendToHosts({ type: 'player_aim', playerId: seat.id, angle: clamp(msg.angle, -180, 180) });
+        return;
+      }
+      case 'stroke': {
+        const seat = this.seatOf(ws);
+        if (!seat || !Number.isFinite(msg.power) || !Number.isFinite(msg.angle)) return;
+        // Safety net for "one swing = one stroke", even if a phone sends twice.
+        const now = Date.now();
+        if (now - seat.lastStrokeAt < TUNING.network.minStrokeIntervalMs) return;
+        seat.lastStrokeAt = now;
+        this.sendToHosts({
+          type: 'player_stroke',
+          playerId: seat.id,
+          power: clamp(msg.power, 0, 100),
+          angle: clamp(msg.angle, -180, 180),
+          mode: msg.mode === 'slingshot' ? 'slingshot' : 'swing',
+          peakRate: Number.isFinite(msg.peakRate) ? msg.peakRate : null,
+          axis: typeof msg.axis === 'string' ? msg.axis.slice(0, 8) : null,
+        });
+        return;
+      }
     }
+  }
+
+  private seatOf(ws: WebSocket): Seat | undefined {
+    for (const seat of this.seats.values()) if (seat.socket === ws) return seat;
+    return undefined;
+  }
+
+  private sendToHosts(msg: ServerMessage): void {
+    for (const ws of this.hosts) send(ws, msg);
   }
 
   handleClose(ws: WebSocket): void {
@@ -89,7 +123,7 @@ export class Lobby {
     let seat = this.seats.get(msg.playerId);
     if (!seat) {
       if (this.seats.size >= MAX_PLAYERS) return refuse(ws, 'game_full');
-      seat = { id: msg.playerId, name, colour, socket: null };
+      seat = { id: msg.playerId, name, colour, socket: null, lastStrokeAt: 0 };
       this.seats.set(seat.id, seat);
     }
     seat.name = name;
@@ -125,6 +159,10 @@ export class Lobby {
     const msg = this.lobbyState();
     for (const ws of [...this.hosts, ...this.phones]) send(ws, msg);
   }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 function toInfo(seat: Seat): PlayerInfo {
