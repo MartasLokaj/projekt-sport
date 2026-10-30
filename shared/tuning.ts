@@ -279,4 +279,35 @@ export const TUNING = {
     maxPullPx: 260,
     curveExponent: 0.8,
   },
+
+  // The Cube World hub (the lobby): a floating cube in starry space, one little world per side.
+  hub: {
+    /** Size of the cube and how round its edges are. */
+    cubeSize: 6,
+    cubeRounding: 0.7,
+    cubeColour: '#b9a6ff',
+    glowColour: '#7ff3ff',
+    skyTop: '#0b0f2e',
+    skyBottom: '#3a1f5c',
+    stars: 1500,
+    /** Camera: distance, height and field of view (degrees). */
+    cameraDistance: 18,
+    cameraHeight: 10,
+    /** Moves the view sideways so the cube sits a little left of centre, clear of the game panel on the right. */
+    cameraSideShift: 2.2,
+    cameraFov: 38,
+    /** How quickly the cube turns to the chosen side (bigger = snappier). */
+    turnSpeed: 5,
+    /** The gentle idle float: up-down distance and speed, and a small sway (degrees). */
+    bobHeight: 0.15,
+    bobSpeed: 0.8,
+    swayDegrees: 6,
+    /** Characters on top of the cube: their size and the spacing between them. */
+    characterScale: 1.35,
+    characterSpacing: 1.6,
+    /** How long a character takes to pop in when its player joins (seconds). */
+    popInSeconds: 0.5,
+    exposure: 1.05,
+    bloomStrength: 0.55,
+  },
 } as const;

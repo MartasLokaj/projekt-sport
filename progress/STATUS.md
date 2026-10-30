@@ -57,9 +57,8 @@ running log of where we are, what the user decided, and what comes next).
 ### Cube World hub (SPEC §12) — started 2026-10-30, before 4c
 - The user added SPEC §12: the lobby becomes a floating rounded cube, one small world per face (Minigolf playable,
   Badminton teaser, other faces "under construction"), players' chibis on the cube, game registry architecture.
-- **Step 1 — visual concepts (done; the user picked B · Starry space):** throwaway prototype `host/concepts/cube.html` +
-  `cube.ts` (not the real hub). Open `https://localhost:8443/host/concepts/cube.html?v=sky|space|sunset`
-  (buttons A/B/C top right):
+- **Step 1 — visual concepts (done; the user picked B · Starry space):** throwaway prototype (deleted after 2a, in git
+  history at commit `7b8bf53`, `host/concepts/`):
   - **A · Dreamy sky — grassy block:** blue sky, puffy clouds, sandy cube with grass caps on every face.
   - **B · Starry space — toy planet:** dark purple space, stars, distant planets, lavender cube with a cyan glow halo.
   - **C · Sunset above the clouds:** purple-orange sunset, a sea of clouds below, cream cube.
@@ -67,10 +66,16 @@ running log of where we are, what the user decided, and what comes next).
   blue tarp with shuttlecock, "Badminton coming soon"), construction faces (cones, crates, scaffolding, glowing "?",
   fog puffs), 3 waving chibis on top, room/QR panel and a "Minigolf · Play" panel.
 - **User's choice (2026-10-30): B · Starry space — toy planet.**
-- **Proposed build plan (waiting for the user's OK):**
+- **Build plan (user said OK 2026-10-30):**
   - 2a Host hub: real 3D space cube replaces the HTML lobby (`host/hub/`), QR/room panel kept, players pop in as
     waving chibis with name tags, arrows rotate the cube, Enter on Minigolf starts, locked faces say "Coming soon",
     return to the cube after a match with Minigolf in front.
+    **2a done (waiting for the user's test):** `host/hub/Hub.ts` (scene, turning, characters, HTML name tags,
+    `turn()`, `show(id)`, `setPlayers()`, `showHit()`, `start()/stop()`), `host/hub/faces.ts` (`FACES` list — a
+    temporary registry until 2b — and the face dioramas + top meadow), lobby layout in `host/index.html`
+    (QR card top-left, game card on the right with ‹ Play ›, "Cube World" title at the bottom), wiring in
+    `host/main.ts` (arrows/Enter/click; the old per-phone aim/power readout cards are gone — a swing in the lobby
+    makes that character jump and shows the power in its name tag). Tuning: `TUNING.hub`. CPU ~1.6 ms/frame.
   - 2b Game registry (`shared/games.ts` + host side), server remembers the selected game (`select_game`), phones
     show it; leader swipes left/right and taps Play.
   - 2c Juice: dive-into-the-face transition, sparkles, pop-in, 60 fps check.
@@ -133,5 +138,5 @@ running log of where we are, what the user decided, and what comes next).
 - Turf brightness/tint can still be tuned (`turfTint`, `bumperTint`, `islandGrassTint`).
 
 ## Next action
-Cube World: user chose concept B (space). Get OK on the 2a/2b/2c plan, then build 2a first (SPEC §12).
+Cube World: 2a (host hub) is built — get the user's test on the TV with real phones, then 2b (registry + phone control), then 2c.
 After that 4c (juice, incl. **wind**: trees and grass swaying), then ask the user to approve Phase 4.

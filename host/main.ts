@@ -1,27 +1,23 @@
-import {
-  MAX_PLAYERS,
-  WS_PATH,
-  type ClientMessage,
-  type GameState,
-  type PlayerInfo,
-  type ServerMessage,
-  type Stroke,
-} from '../shared/protocol.ts';
+import { WS_PATH, type ClientMessage, type GameState, type PlayerInfo, type ServerMessage } from '../shared/protocol.ts';
 import { TUNING } from '../shared/tuning.ts';
 import { Game } from './game/Game.ts';
+import { Hub } from './hub/Hub.ts';
+import type { FaceInfo } from './hub/faces.ts';
 
-// The big screen. The lobby shows the QR code and the players who joined from their phones,
-// with a live readout of each phone's aim and last hit. "Start game" asks the server to start
+// The big screen. The lobby is Cube World: a cube floating in space with one game on each side,
+// the QR code to join, and the players' characters standing on top. "Play" asks the server to start
 // a match; the server's game_state then switches between lobby, playing and the scoreboard.
 
 const qrEl = document.getElementById('qr') as HTMLImageElement;
 const joinUrlEl = document.getElementById('join-url')!;
 const roomCodeEl = document.getElementById('room-code')!;
-const playersEl = document.getElementById('players')!;
 const offlineBanner = document.getElementById('offline-banner')!;
 const lobbyScreen = document.getElementById('lobby-screen')!;
 const gameScreen = document.getElementById('game-screen')!;
 const startButton = document.getElementById('start') as HTMLButtonElement;
+const pickTitle = document.getElementById('pick-title')!;
+const pickDescription = document.getElementById('pick-description')!;
+const pickPlayers = document.getElementById('pick-players')!;
 
 const scoresEl = document.getElementById('hud-scores')!;
 const scoreboardEl = document.getElementById('scoreboard')!;
@@ -35,12 +31,7 @@ let playing = false;
 let players: PlayerInfo[] = [];
 let lastState: GameState | null = null;
 
-type Readout = { angle: number; stroke: Stroke | null };
-type CardRefs = { card: HTMLElement; arrow: HTMLElement; aimText: HTMLElement; powerFill: HTMLElement; powerText: HTMLElement; detail: HTMLElement };
-
-/** Latest aim and hit per player id, kept when the cards are rebuilt. */
-const readouts = new Map<string, Readout>();
-const cards = new Map<string, CardRefs>();
+let hub: Hub | null = null;
 
 function showHostInfo(msg: Extract<ServerMessage, { type: 'host_info' }>): void {
   roomCodeEl.textContent = msg.room;
@@ -61,73 +52,20 @@ function el(tag: string, className: string, text = ''): HTMLElement {
   return element;
 }
 
-function showPlayers(players: PlayerInfo[]): void {
-  playersEl.replaceChildren();
-  cards.clear();
-  for (let i = 0; i < MAX_PLAYERS; i++) {
-    const player = players[i];
-    const card = el('div', 'player');
-    const dot = el('div', 'dot');
-    const info = el('div', 'info');
-    if (player) {
-      dot.style.background = player.colour;
-      const hand = player.handedness === 'left' ? 'Left-handed' : 'Right-handed';
-      const state = player.connected ? `Ready · ${hand} · sensitivity ${player.sensitivity} %` : 'Phone disconnected…';
-      info.append(el('div', 'name', player.name), el('div', 'state', state));
-      if (!player.connected) card.classList.add('offline');
-
-      const refs: CardRefs = {
-        card,
-        arrow: el('span', 'arrow', '▲'),
-        aimText: el('span', 'aim-text'),
-        powerFill: el('div', 'power-fill'),
-        powerText: el('span', 'power-text'),
-        detail: el('div', 'detail'),
-      };
-      const aim = el('div', 'aim');
-      aim.append(refs.arrow, refs.aimText);
-      const bar = el('div', 'power-bar');
-      bar.append(refs.powerFill, refs.powerText);
-      info.append(aim, bar, refs.detail);
-      cards.set(player.id, refs);
-      renderReadout(player.id);
-    } else {
-      card.classList.add('empty');
-      info.append(el('div', 'name', 'Waiting for player…'));
-    }
-    card.append(dot, info);
-    playersEl.append(card);
-  }
+/** The game on the front of the cube, and whether it can be played yet. */
+function showPick(face: FaceInfo): void {
+  pickTitle.textContent = face.title;
+  pickDescription.textContent = face.description;
+  const ready = players.filter((p) => p.connected).length;
+  pickPlayers.textContent = face.available
+    ? `${face.players} · ${ready === 0 ? 'waiting for players to join' : `${ready} ready`}`
+    : face.players;
+  startButton.textContent = face.available ? 'Play (Enter)' : 'Coming soon';
+  startButton.disabled = !face.available || ready === 0;
 }
 
-function readoutOf(playerId: string): Readout {
-  let readout = readouts.get(playerId);
-  if (!readout) {
-    readout = { angle: 0, stroke: null };
-    readouts.set(playerId, readout);
-  }
-  return readout;
-}
-
-function renderReadout(playerId: string): void {
-  const refs = cards.get(playerId);
-  if (!refs) return;
-  const { angle, stroke } = readoutOf(playerId);
-  refs.arrow.style.transform = `rotate(${angle}deg)`;
-  refs.aimText.textContent = `Aim ${Math.round(angle)}°`;
-  refs.powerFill.style.width = `${stroke?.power ?? 0}%`;
-  refs.powerText.textContent = stroke ? `Last hit: ${Math.round(stroke.power)}%` : 'No hit yet';
-  refs.detail.textContent = !stroke
-    ? ''
-    : stroke.mode === 'slingshot'
-      ? 'Touch controls'
-      : `Swing · back ${stroke.backswing}° · speed ${stroke.speed}°/s · arc ${stroke.radius ?? '?'} cm · twist ${stroke.twist ?? '?'}°`;
-}
-
-function flash(card: HTMLElement): void {
-  card.classList.remove('hit');
-  void card.offsetWidth; // restart the animation
-  card.classList.add('hit');
+function startSelected(): void {
+  if (hub?.selected.available && players.some((p) => p.connected)) send({ type: 'start_game' });
 }
 
 let socket: WebSocket | null = null;
@@ -148,21 +86,15 @@ function connect(): void {
     if (msg.type === 'host_info') showHostInfo(msg);
     else if (msg.type === 'lobby_state') {
       players = msg.players;
-      showPlayers(players);
-      startButton.disabled = !players.some((p) => p.connected);
+      hub?.setPlayers(players);
+      if (hub) showPick(hub.selected);
       game?.setPlayers(players);
     } else if (msg.type === 'game_state') void onGameState(msg);
     else if (msg.type === 'player_aim') {
-      readoutOf(msg.playerId).angle = msg.angle;
-      renderReadout(msg.playerId);
       if (playing) game?.onPhoneAim(msg.angle);
     } else if (msg.type === 'player_stroke') {
-      const { type: _type, playerId, ...stroke } = msg;
-      if (playing) game?.onPhoneStroke(stroke.power, stroke.angle, stroke.twist);
-      readoutOf(playerId).stroke = stroke;
-      renderReadout(playerId);
-      const refs = cards.get(playerId);
-      if (refs) flash(refs.card);
+      if (playing) game?.onPhoneStroke(msg.power, msg.angle, msg.twist);
+      else hub?.showHit(msg.playerId, msg.power);
     } else if (msg.type === 'player_practice') {
       if (playing) game?.onPhonePractice(msg.power, msg.angle, msg.twist);
     } else if (msg.type === 'player_swing_progress') {
@@ -205,6 +137,9 @@ async function onGameState(state: GameState): Promise<void> {
       game?.stop();
       gameScreen.hidden = true;
       lobbyScreen.hidden = false;
+      // Back to the cube, with the game we just played in front.
+      hub?.start();
+      hub?.show('minigolf');
     }
     return;
   }
@@ -213,6 +148,7 @@ async function onGameState(state: GameState): Promise<void> {
   g.setPlayers(players);
   if (!playing) {
     playing = true;
+    hub?.stop();
     lobbyScreen.hidden = true;
     gameScreen.hidden = false;
     g.start();
@@ -282,13 +218,28 @@ function renderScores(state: GameState): void {
   });
 }
 
-startButton.addEventListener('click', () => send({ type: 'start_game' }));
+startButton.addEventListener('click', startSelected);
+document.getElementById('turn-left')!.addEventListener('click', () => hub?.turn(-1));
+document.getElementById('turn-right')!.addEventListener('click', () => hub?.turn(1));
 window.addEventListener('keydown', (e) => {
   const phase = lastState?.phase ?? 'lobby';
+  if (phase === 'lobby' && !playing) {
+    if (e.key === 'ArrowLeft') hub?.turn(-1);
+    else if (e.key === 'ArrowRight') hub?.turn(1);
+    else if (e.key === 'Enter') startSelected();
+    return;
+  }
   if (e.key === 'Enter' && phase === 'hole_end') send({ type: 'next_hole' });
-  else if (e.key === 'Enter' && phase !== 'playing') send({ type: 'start_game' });
+  else if (e.key === 'Enter' && phase === 'game_end') send({ type: 'start_game' });
   else if (e.key === 'Escape' && phase !== 'lobby') send({ type: 'end_game' });
 });
 
-showPlayers([]);
+void Hub.create(document.getElementById('hub-canvas')!).then((created) => {
+  hub = created;
+  hub.onSelect = showPick;
+  hub.setPlayers(players);
+  showPick(hub.selected);
+  if (!playing) hub.start();
+  if (import.meta.env.DEV) Object.assign(window, { hub }); // for debugging in the browser console
+});
 connect();

@@ -14,18 +14,29 @@
       html, body { margin: 0; height: 100%; }
       [hidden] { display: none !important; }
       body { font-family: var(--font); color: var(--ink); margin: 0; overflow: hidden; }
-      #lobby-screen {
-        height: 100%;
-        background: linear-gradient(#8fd3ff, #d9f2ff 60%, #b8e986);
-        display: flex; flex-direction: column; align-items: center;
-        padding: 4vh 4vw; box-sizing: border-box;
+      #lobby-screen { position: fixed; inset: 0; background: #0b0f2e; color: var(--ink); }
+      #hub-canvas { position: absolute; inset: 0; }
+      .panel { position: absolute; background: rgba(255, 255, 255, 0.92); border-radius: 28px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); }
+      #pick { right: 3vw; top: 50%; transform: translateY(-50%); width: min(26vw, 380px); padding: 22px 24px; text-align: center; }
+      #pick .row { display: flex; align-items: center; justify-content: center; gap: 14px; }
+      #pick h2 { margin: 0; font-size: clamp(30px, 3.4vw, 52px); font-weight: 900; }
+      #pick-description { margin: 4px 0 2px; font-size: 20px; color: var(--soft); }
+      #pick-players { margin: 0 0 12px; font-size: 18px; font-weight: 700; color: var(--soft); }
+      .turn {
+        font: inherit; font-size: 30px; font-weight: 900; width: 58px; height: 58px; border-radius: 50%; border: none;
+        background: #ece8ff; color: #5b46c9; cursor: pointer;
       }
       #start {
-        margin-top: 3vh; font: inherit; font-size: 30px; font-weight: 900; color: #ffffff; background: #3ec300;
-        border: none; border-radius: 24px; padding: 18px 48px; box-shadow: 0 8px 0 #2b8a00; cursor: pointer;
+        font: inherit; font-size: 26px; font-weight: 900; color: #ffffff; background: #3ec300;
+        border: none; border-radius: 999px; padding: 12px 28px; box-shadow: 0 6px 0 #2b8a00; cursor: pointer; white-space: nowrap;
       }
-      #start:active { transform: translateY(6px); box-shadow: 0 2px 0 #2b8a00; }
-      #start:disabled { opacity: 0.5; cursor: default; }
+      #start:active { transform: translateY(5px); box-shadow: 0 1px 0 #2b8a00; }
+      #start:disabled { background: #b8b2d6; box-shadow: 0 6px 0 #8f88b5; cursor: default; }
+      #hub-title {
+        position: absolute; bottom: 3vh; left: 50%; transform: translateX(-50%); margin: 0; color: #ffffff;
+        font-size: clamp(30px, 4vw, 60px); font-weight: 900; letter-spacing: 1px; text-shadow: 0 0 24px rgba(127, 243, 255, 0.7);
+      }
+      #hub-keys { position: absolute; bottom: 2vh; right: 2vw; color: rgba(255, 255, 255, 0.7); font-size: 16px; font-weight: 600; }
       #hud-scores {
         position: absolute; top: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px;
       }
@@ -93,41 +104,13 @@
         position: absolute; top: 38%; left: 50%; transform: translate(-50%, -50%); white-space: pre-line; text-align: center;
         font-size: 64px; font-weight: 900; color: #ffffff; text-shadow: 0 4px 0 rgba(0, 0, 0, 0.25), 0 0 30px rgba(0, 0, 0, 0.2);
       }
-      h1 { margin: 0 0 3vh; font-size: clamp(36px, 5vw, 72px); font-weight: 900; letter-spacing: 1px; }
-      #lobby { display: flex; gap: 4vw; align-items: flex-start; width: 100%; max-width: 1400px; flex: 1; }
-      #join {
-        background: var(--card); border-radius: 32px; padding: 28px; text-align: center;
-        box-shadow: 0 12px 0 rgba(0, 0, 0, 0.08); flex: 0 0 auto;
-      }
-      #join h2 { margin: 0 0 12px; font-size: 32px; }
-      #qr { width: min(34vh, 360px); height: min(34vh, 360px); image-rendering: pixelated; display: block; margin: 0 auto; }
-      #join-url { margin: 12px 0 0; font-size: 18px; color: var(--soft); word-break: break-all; max-width: 360px; }
-      #room { margin: 12px 0 0; font-size: 24px; }
-      #room b { font-size: 40px; letter-spacing: 6px; }
-      #players { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
-      .player {
-        background: var(--card); border-radius: 28px; padding: 24px; min-height: 120px;
-        display: flex; align-items: center; gap: 20px; font-size: clamp(22px, 2.4vw, 34px); font-weight: 800;
-        box-shadow: 0 10px 0 rgba(0, 0, 0, 0.08); transition: opacity 0.3s, filter 0.3s;
-      }
-      .player .info { min-width: 0; flex: 1; overflow-wrap: anywhere; }
-      .player .aim { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 22px; }
-      .player .arrow { display: inline-block; font-size: 26px; transition: transform 0.06s linear; }
-      .player .power-bar { position: relative; height: 30px; border-radius: 15px; background: #e8eef4; overflow: hidden; margin-top: 10px; }
-      .player .power-fill { height: 100%; width: 0; background: linear-gradient(90deg, #3ec300, #ffb400 60%, #ff5a5f); transition: width 0.3s; }
-      .player .power-text { position: absolute; inset: 0; display: flex; align-items: center; padding-left: 12px; font-size: 18px; }
-      .player .detail { font-size: 15px; font-weight: 600; color: var(--soft); margin-top: 6px; min-height: 1.2em; }
-      .player.hit { animation: hit 0.5s ease-out; }
-      @keyframes hit { 0% { transform: scale(1.06); box-shadow: 0 0 0 8px #ffb400; } 100% { transform: scale(1); } }
-      .player .dot { width: 64px; height: 64px; border-radius: 50%; flex: 0 0 auto; border: 5px solid rgba(0, 0, 0, 0.12); }
-      .player .state { font-size: 18px; font-weight: 600; color: var(--soft); }
-      .player.empty { background: rgba(255, 255, 255, 0.45); color: var(--soft); font-weight: 600; font-size: 24px; box-shadow: none; }
-      .player.empty .dot { background: rgba(255, 255, 255, 0.6); border-style: dashed; }
-      .player.offline { opacity: 0.55; filter: grayscale(0.8); }
-      #help {
-        margin-top: 3vh; max-width: 1400px; width: 100%; box-sizing: border-box;
-        background: rgba(255, 255, 255, 0.7); border-radius: 20px; padding: 14px 24px; font-size: 18px; color: var(--soft);
-      }
+      #join { top: 3vh; left: 2vw; padding: 20px; text-align: center; width: min(24vh, 260px); }
+      #join h3 { margin: 0 0 10px; font-size: 22px; }
+      #qr { width: 100%; aspect-ratio: 1; image-rendering: pixelated; display: block; margin: 0 auto; }
+      #join-url { margin: 10px 0 0; font-size: 13px; color: var(--soft); word-break: break-all; }
+      #room { margin: 8px 0 0; font-size: 20px; }
+      #room b { font-size: 32px; letter-spacing: 5px; }
+      #help { margin: 10px 0 0; font-size: 12px; line-height: 1.35; color: var(--soft); text-align: left; }
       #help b { color: var(--ink); }
       #offline-banner {
         position: fixed; top: 0; left: 0; right: 0; padding: 12px; text-align: center;
@@ -138,22 +121,30 @@
   <body>
     <div id="offline-banner" hidden>Lost connection to the game server. Reconnecting…</div>
     <div id="lobby-screen">
-    <h1>Minigolf Party</h1>
-    <div id="lobby">
-      <div id="join">
-        <h2>Scan to join</h2>
+      <div id="hub-canvas"></div>
+      <h1 id="hub-title">Cube World</h1>
+      <div id="join" class="panel">
+        <h3>Scan to join</h3>
         <img id="qr" alt="QR code to join the game" />
-        <p id="join-url"></p>
         <p id="room">Room <b id="room-code">····</b></p>
+        <p id="join-url"></p>
+        <p id="help">
+          <b>Phone can't connect?</b> Use the same Wi-Fi as this computer. The first time, the phone shows a security
+          warning: tap "Show Details" / "Advanced" and continue. If the Mac asks whether "node" may accept incoming
+          connections, click "Allow".
+        </p>
       </div>
-      <div id="players"></div>
-    </div>
-    <div id="help">
-      <b>Phone can't connect?</b> Use the same Wi-Fi as this computer (guest networks often block devices from seeing each other).
-      The first time, the phone shows a security warning: tap "Show Details" / "Advanced" and continue to the website.
-      If the Mac asks whether "node" may accept incoming connections, click "Allow".
-    </div>
-    <button id="start" type="button" disabled>Start game (Enter)</button>
+      <div id="pick" class="panel">
+        <h2 id="pick-title"></h2>
+        <p id="pick-description"></p>
+        <p id="pick-players"></p>
+        <div class="row">
+          <button class="turn" id="turn-left" type="button" aria-label="Previous game">‹</button>
+          <button id="start" type="button" disabled>Play (Enter)</button>
+          <button class="turn" id="turn-right" type="button" aria-label="Next game">›</button>
+        </div>
+      </div>
+      <div id="hub-keys">← → choose a game · Enter play · click a side of the cube</div>
     </div>
 
     <div id="game-screen" hidden>
@@ -171,7 +162,7 @@
       </div>
       <div id="hud-scores"></div>
       <div id="hud-message" hidden></div>
-      <div id="hud-keys">Mac keys: ← → aim · hold P for a practice swing · hold Space to hit · Esc back to lobby</div>
+      <div id="hud-keys">Mac keys: ← → aim · hold P for a practice swing · hold Space to hit · Esc back to the cube</div>
       <div id="scoreboard" hidden>
         <div id="scoreboard-card">
           <h2 id="scoreboard-title">Hole complete!</h2>
