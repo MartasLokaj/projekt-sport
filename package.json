@@ -1,0 +1,24 @@
+{
+  "name": "projekt-sport",
+  "version": "0.1.0",
+  "description": "Party minigolf: Three.js game on the Mac, phones as controllers.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx server/index.ts",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "selfsigned": "^5.5.0",
+    "three": "^0.187.0",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/three": "^0.186.0",
+    "@types/ws": "^8.18.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5"
+  }
+}

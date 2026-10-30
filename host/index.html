@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Minigolf Party</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #8fd3ff; font-family: system-ui, sans-serif; }
+      canvas { display: block; }
+      #status {
+        position: fixed; top: 24px; left: 24px; padding: 16px 24px; border-radius: 20px;
+        background: rgba(255, 255, 255, 0.9); font-size: 28px; font-weight: 700; color: #234;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="status">Connecting…</div>
+    <script type="module" src="/host/main.ts"></script>
+  </body>
+</html>
