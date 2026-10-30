@@ -17,8 +17,6 @@ export type HoleDef = {
   /** Floor areas. The cup gap is cut out automatically. */
   floors: Rect[];
   walls: Rect[];
-  /** Where the aim points at the start of a shot: the first point the ball can see, checked from the last. */
-  aimPoints: Point[];
 };
 
 const WALL = 0.2; // wall thickness
@@ -41,11 +39,13 @@ export const HOLE_1: HoleDef = {
     { x: 4.5 + WALL / 2, z: 7 - WALL / 2, w: 7 + WALL, d: WALL }, // near side of the second lane
     { x: 8 + WALL / 2, z: 8, w: WALL, d: 2 }, // end
   ],
-  aimPoints: [
-    { x: 0, z: 7.8 }, // the corner
-    { x: 7, z: 8 }, // the cup
-  ],
 };
+
+/** True when the ball has dropped into the cup. */
+export function isInCup(p: { x: number; y: number; z: number }, hole: HoleDef): boolean {
+  const gap = TUNING.course.cupGap;
+  return p.y < -TUNING.ball.radius * 1.5 && Math.abs(p.x - hole.cup.x) < gap && Math.abs(p.z - hole.cup.z) < gap;
+}
 
 /** Adds the hole's meshes to the scene and its colliders to the physics world. */
 export function buildCourse(hole: HoleDef, world: RAPIER.World, R: typeof RAPIER): THREE.Group {

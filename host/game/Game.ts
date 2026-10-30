@@ -2,21 +2,27 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
 import { TUNING } from '../../shared/tuning.ts';
 import { applyRollingResistance, createBall, shotSpeed } from './ball.ts';
-import { buildCourse, HOLE_1, type HoleDef } from './course.ts';
+import { buildCourse, HOLE_1, isInCup, type HoleDef } from './course.ts';
+import { ShotPreview } from './preview.ts';
 
 // Phase 2, step A: one graybox hole for one player. The host owns the ball physics.
-// The phone's aim and strokes come in through onPhoneAim / onPhoneStroke.
-// Mac keyboard for testing: arrow keys aim, hold Space to charge and release to hit, R resets the ball.
+// The phone's aim, practice swings and strokes come in through onPhoneAim / onPhonePractice / onPhoneStroke.
+// Every shot starts aimed straight at the cup; the phone's aim angle turns it from there.
+// A practice swing shows its power on the gauge and the path the ball would roll.
+// Mac keyboard for testing: arrow keys aim, hold P for a practice swing, hold Space to hit, R resets the ball.
 
 type State = 'aiming' | 'rolling' | 'holed';
+type SwingKind = 'hit' | 'practice';
 
 export type GameHud = {
   /** Hole, par and stroke count. */
   info: HTMLElement;
   /** Big message in the middle ("Hole in one!"). */
   message: HTMLElement;
-  /** Power of the last or charging hit. */
-  power: HTMLElement;
+  /** Power gauge at the side of the screen: container, coloured fill and label. */
+  gauge: HTMLElement;
+  gaugeFill: HTMLElement;
+  gaugeLabel: HTMLElement;
 };
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -29,6 +35,9 @@ export class Game {
   private readonly ball: RAPIER.RigidBody;
   private readonly ballMesh: THREE.Mesh;
   private readonly aimDots: THREE.Mesh[] = [];
+  private readonly preview: ShotPreview;
+  private readonly previewDots: THREE.InstancedMesh;
+  private readonly previewEnd: THREE.Mesh;
   private readonly clock = new THREE.Clock();
 
   private hole: HoleDef = HOLE_1;
@@ -39,15 +48,21 @@ export class Game {
   private stepAccumulator = 0;
   private messageTimer: number | undefined;
 
-  /** Aim straight towards the next aim point, set at the start of each shot. */
+  /** Direction straight at the cup, set at the start of each shot. */
   private baseYaw = 0;
-  /** Latest aim angle from the phone (degrees) and its value when the shot started. */
+  /** Aim angle from the phone (degrees). The phone resets it to 0 at the start of each shot. */
   private phoneAngle = 0;
-  private phoneZero = 0;
   /** Extra aim from the Mac arrow keys (degrees). */
   private keyboardOffset = 0;
   private keysTurning = 0;
-  private charging: number | null = null;
+  private charging: { kind: SwingKind; amount: number } | null = null;
+  /** Power of the last practice swing for this shot, or null. */
+  private practicePower: number | null = null;
+  /** Aim the preview was computed for, so it updates when the aim changes. */
+  private previewYaw = Number.NaN;
+
+  /** Called at the start of every shot, so the phones can reset their aim. */
+  onNewShot: (() => void) | null = null;
 
   private readonly cameraTarget = new THREE.Vector3();
   private readonly followDir = new THREE.Vector3(0, 0, 1);
@@ -105,8 +120,25 @@ export class Game {
       this.scene.add(aimDot);
     }
 
+    // Predicted path of a practice swing: yellow dots and a ring where the ball would stop.
+    this.preview = new ShotPreview(this.hole, RAPIER);
+    const maxPreviewDots = 400;
+    this.previewDots = new THREE.InstancedMesh(
+      new THREE.SphereGeometry(0.035, 10, 6),
+      new THREE.MeshBasicMaterial({ color: '#ffd23f' }),
+      maxPreviewDots,
+    );
+    this.previewDots.count = 0;
+    this.previewDots.frustumCulled = false;
+    this.previewEnd = new THREE.Mesh(
+      new THREE.RingGeometry(0.13, 0.2, 32),
+      new THREE.MeshBasicMaterial({ color: '#ffd23f', side: THREE.DoubleSide }),
+    );
+    this.previewEnd.rotation.x = -Math.PI / 2;
+    this.previewEnd.visible = false;
+    this.scene.add(this.previewDots, this.previewEnd);
+
     this.resetBall(new THREE.Vector3(this.hole.tee.x, 0, this.hole.tee.z));
-    this.world.step(); // fills the physics world's lookup tables, so the first aim check can see the walls
     this.beginShot();
     this.snapCamera();
   }
@@ -131,6 +163,12 @@ export class Game {
     this.phoneAngle = angle;
   }
 
+  onPhonePractice(power: number, angle: number): void {
+    if (this.state !== 'aiming') return;
+    this.phoneAngle = angle;
+    this.practice(power);
+  }
+
   onPhoneStroke(power: number, angle: number): void {
     if (this.state !== 'aiming') return;
     this.phoneAngle = angle;
@@ -141,10 +179,21 @@ export class Game {
 
   private beginShot(): void {
     this.state = 'aiming';
-    this.baseYaw = this.findAimYaw();
-    this.phoneZero = this.phoneAngle;
+    const p = this.ball.translation();
+    this.baseYaw = Math.atan2(this.hole.cup.x - p.x, this.hole.cup.z - p.z);
+    this.phoneAngle = 0;
     this.keyboardOffset = 0;
+    this.practicePower = null;
+    this.hidePreview();
+    this.hud.gauge.hidden = true;
+    this.onNewShot?.();
     this.updateInfo();
+  }
+
+  private practice(power: number): void {
+    this.practicePower = power;
+    this.previewYaw = Number.NaN; // recompute
+    this.setGauge('Practice', power);
   }
 
   private shoot(power: number): void {
@@ -155,17 +204,15 @@ export class Game {
     this.strokes++;
     this.state = 'rolling';
     this.restTime = 0;
-    this.hud.power.textContent = `Power ${Math.round(power)}%`;
+    this.hidePreview();
+    this.setGauge('Hit', power);
     this.updateInfo();
   }
 
   private checkBall(dt: number): void {
     if (this.state !== 'rolling') return;
     const p = this.ball.translation();
-    const cup = this.hole.cup;
-    const gap = TUNING.course.cupGap;
-
-    if (p.y < -TUNING.ball.radius * 1.5 && Math.abs(p.x - cup.x) < gap && Math.abs(p.z - cup.z) < gap) {
+    if (isInCup(p, this.hole)) {
       this.holed();
       return;
     }
@@ -202,7 +249,6 @@ export class Game {
     window.setTimeout(() => {
       // Practice: start the hole again.
       this.strokes = 0;
-      this.hud.power.textContent = '';
       this.resetBall(new THREE.Vector3(this.hole.tee.x, 0, this.hole.tee.z));
       this.beginShot();
     }, 3000);
@@ -215,25 +261,9 @@ export class Game {
     this.lastRest.set(at.x, 0, at.z);
   }
 
-  /** Points at the farthest aim point the ball can see (the cup if possible, else the corner). */
-  private findAimYaw(): number {
-    const p = this.ball.translation();
-    const points = this.hole.aimPoints;
-    for (let i = points.length - 1; i >= 0; i--) {
-      const dx = points[i].x - p.x;
-      const dz = points[i].z - p.z;
-      const dist = Math.hypot(dx, dz);
-      if (dist < 0.01) continue;
-      const ray = new RAPIER.Ray({ x: p.x, y: p.y, z: p.z }, { x: dx / dist, y: 0, z: dz / dist });
-      const hit = this.world.castRay(ray, dist, true, undefined, undefined, undefined, this.ball);
-      if (!hit || i === 0) return Math.atan2(dx, dz);
-    }
-    return 0;
-  }
-
   /** Current aim direction. Positive phone angles turn the aim to the right. */
   private aimYaw(): number {
-    const offset = this.phoneAngle - this.phoneZero + this.keyboardOffset;
+    const offset = this.phoneAngle + this.keyboardOffset;
     return this.baseYaw - THREE.MathUtils.degToRad(offset);
   }
 
@@ -244,10 +274,12 @@ export class Game {
 
     if (this.state === 'aiming') {
       this.keyboardOffset += this.keysTurning * TUNING.aimLine.keyboardDegreesPerSecond * dt;
-      if (this.charging !== null) {
-        this.charging = Math.min(1, this.charging + dt / TUNING.aimLine.keyboardChargeTime);
-        this.hud.power.textContent = `Power ${Math.round(this.charging * 100)}%`;
+      if (this.charging) {
+        this.charging.amount = Math.min(1, this.charging.amount + dt / TUNING.aimLine.keyboardChargeTime);
+        this.setGauge(this.charging.kind === 'hit' ? 'Hit' : 'Practice', Math.round(this.charging.amount * 100));
       }
+      const aimChanged = Number.isNaN(this.previewYaw) || Math.abs(this.aimYaw() - this.previewYaw) > 0.002;
+      if (this.practicePower !== null && aimChanged) this.updatePreview();
     }
 
     const step = this.world.timestep;
@@ -280,6 +312,31 @@ export class Game {
       dot.position.copy(start).addScaledVector(dir, 0.25 + (i / dots) * length);
       dot.position.y = 0.04;
     });
+  }
+
+  private updatePreview(): void {
+    if (this.practicePower === null) return;
+    const yaw = this.aimYaw();
+    this.previewYaw = yaw;
+    const p = this.ball.translation();
+    const { points, holed } = this.preview.predict({ x: p.x, z: p.z }, yaw, this.practicePower);
+    const matrix = new THREE.Matrix4();
+    const count = Math.min(points.length, this.previewDots.instanceMatrix.count);
+    for (let i = 0; i < count; i++) {
+      matrix.setPosition(points[i].x, 0.04, points[i].z);
+      this.previewDots.setMatrixAt(i, matrix);
+    }
+    this.previewDots.count = count;
+    this.previewDots.instanceMatrix.needsUpdate = true;
+    const end = points[points.length - 1];
+    this.previewEnd.position.set(end.x, 0.012, end.z);
+    (this.previewEnd.material as THREE.MeshBasicMaterial).color.set(holed ? '#3ec300' : '#ffd23f');
+    this.previewEnd.visible = true;
+  }
+
+  private hidePreview(): void {
+    this.previewDots.count = 0;
+    this.previewEnd.visible = false;
   }
 
   private desiredCamera(): { position: THREE.Vector3; look: THREE.Vector3 } {
@@ -324,6 +381,13 @@ export class Game {
     this.hud.info.textContent = `Hole ${this.hole.number} · Par ${this.hole.par} · Strokes ${this.strokes}`;
   }
 
+  private setGauge(label: string, power: number): void {
+    this.hud.gauge.hidden = false;
+    this.hud.gauge.classList.toggle('practice', label === 'Practice');
+    this.hud.gaugeFill.style.height = `${power}%`;
+    this.hud.gaugeLabel.textContent = `${label}\n${power}%`;
+  }
+
   private showMessage(text: string, ms: number): void {
     this.hud.message.textContent = text;
     this.hud.message.hidden = false;
@@ -343,9 +407,9 @@ export class Game {
     if (e.repeat) return;
     if (e.key === 'ArrowLeft') this.keysTurning = -1;
     else if (e.key === 'ArrowRight') this.keysTurning = 1;
-    else if (e.key === ' ' && this.state === 'aiming') {
+    else if ((e.key === ' ' || e.key === 'p' || e.key === 'P') && this.state === 'aiming') {
       e.preventDefault();
-      this.charging = 0;
+      this.charging = { kind: e.key === ' ' ? 'hit' : 'practice', amount: 0 };
     } else if ((e.key === 'r' || e.key === 'R') && this.state !== 'holed') {
       this.resetBall(this.lastRest);
       this.beginShot();
@@ -354,10 +418,13 @@ export class Game {
 
   private readonly onKeyUp = (e: KeyboardEvent): void => {
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') this.keysTurning = 0;
-    else if (e.key === ' ' && this.charging !== null) {
-      const power = Math.max(1, Math.round(this.charging * 100));
+    else if ((e.key === ' ' || e.key === 'p' || e.key === 'P') && this.charging) {
+      const { kind, amount } = this.charging;
       this.charging = null;
-      if (this.state === 'aiming') this.shoot(power);
+      if (this.state !== 'aiming') return;
+      const power = Math.max(1, Math.round(amount * 100));
+      if (kind === 'hit') this.shoot(power);
+      else this.practice(power);
     }
   };
 }

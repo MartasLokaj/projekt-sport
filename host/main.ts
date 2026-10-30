@@ -117,12 +117,18 @@ function flash(card: HTMLElement): void {
   card.classList.add('hit');
 }
 
+let socket: WebSocket | null = null;
+
+function send(msg: ClientMessage): void {
+  if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(msg));
+}
+
 function connect(): void {
   const ws = new WebSocket(`wss://${location.host}${WS_PATH}`);
+  socket = ws;
   ws.addEventListener('open', () => {
     offlineBanner.hidden = true;
-    const hello: ClientMessage = { type: 'host_hello' };
-    ws.send(JSON.stringify(hello));
+    send({ type: 'host_hello' });
   });
   ws.addEventListener('message', (event) => {
     const msg = JSON.parse(event.data) as ServerMessage;
@@ -139,6 +145,8 @@ function connect(): void {
       renderReadout(playerId);
       const refs = cards.get(playerId);
       if (refs) flash(refs.card);
+    } else if (msg.type === 'player_practice') {
+      if (playing) game?.onPhonePractice(msg.power, msg.angle);
     }
   });
   ws.addEventListener('close', () => {
@@ -155,8 +163,11 @@ async function startGame(): Promise<void> {
   game ??= await Game.create(document.getElementById('game-canvas')!, {
     info: document.getElementById('hud-info')!,
     message: document.getElementById('hud-message')!,
-    power: document.getElementById('hud-power')!,
+    gauge: document.getElementById('gauge')!,
+    gaugeFill: document.getElementById('gauge-fill')!,
+    gaugeLabel: document.getElementById('gauge-label')!,
   });
+  game.onNewShot = () => send({ type: 'new_shot' });
   if (import.meta.env.DEV) Object.assign(window, { game }); // for debugging in the browser console
   startButton.disabled = false;
   lobbyScreen.hidden = true;

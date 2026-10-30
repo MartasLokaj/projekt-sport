@@ -98,6 +98,13 @@ export const TUNING = {
     smoothing: 3,
   },
 
+  practice: {
+    /** How far ahead the practice swing shows the ball's path (seconds of rolling). Lower = harder. */
+    previewSeconds: 6,
+    /** Distance between the dots of the predicted path. */
+    dotSpacing: 0.18,
+  },
+
   aimLine: {
     length: 2.2,
     dots: 12,

@@ -8,6 +8,7 @@ import {
   type JoinError,
   type PlayerInfo,
   type ServerMessage,
+  type Stroke,
 } from '../shared/protocol.ts';
 import { TUNING } from '../shared/tuning.ts';
 
@@ -67,22 +68,25 @@ export class Lobby {
       }
       case 'stroke': {
         const seat = this.seatOf(ws);
-        if (!seat || !Number.isFinite(msg.power) || !Number.isFinite(msg.angle)) return;
+        const stroke = cleanStroke(msg);
+        if (!seat || !stroke) return;
         // Safety net for "one swing = one stroke", even if a phone sends twice.
         const now = Date.now();
         if (now - seat.lastStrokeAt < TUNING.network.minStrokeIntervalMs) return;
         seat.lastStrokeAt = now;
-        this.sendToHosts({
-          type: 'player_stroke',
-          playerId: seat.id,
-          power: clamp(msg.power, 0, 100),
-          angle: clamp(msg.angle, -180, 180),
-          mode: msg.mode === 'slingshot' ? 'slingshot' : 'swing',
-          backswing: Number.isFinite(msg.backswing) ? msg.backswing : null,
-          speed: Number.isFinite(msg.speed) ? msg.speed : null,
-        });
+        this.sendToHosts({ type: 'player_stroke', playerId: seat.id, ...stroke });
         return;
       }
+      case 'practice': {
+        const seat = this.seatOf(ws);
+        const stroke = cleanStroke(msg);
+        if (seat && stroke) this.sendToHosts({ type: 'player_practice', playerId: seat.id, ...stroke });
+        return;
+      }
+      case 'new_shot':
+        if (!this.hosts.has(ws)) return;
+        for (const seat of this.seats.values()) if (seat.socket) send(seat.socket, { type: 'aim_reset' });
+        return;
     }
   }
 
@@ -159,6 +163,18 @@ export class Lobby {
     const msg = this.lobbyState();
     for (const ws of [...this.hosts, ...this.phones]) send(ws, msg);
   }
+}
+
+/** Checks the numbers a phone sent for a stroke or practice swing. */
+function cleanStroke(msg: Stroke): Stroke | null {
+  if (!Number.isFinite(msg.power) || !Number.isFinite(msg.angle)) return null;
+  return {
+    power: clamp(msg.power, 0, 100),
+    angle: clamp(msg.angle, -180, 180),
+    mode: msg.mode === 'slingshot' ? 'slingshot' : 'swing',
+    backswing: Number.isFinite(msg.backswing) ? msg.backswing : null,
+    speed: Number.isFinite(msg.speed) ? msg.speed : null,
+  };
 }
 
 function clamp(value: number, min: number, max: number): number {

@@ -37,7 +37,11 @@ export type ClientMessage =
   | { type: 'join'; room: string; playerId: string; name: string; colour: string }
   /** Live aim while dragging, about 20 per second. */
   | { type: 'aim'; angle: number }
-  | ({ type: 'stroke' } & Stroke);
+  | ({ type: 'stroke' } & Stroke)
+  /** A practice swing: measured like a stroke, but the ball does not move. */
+  | ({ type: 'practice' } & Stroke)
+  /** From the host: a new shot starts, so the phones reset their aim to straight at the cup. */
+  | { type: 'new_shot' };
 
 /** Sent by the server. */
 export type ServerMessage =
@@ -48,4 +52,7 @@ export type ServerMessage =
   | { type: 'join_error'; reason: JoinError }
   /** Forwarded to the host page. */
   | { type: 'player_aim'; playerId: string; angle: number }
-  | ({ type: 'player_stroke'; playerId: string } & Stroke);
+  | ({ type: 'player_stroke'; playerId: string } & Stroke)
+  | ({ type: 'player_practice'; playerId: string } & Stroke)
+  /** To the phones: set the aim back to 0 (straight at the cup). */
+  | { type: 'aim_reset' };

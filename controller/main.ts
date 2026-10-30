@@ -161,6 +161,9 @@ function connect(): void {
       case 'join_error':
         handleJoinError(msg.reason);
         break;
+      case 'aim_reset':
+        play.resetAim();
+        break;
     }
   });
   socket.addEventListener('close', () => {
