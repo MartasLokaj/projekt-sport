@@ -78,8 +78,8 @@ export class Lobby {
           power: clamp(msg.power, 0, 100),
           angle: clamp(msg.angle, -180, 180),
           mode: msg.mode === 'slingshot' ? 'slingshot' : 'swing',
-          peakRate: Number.isFinite(msg.peakRate) ? msg.peakRate : null,
-          axis: typeof msg.axis === 'string' ? msg.axis.slice(0, 8) : null,
+          backswing: Number.isFinite(msg.backswing) ? msg.backswing : null,
+          speed: Number.isFinite(msg.speed) ? msg.speed : null,
         });
         return;
       }

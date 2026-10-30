@@ -91,22 +91,33 @@ export function initPlayScreen(send: (msg: ClientMessage) => void): { onJoined: 
     powerText.textContent = `${power}%`;
   }
 
-  function hit(power: number, peakRate: number | null, axis: string | null): void {
+  function hit(power: number, backswing: number | null, speed: number | null): void {
     strokeSent = true;
-    send({ type: 'stroke', power, angle: Math.round(angle * 10) / 10, mode, peakRate, axis });
+    send({ type: 'stroke', power, angle: Math.round(angle * 10) / 10, mode, backswing, speed });
     setMeter(power);
     statusEl.textContent = `Hit! ${power}%`;
     if ('vibrate' in navigator) navigator.vibrate(40); // not supported on iPhone
   }
 
+  let lastMotionTime = 0;
+
   window.addEventListener('devicemotion', (e) => {
     const r = e.rotationRate;
     if (!r || r.alpha === null || r.beta === null || r.gamma === null) return;
     sensorSeen = true;
-    if (!holding || mode !== 'swing') return;
-    const result = detector.sample({ alpha: r.alpha, beta: r.beta, gamma: r.gamma });
-    if (result) hit(result.power, result.peakRate, result.axis);
-    else if (!strokeSent) setMeter(detector.livePower);
+    // Seconds since the previous reading (about 1/60), capped in case readings paused.
+    const dt = lastMotionTime ? Math.min(0.05, Math.max(0, (e.timeStamp - lastMotionTime) / 1000)) : 1 / 60;
+    lastMotionTime = e.timeStamp;
+    if (!holding || mode !== 'swing' || strokeSent) return;
+    const result = detector.sample({ alpha: r.alpha, beta: r.beta, gamma: r.gamma }, dt);
+    if (result) {
+      hit(result.power, result.backswing, result.speed);
+    } else {
+      const back = detector.liveBackswing;
+      const cfg = TUNING.swing;
+      setMeter(powerFromValue(back, cfg.minBackswing, cfg.maxBackswing, cfg.curveExponent));
+      if (back > 0) statusEl.textContent = `Back ${back}°`;
+    }
   });
 
   swingButton.addEventListener('pointerdown', (e) => {
@@ -119,7 +130,7 @@ export function initPlayScreen(send: (msg: ClientMessage) => void): { onJoined: 
     setMeter(0);
     if (mode === 'swing') {
       detector.start();
-      statusEl.textContent = 'Swing back, then forward!';
+      statusEl.textContent = 'Swing back, then forward through this point!';
     } else {
       pullStartY = e.clientY;
       pullPower = 0;
@@ -142,9 +153,14 @@ export function initPlayScreen(send: (msg: ClientMessage) => void): { onJoined: 
     swingButton.classList.remove('held');
     swingButton.style.setProperty('--pull', '0px');
     if (mode === 'swing') {
-      const result = detector.release();
-      if (result && !cancelled) hit(result.power, result.peakRate, result.axis);
-      if (!strokeSent) statusEl.textContent = 'No swing detected. Swing a little faster.';
+      const result = strokeSent ? null : detector.release();
+      if (result && !cancelled) hit(result.power, result.backswing, result.speed);
+      if (!strokeSent) {
+        statusEl.textContent =
+          detector.missReason === 'too_short'
+            ? 'No swing detected. Swing back a little further.'
+            : 'Swing forward through the start point before you let go.';
+      }
     } else if (!cancelled && pullPower > 0) {
       hit(pullPower, null, null);
     } else {

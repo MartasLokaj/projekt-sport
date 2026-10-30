@@ -101,7 +101,7 @@ function renderReadout(playerId: string): void {
     ? ''
     : stroke.mode === 'slingshot'
       ? 'Touch controls'
-      : `Swing · peak ${stroke.peakRate}°/s · axis ${stroke.axis}`;
+      : `Swing · back ${stroke.backswing}° · speed ${stroke.speed}°/s`;
 }
 
 function flash(card: HTMLElement): void {

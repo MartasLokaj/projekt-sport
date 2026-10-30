@@ -15,9 +15,10 @@ export type ControlMode = 'swing' | 'slingshot';
 /**
  * A hit from a phone.
  * angle: aim in degrees, 0 = straight ahead, positive = to the right (-180..180).
- * power: 0..100. peakRate and axis are measurements for tuning the swing (null for slingshot).
+ * power: 0..100. backswing (degrees) and speed (degrees per second) are swing measurements
+ * shown on the big screen for tuning (null for the slingshot).
  */
-export type Stroke = { power: number; angle: number; mode: ControlMode; peakRate: number | null; axis: string | null };
+export type Stroke = { power: number; angle: number; mode: ControlMode; backswing: number | null; speed: number | null };
 
 /** Why the server refused a phone. */
 export type JoinError =
