@@ -89,11 +89,11 @@ export class Scenery {
         // Flat top, gentle beach down into the sea, small natural bumps on the grass.
         let y = THREE.MathUtils.lerp(top, c.seaLevel - 0.9, THREE.MathUtils.smoothstep(r, 0.9, 1.35));
         y += Math.sin(x * 0.9 + wobble[0]) * Math.sin(z * 0.7 + wobble[1]) * 0.06 * (1 - THREE.MathUtils.smoothstep(r, 0.6, 0.95));
-        // Near the course the ground follows the lane, just below the turf.
+        // Near the course the ground follows the lane (on a hill too); the bumpers' slopes sink into it.
         const spot = hole.lane.nearest(x, z);
         const fromEdge = spot.distance - spot.width;
         const blend = THREE.MathUtils.smoothstep(-fromEdge, -(bumpers + 1.6), -bumpers * 0.6);
-        y = THREE.MathUtils.lerp(y, Math.max(y, spot.height - 0.05), blend);
+        y = THREE.MathUtils.lerp(y, Math.max(y, spot.height - c.groundDepth), blend);
         positions.push(x, y, z);
         uvs.push(x, z); // scaled per material below
         reaches.push(r);

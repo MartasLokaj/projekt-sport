@@ -121,6 +121,10 @@ export const TUNING = {
     /** The round bumpers: width and height. */
     bumperWidth: 0.24,
     bumperHeight: 0.3,
+    /** The bumpers' outer side slopes down into the island ground over this distance (bigger = more massive). */
+    bumperSlope: 0.8,
+    /** How far below the course floor that slope ends (hidden under the island ground). */
+    bumperSlopeDepth: 0.32,
     /** One repeat of the grass texture covers this many units, on the lane and on the bumpers. */
     turfTextureSize: 2.2,
     bumperTextureSize: 0.9,

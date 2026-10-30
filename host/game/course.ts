@@ -187,7 +187,7 @@ export function buildHole(def: HoleDef, kit: Kit, world: RAPIER.World, R: typeof
   );
 
   const teeSpot = lane.at(cfg.teeDistance);
-  const outerEdge = cfg.bumperWidth + 0.05;
+  const outerEdge = cfg.bumperWidth + cfg.bumperSlope;
   return {
     def,
     group,
@@ -389,12 +389,20 @@ function buildBumper(lane: Lane): THREE.BufferGeometry {
     [-0.02, -0.15],
     [0, 0.02],
   ];
-  const arcSteps = 10;
+  // Round on the lane side up to the top...
+  const arcSteps = 6;
   for (let k = 0; k <= arcSteps; k++) {
-    const a = Math.PI - (k / arcSteps) * Math.PI;
+    const a = Math.PI - (k / arcSteps) * (Math.PI / 2);
     profile.push([r + r * Math.cos(a), h - r + r * Math.sin(a)]);
   }
-  profile.push([w, 0.02], [w + 0.04, -0.3]);
+  // ...then a wide, soft slope on the outer side that sinks into the island ground, so the bumper looks massive.
+  const reach = w - r + cfg.bumperSlope;
+  const depth = cfg.bumperSlopeDepth;
+  const slopeSteps = 14;
+  for (let k = 1; k <= slopeSteps; k++) {
+    const t = k / slopeSteps;
+    profile.push([r + reach * t, -depth + (h + depth) * (1 - THREE.MathUtils.smootherstep(t, 0, 1))]);
+  }
 
   const positions: number[] = [];
   const uvs: number[] = [];
