@@ -207,12 +207,16 @@ export const TUNING = {
 
   // Trees, bushes and grass tufts on the islands (KayKit Forest Nature Pack models).
   vegetation: {
-    /** How many of each go on one island (fewer = faster). */
+    /** How many trees in groves and alone, and how many bushes, go on one island (fewer = faster). */
     treesPerIsland: 24,
+    loneTrees: 6,
     bushesPerIsland: 34,
-    grassPerIsland: 160,
-    /** Trees grow in little groves: this many groves per island. */
-    grovesPerIsland: 7,
+    /** Trees grow in little groves spread evenly around the island: this many groves per island. */
+    grovesPerIsland: 8,
+    /** Smallest distance between two tree trunks. */
+    treeSpacing: 1.2,
+    /** Grass tufts cover the whole grassy island, one in every square of this size (smaller = denser, slower). */
+    grassSpacing: 0.5,
     /** Size of the models compared with the original pack (smallest, biggest). Trees grow bigger further from the lane. */
     treeScale: [0.38, 0.62],
     bushScale: [0.3, 0.5],

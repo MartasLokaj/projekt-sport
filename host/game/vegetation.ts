@@ -12,13 +12,15 @@ const TREES = ['Tree_1_A', 'Tree_1_B', 'Tree_2_A', 'Tree_2_B', 'Tree_3_A', 'Tree
 /** Big trees, used only far from the lane. */
 const BIG_TREES = ['Tree_1_C', 'Tree_2_C'];
 const BUSHES = ['Bush_1_B', 'Bush_1_C', 'Bush_1_E', 'Bush_2_A', 'Bush_2_B', 'Bush_3_A', 'Bush_3_B', 'Bush_4_A', 'Bush_4_B', 'Bush_4_D'];
-const GRASS = ['Grass_1_B', 'Grass_1_C', 'Grass_2_B', 'Grass_2_C'];
+const GRASS = ['Grass_1_B', 'Grass_2_B'];
+/** Bigger tufts (more triangles), used for one tuft in five. */
+const BIG_GRASS = ['Grass_1_C', 'Grass_2_C'];
 
 export type Forest = { geometries: Map<string, THREE.BufferGeometry>; material: THREE.MeshStandardMaterial };
 
 export async function loadForest(): Promise<Forest> {
   const loader = new GLTFLoader();
-  const names = [...TREES, ...BIG_TREES, ...BUSHES, ...GRASS];
+  const names = [...TREES, ...BIG_TREES, ...BUSHES, ...GRASS, ...BIG_GRASS];
   const geometries = new Map<string, THREE.BufferGeometry>();
   let material: THREE.MeshStandardMaterial | null = null;
   await Promise.all(
@@ -113,28 +115,45 @@ export function plantIsland(planter: Planter, island: IslandInfo, random: () => 
     planter.add(name, new THREE.Vector3(x, groundAt(x, z) - 0.02, z), random() * Math.PI * 2, scale);
   };
 
-  // Groves: a few clearings away from the lane where the trees gather.
+  // Groves spread evenly around the island: the island is cut into equal slices like a cake, one grove per slice.
+  const treeOk = (x: number, z: number): boolean => gap(x, z) >= v.treeGap && reach(x, z) <= v.maxReach && !nearTeeView(x, z);
   const groves: THREE.Vector2[] = [];
-  for (let k = 0; k < 200 && groves.length < v.grovesPerIsland; k++) {
-    const spot = randomSpot(v.maxReach);
-    if (spot && gap(spot.x, spot.y) > v.treeGap + 0.8 && !nearTeeView(spot.x, spot.y)) groves.push(spot);
+  const turn = random() * Math.PI * 2;
+  for (let s = 0; s < v.grovesPerIsland; s++) {
+    for (let k = 0; k < 60; k++) {
+      const angle = turn + ((s + random()) / v.grovesPerIsland) * Math.PI * 2;
+      const r = (0.45 + random() * 0.35) * v.maxReach / 0.8;
+      const x = centre.x + Math.cos(angle) * radius.x * r;
+      const z = centre.z + Math.sin(angle) * radius.y * r;
+      if (!treeOk(x, z)) continue;
+      groves.push(new THREE.Vector2(x, z));
+      break;
+    }
   }
 
   const trees: THREE.Vector2[] = [];
-  for (let k = 0; k < v.treesPerIsland * 30 && trees.length < v.treesPerIsland && groves.length > 0; k++) {
-    const grove = pick(groves);
-    const angle = random() * Math.PI * 2;
-    const spread = 0.5 + random() * 2.6;
-    const x = grove.x + Math.cos(angle) * spread;
-    const z = grove.y + Math.sin(angle) * spread;
-    const g = gap(x, z);
-    if (g < v.treeGap || reach(x, z) > v.maxReach || nearTeeView(x, z)) continue;
-    if (trees.some((t) => t.distanceTo(new THREE.Vector2(x, z)) < 1.3)) continue;
+  const plantTree = (x: number, z: number): boolean => {
+    if (!treeOk(x, z) || trees.some((t) => t.distanceTo(new THREE.Vector2(x, z)) < v.treeSpacing)) return false;
     // Small trees close to the lane, bigger ones further away.
-    const far = THREE.MathUtils.smoothstep(g, v.treeGap, v.treeGap + 4);
+    const far = THREE.MathUtils.smoothstep(gap(x, z), v.treeGap, v.treeGap + 4);
     const name = far > 0.7 && random() < 0.3 ? pick(BIG_TREES) : pick(TREES);
     place(name, x, z, range(v.treeScale, far * 0.7 + random() * 0.3));
     trees.push(new THREE.Vector2(x, z));
+    return true;
+  };
+  // The same number of trees in every grove...
+  const perGrove = Math.floor(v.treesPerIsland / Math.max(1, groves.length));
+  for (const grove of groves) {
+    for (let planted = 0, k = 0; k < 80 && planted < perGrove; k++) {
+      const angle = random() * Math.PI * 2;
+      const spread = 0.4 + random() * 2.2;
+      if (plantTree(grove.x + Math.cos(angle) * spread, grove.y + Math.sin(angle) * spread)) planted++;
+    }
+  }
+  // ...and a few lone trees in between.
+  for (let k = 0; k < 200 && trees.length < v.treesPerIsland + v.loneTrees; k++) {
+    const spot = randomSpot(v.maxReach);
+    if (spot) plantTree(spot.x, spot.y);
   }
 
   // Bushes: half at the feet of trees, half along the bumpers.
@@ -160,25 +179,15 @@ export function plantIsland(planter: Planter, island: IslandInfo, random: () => 
     bushes.push(new THREE.Vector2(x, z));
   }
 
-  // Grass tufts everywhere on the grass, a bit thicker around trees and bushes.
-  const grassReach = TUNING.scenery.grassReach - 0.03;
-  const hosts = [...trees, ...bushes];
-  for (let placed = 0, k = 0; k < v.grassPerIsland * 10 && placed < v.grassPerIsland; k++) {
-    let x: number;
-    let z: number;
-    if (k % 3 === 0 && hosts.length > 0) {
-      const host = pick(hosts);
-      const angle = random() * Math.PI * 2;
-      const d = 0.3 + random() * 1.2;
-      x = host.x + Math.cos(angle) * d;
-      z = host.y + Math.sin(angle) * d;
-    } else {
-      const spot = randomSpot(grassReach);
-      if (!spot) continue;
-      [x, z] = [spot.x, spot.y];
+  // Grass tufts all over the grass: one in every small square of a grid, nudged randomly so no rows show.
+  const grassReach = TUNING.scenery.grassReach - 0.02;
+  const step = v.grassSpacing;
+  for (let gx = centre.x - radius.x; gx < centre.x + radius.x; gx += step) {
+    for (let gz = centre.z - radius.y; gz < centre.z + radius.y; gz += step) {
+      const x = gx + random() * step;
+      const z = gz + random() * step;
+      if (gap(x, z) < 0.05 || reach(x, z) > grassReach) continue;
+      place(pick(random() < 0.2 ? BIG_GRASS : GRASS), x, z, range(v.grassScale));
     }
-    if (gap(x, z) < 0.05 || reach(x, z) > grassReach) continue;
-    place(pick(GRASS), x, z, range(v.grassScale));
-    placed++;
   }
 }

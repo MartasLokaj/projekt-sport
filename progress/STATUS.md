@@ -40,6 +40,9 @@ running log of where we are, what the user decided, and what comes next).
       `host/game/vegetation.ts` plants groves of trees (bigger further from the lane), bushes at tree feet and along
       the bumpers, grass tufts everywhere; one InstancedMesh per model. Keeps clear of the lane and the camera's view
       behind the tee. Counts/sizes/tint in `TUNING.vegetation`. CPU ~1.25 ms/frame in the dev browser.
+    - Then (user: "grass everywhere, trees better spread"): grass tufts on a jittered grid over all island grass
+      (`grassSpacing`, mostly small tufts), groves spread evenly around each island (one per slice) + a few lone trees.
+      ~430k instanced triangles in total — if the MacBook Air stutters, raise `grassSpacing` first.
     - Possible follow-ups: a tree may still block the camera mid-lane at bends (could fade like the windmill).
     - **Wind** (swaying trees/grass) — the user wants it in 4c.
     - Still need a **light CC0 tree source** (e.g. Quaternius stylized nature packs, or another CC0 set). Propose
