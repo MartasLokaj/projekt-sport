@@ -97,14 +97,20 @@ export function initLabScreen(send: (msg: ClientMessage) => void): LabScreen {
     renderLive(tilt);
     if (!swing) return;
 
-    swings++;
     const { at, ...rest } = swing;
     send({ type: 'badminton_swing', ...rest, at: Math.round(at + (offset ?? 0)), fused });
+    if (swing.ignored) {
+      detailEl.textContent = `Ignored: racket going back or up (${swing.speed}°/s)`;
+      return;
+    }
+    swings++;
     if ('vibrate' in navigator) navigator.vibrate(30); // not supported on iPhone
     kindEl.textContent = swing.kind === 'overhead' ? 'OVERHEAD' : 'UNDERHAND';
     kindEl.className = swing.kind;
     powerEl.textContent = `${Math.round(swing.power)} %`;
-    detailEl.textContent = `Swing ${swings} · ${swing.speed}°/s · top ${swing.tilt}° ${swing.tilt >= 0 ? 'up' : 'down'}`;
+    detailEl.textContent =
+      `Swing ${swings} · ${swing.speed}°/s · top ${swing.tilt}° ${swing.tilt >= 0 ? 'up' : 'down'} before the hit` +
+      (detector.learned ? '' : ' · learning your swing');
   });
 
   let lastLive = 0;

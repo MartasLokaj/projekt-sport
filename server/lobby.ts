@@ -312,10 +312,11 @@ function cleanBadmintonSwing(msg: BadmintonSwing): BadmintonSwing | null {
   const trace = Array.isArray(msg.trace)
     ? msg.trace
         .slice(0, 200)
-        .filter((p): p is [number, number, number] => Array.isArray(p) && p.length === 3 && p.every(Number.isFinite))
+        .filter((p) => Array.isArray(p) && p.length >= 3 && p.length <= 6 && p.every(Number.isFinite))
     : [];
   return {
     kind: msg.kind === 'overhead' ? 'overhead' : 'underhand',
+    ignored: msg.ignored === true,
     speed: clamp(msg.speed, 0, 5000),
     power: clamp(msg.power, 0, 100),
     tilt: clamp(msg.tilt, -90, 90),

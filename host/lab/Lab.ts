@@ -70,6 +70,10 @@ export class Lab {
     const card = this.cards.get(msg.playerId);
     if (!card) return;
     const cfg = TUNING.badmintonSwing;
+    if (msg.ignored) {
+      card.detail.textContent = `Ignored a turn the other way (racket going back or up, ${msg.speed}°/s)`;
+      return;
+    }
     card.swings.push(msg);
     card.flash = performance.now();
 
@@ -93,7 +97,7 @@ export class Lab {
     }
 
     card.detail.textContent =
-      `${msg.speed}°/s · top ${Math.abs(msg.tilt)}° ${msg.tilt >= 0 ? 'up' : 'down'} · ` +
+      `${msg.speed}°/s · top ${Math.abs(msg.tilt)}° ${msg.tilt >= 0 ? 'up' : 'down'} before the hit · ` +
       `arrived ${Math.max(0, msg.receivedAt - msg.at)} ms after the hit · ${msg.fused ? 'orientation sensor' : 'gravity only'}`;
 
     const overhead = card.swings.filter((s) => s.kind === 'overhead').length;
@@ -168,7 +172,7 @@ export class Lab {
     c.stroke();
     c.setLineDash([]);
 
-    const line = (colour: string, y: (p: [number, number, number]) => number): void => {
+    const line = (colour: string, y: (p: number[]) => number): void => {
       c.strokeStyle = colour;
       c.lineWidth = 3;
       c.beginPath();
@@ -197,7 +201,7 @@ export class Lab {
     const h = canvas.clientHeight;
     c.clearRect(0, 0, w, h);
 
-    const hitY = h * 0.78;
+    const hitY = h * 0.5;
     const cycle = lab.fallMs + lab.pauseMs;
     const since = (Date.now() - this.epoch) % cycle;
 
@@ -225,7 +229,7 @@ export class Lab {
     // The shuttle: falls with gentle easing, then fades below the line.
     if (since < lab.fallMs + 300) {
       const t = since / lab.fallMs;
-      const y = 40 + (hitY - 40) * (t <= 1 ? t * t * 0.4 + t * 0.6 : 1 + (t - 1) * 0.6);
+      const y = 70 + (hitY - 70) * (t <= 1 ? t * t * 0.4 + t * 0.6 : 1 + (t - 1) * 0.6);
       c.globalAlpha = t <= 1 ? 1 : Math.max(0, 1 - (since - lab.fallMs) / 300);
       drawShuttle(c, w / 2, y);
       c.globalAlpha = 1;

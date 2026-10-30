@@ -65,20 +65,22 @@ export type SwingProgress = {
  * Badminton swing (Swing Lab, phase B1). The phone detects it instantly, with no button.
  * kind: overhead = the top of the phone (where the racket head would be) points up at the fastest moment.
  * speed: fastest turn of the phone (degrees per second). power: 0..100 from the speed and sensitivity.
- * tilt: angle of the top of the phone above the horizon at the fastest moment (degrees, -90..90).
+ * tilt: highest angle of the top of the phone above the horizon just before the fastest moment (degrees, -90..90).
+ * ignored: it turned the opposite way to this player's real swings (racket going back or up), so it is no hit.
  * at: when the fastest moment happened, in the server's clock (milliseconds since 1970), so timing
  * can be judged without the Wi-Fi delay. trace: the last moments of motion, for the graph and the log.
  */
 export type BadmintonSwing = {
   kind: 'overhead' | 'underhand';
+  ignored: boolean;
   speed: number;
   power: number;
   tilt: number;
   at: number;
   /** true when the tilt came from the fused orientation sensor, false when from gravity only. */
   fused: boolean;
-  /** Samples: [ms relative to the fastest moment, speed deg/s, tilt deg]. */
-  trace: [number, number, number][];
+  /** Samples: [ms relative to the fastest moment, speed deg/s, tilt deg, turn around x, y, z deg/s]. */
+  trace: number[][];
 };
 
 /** What happened to the ball after a stroke, reported by the host. */

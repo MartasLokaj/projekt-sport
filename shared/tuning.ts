@@ -334,14 +334,32 @@ export const TUNING = {
     releaseRatio: 0.75,
     /** ...or at the latest this long after it started. */
     maxSwingMs: 250,
+    /**
+     * After the turn slows down, wait this long in case a faster swing follows (reaching back with the
+     * racket comes just before the real swing). Adds to the delay, but the hit time is still exact.
+     */
+    confirmMs: 280,
     /** After a swing, ignore motion for this long (the arm coming back is not a new swing). */
     cooldownMs: 450,
+    /** The phone learns which way this player's real swings turn, from swings faster than this... */
+    learnSpeed: 900,
+    /** ...each strong swing moves what it learned this much (0..1). */
+    learnRate: 0.3,
+    /**
+     * A turn pointing the other way than the learned swings (below this, -1 = exactly opposite, 0 = sideways)
+     * is the racket going back or up, e.g. reaching for the shuttle. Ignored.
+     */
+    backwardDot: -0.3,
     /** Speed for 0 % and 100 % power, and the curve between them (1 = straight). */
     minSpeed: 350,
-    maxSpeed: 1600,
+    maxSpeed: 2000,
     curveExponent: 1,
-    /** Overhead when the top of the phone points higher than this above the horizon at the fastest moment (degrees). */
-    overheadMinTilt: 25,
+    /**
+     * Overhead when the top of the phone pointed higher than this above the horizon (degrees) at some point
+     * in the `overheadLookbackMs` before the fastest moment (the racket was up, then swung forward).
+     */
+    overheadMinTilt: 45,
+    overheadLookbackMs: 350,
     /** Power bands shown in the lab: soft below the first, hard from the second (percent). */
     softBelow: 35,
     hardFrom: 70,

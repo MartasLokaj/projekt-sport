@@ -102,7 +102,16 @@ running log of where we are, what the user decided, and what comes next).
   Lift), timing, delay, speed+tilt graph. Every swing → `logs/badminton-swings.jsonl` (gitignored) for tuning.
   - Not verified on real phones: tilt sign on iPhone/Android, whether `triggerSpeed`/`maxSpeed` fit, whether the
     follow-through/arm coming back makes double swings (`cooldownMs`), whether timing feels fair (`displayLatencyMs`).
-  - Next: user tests → read the log → tune → B2 (graybox rally vs CPU).
+  - **Test 1 (user, 28 swings, `logs/badminton-swings-session1.jsonl`):** "works quite well", but (a) reaching up
+    with the racket counted as a swing and the real, faster swing right after was lost in the cooldown; (b) hard
+    overheads were called underhand, because at the fastest moment the racket already points forward (tilt ~0).
+    Real swings reach 1000–2100°/s; phone→Mac delay 50–200 ms.
+    **Fixes:** `confirmMs` wait (a faster swing right after replaces the first), learned swing direction per phone
+    (`learnSpeed`, `backwardDot`: a turn the other way = racket going back/up → `ignored`, still logged),
+    overhead = highest tilt in `overheadLookbackMs` before the peak ≥ `overheadMinTilt` (45), `maxSpeed` 2000,
+    hit line moved to the middle of the drill. Trace now also has the gyro x/y/z. Cost: report ~330 ms after the peak
+    (hit time stays exact). Backhand swings would turn "the other way" and be ignored — fine for now, revisit in B2.
+  - Next: user tests again (ideally 10 overhead, pause, 10 underhand, so the log can be checked) → tune → B2.
 
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.
