@@ -47,6 +47,9 @@ export class Hub {
   private drag: { x: number; y: number; moved: number; time: number } | null = null;
   private time = 0;
   private running = false;
+  /** Camera distance from the cube: where it is now and where the zoom wants it. */
+  private distance: number = TUNING.hub.cameraDistance;
+  private targetDistance: number = TUNING.hub.cameraDistance;
 
   static async create(container: HTMLElement): Promise<Hub> {
     const loader = new GLTFLoader();
@@ -204,6 +207,10 @@ export class Hub {
       if (this.spin.length() < c.idleSpin) this.spin.x += (c.idleSpin - this.spin.x) * Math.min(1, dt);
       this.turnBy(this.spin.x * dt, this.spin.y * dt);
     }
+    // Glide smoothly to the zoomed distance, along the same line of view.
+    this.distance += (this.targetDistance - this.distance) * (1 - Math.exp(-8 * dt));
+    this.camera.position.set(0, c.cameraHeight, c.cameraDistance).multiplyScalar(this.distance / c.cameraDistance);
+    this.camera.lookAt(0, 0, 0);
     this.planet.position.y = Math.sin(this.time * c.bobSpeed) * c.bobHeight;
     this.halo.position.copy(this.planet.position).add(new THREE.Vector3(0, 0, -c.cubeSize));
     this.stars.rotation.y += dt * 0.01;
@@ -269,6 +276,17 @@ export class Hub {
       canvas.style.cursor = 'grab';
       if (click) this.clickAt(e.clientX, e.clientY);
     };
+    // The mouse wheel, or pinching on a trackpad, zooms in and out.
+    canvas.addEventListener(
+      'wheel',
+      (e) => {
+        e.preventDefault();
+        const c = TUNING.hub;
+        const amount = e.deltaY * (e.ctrlKey ? 4 : 1) * c.zoomSpeed; // a pinch sends small steps, so it counts more
+        this.targetDistance = THREE.MathUtils.clamp(this.targetDistance * Math.exp(amount), c.zoomMin, c.zoomMax);
+      },
+      { passive: false },
+    );
     canvas.addEventListener('pointerup', release);
     canvas.addEventListener('pointercancel', release);
   }

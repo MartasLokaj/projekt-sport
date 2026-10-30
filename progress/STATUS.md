@@ -81,6 +81,7 @@ running log of where we are, what the user decided, and what comes next).
     turns **up** (tipped towards us), the game card slides in on the right and the players' chibis **pop up on that
     side** one after another. Click into space / drag / Esc lets go (card slides away, characters vanish). The cube now
     has 6 sides (`FACES` in `faces.ts` with `normal` + `forward`): Minigolf, Badminton, 4 mystery building sites.
+    **Zoom:** mouse wheel or trackpad pinch (`zoomMin`/`zoomMax`/`zoomSpeed` in `TUNING.hub`).
     Who has joined is listed under the QR code. Enter with nothing chosen picks Minigolf, Enter again plays.
   - 2b Game registry (`shared/games.ts` + host side), server remembers the selected game (`select_game`), phones
     show it; leader swipes left/right and taps Play.

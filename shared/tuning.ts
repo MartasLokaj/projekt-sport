@@ -294,6 +294,10 @@ export const TUNING = {
     cameraDistance: 16.5,
     cameraHeight: 3.5,
     cameraFov: 40,
+    /** Zooming with the mouse wheel or a trackpad pinch: nearest and farthest camera distance, and how fast. */
+    zoomMin: 9,
+    zoomMax: 32,
+    zoomSpeed: 0.0015,
     /** Dragging with the mouse: how far the cube turns per pixel, and how long it keeps spinning after letting go. */
     dragSpeed: 0.008,
     spinFriction: 3,
