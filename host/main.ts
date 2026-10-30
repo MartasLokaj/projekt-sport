@@ -69,7 +69,9 @@ function showPlayers(players: PlayerInfo[]): void {
     const info = el('div', 'info');
     if (player) {
       dot.style.background = player.colour;
-      info.append(el('div', 'name', player.name), el('div', 'state', player.connected ? 'Ready' : 'Phone disconnected…'));
+      const hand = player.handedness === 'left' ? 'Left-handed' : 'Right-handed';
+      const state = player.connected ? `Ready · ${hand} · sensitivity ${player.sensitivity} %` : 'Phone disconnected…';
+      info.append(el('div', 'name', player.name), el('div', 'state', state));
       if (!player.connected) card.classList.add('offline');
 
       const refs: CardRefs = {

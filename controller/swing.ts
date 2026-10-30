@@ -52,6 +52,8 @@ export function powerFromValue(value: number, min: number, max: number, exponent
 }
 
 export class SwingDetector {
+  /** This player's own sensitivity (1 = 100 %), set from their profile. */
+  playerSensitivity = 1;
   private state: SwingPhase = 'idle';
   private stillTime = 0;
   /** Rotation since the start point, in degrees around each phone axis (alpha, beta, gamma order). */
@@ -77,7 +79,8 @@ export class SwingDetector {
   /** Rough power of the swing so far, assuming the forward swing matches the backswing. */
   get livePower(): number {
     const cfg = TUNING.swing;
-    return round1(unit(this.maxBack, cfg.minBackswing, cfg.maxBackswing, cfg.curveExponent) * cfg.sensitivity * 100);
+    const power = unit(this.maxBack, cfg.minBackswing, cfg.maxBackswing, cfg.curveExponent) * cfg.sensitivity * this.playerSensitivity * 100;
+    return Math.min(100, round1(power));
   }
 
   /** Call after the tap: wait for the phone to be still, then lock the start point. */
@@ -163,7 +166,7 @@ export class SwingDetector {
     const mixed = cfg.backswingWeight * fromBackswing + (1 - cfg.backswingWeight) * fromSpeed;
     return {
       type: 'hit',
-      power: Math.max(0.1, Math.min(100, round1(mixed * cfg.sensitivity * 100))),
+      power: Math.max(0.1, Math.min(100, round1(mixed * cfg.sensitivity * this.playerSensitivity * 100))),
       backswing: Math.round(this.maxBack),
       speed: Math.round(speed),
       radius: radius === null ? null : Math.round(radius * 100),

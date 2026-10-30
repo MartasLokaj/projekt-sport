@@ -7,7 +7,23 @@ export const ROOM_CODE_LENGTH = 4;
 export const NAME_MAX_LENGTH = 12;
 export const SHIRT_COLOURS = ['#ff5a5f', '#ffb400', '#3ec300', '#00a6ed', '#9b5cff', '#ff7ac6'] as const;
 
-export type PlayerInfo = { id: string; name: string; colour: string; connected: boolean };
+/** Per-player swing sensitivity in percent: the swing's power is multiplied by it. */
+export const SENSITIVITY_MIN = 50;
+export const SENSITIVITY_MAX = 150;
+export const SENSITIVITY_DEFAULT = 100;
+
+export type Handedness = 'right' | 'left';
+
+export type PlayerInfo = {
+  id: string;
+  name: string;
+  colour: string;
+  connected: boolean;
+  /** Which way the player putts. Swing detection works the same for both; the character will stand mirrored (Phase 3). */
+  handedness: Handedness;
+  /** Swing sensitivity in percent (applied on the phone). */
+  sensitivity: number;
+};
 
 /** How the phone hits: swinging the phone, or pulling back a finger like a slingshot. */
 export type ControlMode = 'swing' | 'slingshot';
@@ -70,7 +86,15 @@ export type ClientMessage =
   | { type: 'host_hello' }
   /** Sent by a phone on every (re)connect, to get its seat back if it has one. */
   | { type: 'rejoin'; room: string; playerId: string }
-  | { type: 'join'; room: string; playerId: string; name: string; colour: string }
+  | {
+      type: 'join';
+      room: string;
+      playerId: string;
+      name: string;
+      colour: string;
+      handedness: Handedness;
+      sensitivity: number;
+    }
   /** Live aim while dragging, about 20 per second. */
   | { type: 'aim'; angle: number }
   | ({ type: 'stroke' } & Stroke)

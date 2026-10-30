@@ -3,8 +3,12 @@ import {
   MAX_PLAYERS,
   NAME_MAX_LENGTH,
   ROOM_CODE_LENGTH,
+  SENSITIVITY_DEFAULT,
+  SENSITIVITY_MAX,
+  SENSITIVITY_MIN,
   SHIRT_COLOURS,
   type ClientMessage,
+  type Handedness,
   type JoinError,
   type PlayerInfo,
   type ServerMessage,
@@ -19,7 +23,15 @@ import { Match } from './match.ts';
 
 const ROOM_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I or O, they look like 1 and 0
 
-type Seat = { id: string; name: string; colour: string; socket: WebSocket | null; lastStrokeAt: number };
+type Seat = {
+  id: string;
+  name: string;
+  colour: string;
+  handedness: Handedness;
+  sensitivity: number;
+  socket: WebSocket | null;
+  lastStrokeAt: number;
+};
 
 export function makeRoomCode(): string {
   let code = '';
@@ -194,11 +206,15 @@ export class Lobby {
     let seat = this.seats.get(msg.playerId);
     if (!seat) {
       if (this.seats.size >= MAX_PLAYERS) return refuse(ws, 'game_full');
-      seat = { id: msg.playerId, name, colour, socket: null, lastStrokeAt: 0 };
+      seat = { id: msg.playerId, name, colour, handedness: 'right', sensitivity: SENSITIVITY_DEFAULT, socket: null, lastStrokeAt: 0 };
       this.seats.set(seat.id, seat);
     }
     seat.name = name;
     seat.colour = colour;
+    seat.handedness = msg.handedness === 'left' ? 'left' : 'right';
+    seat.sensitivity = Number.isFinite(msg.sensitivity)
+      ? Math.round(clamp(msg.sensitivity, SENSITIVITY_MIN, SENSITIVITY_MAX))
+      : SENSITIVITY_DEFAULT;
     this.attach(ws, seat);
   }
 
@@ -252,7 +268,14 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function toInfo(seat: Seat): PlayerInfo {
-  return { id: seat.id, name: seat.name, colour: seat.colour, connected: seat.socket !== null };
+  return {
+    id: seat.id,
+    name: seat.name,
+    colour: seat.colour,
+    connected: seat.socket !== null,
+    handedness: seat.handedness,
+    sensitivity: seat.sensitivity,
+  };
 }
 
 function send(ws: WebSocket, msg: ServerMessage): void {

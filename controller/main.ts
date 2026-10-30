@@ -1,10 +1,14 @@
 import {
   NAME_MAX_LENGTH,
   ROOM_CODE_LENGTH,
+  SENSITIVITY_DEFAULT,
+  SENSITIVITY_MAX,
+  SENSITIVITY_MIN,
   SHIRT_COLOURS,
   WS_PATH,
   type ClientMessage,
   type GameState,
+  type Handedness,
   type JoinError,
   type PlayerInfo,
   type ServerMessage,
@@ -15,7 +19,7 @@ import { initPlayScreen } from './play.ts';
 // The phone controller: join the game (room code from the QR code link, or typed in),
 // stay joined through screen locks and Wi-Fi blips, then aim and hit on the play screen.
 
-type Profile = { playerId: string; name: string; colour: string };
+type Profile = { playerId: string; name: string; colour: string; handedness: Handedness; sensitivity: number };
 
 const PROFILE_KEY = 'minigolf.profile';
 
@@ -35,6 +39,9 @@ const roomInput = document.getElementById('room-code') as HTMLInputElement;
 const roomError = document.getElementById('room-error')!;
 const joinForm = document.getElementById('join-form') as HTMLFormElement;
 const nameInput = document.getElementById('name') as HTMLInputElement;
+const handButtons = [...document.querySelectorAll<HTMLButtonElement>('#hands button')];
+const sensitivityInput = document.getElementById('sensitivity') as HTMLInputElement;
+const sensitivityValue = document.getElementById('sensitivity-value')!;
 const coloursEl = document.getElementById('colours')!;
 const joinError = document.getElementById('join-error')!;
 const meDot = document.getElementById('me-dot')!;
@@ -48,6 +55,7 @@ let reconnectTimer: number | undefined;
 let stopped = false;
 let joined = false;
 let selectedColour: string = profile.colour;
+let selectedHand: Handedness = profile.handedness;
 let otherPlayers: PlayerInfo[] = [];
 let allPlayers: PlayerInfo[] = [];
 let gameState: GameState | null = null;
@@ -74,6 +82,9 @@ function showRoomForm(error = ''): void {
 function showJoinForm(error = ''): void {
   joined = false;
   if (!nameInput.value) nameInput.value = profile.name;
+  selectedHand = profile.handedness;
+  sensitivityInput.value = String(profile.sensitivity);
+  renderSettings();
   joinError.textContent = error;
   renderColours();
   show('join');
@@ -153,6 +164,19 @@ function renderTurn(): void {
 turnButton.addEventListener('click', () => send({ type: 'start_game' }));
 turnEdit.addEventListener('click', () => showJoinForm());
 
+function renderSettings(): void {
+  for (const button of handButtons) button.classList.toggle('selected', button.dataset.hand === selectedHand);
+  sensitivityValue.textContent = `${sensitivityInput.value} %`;
+}
+
+for (const button of handButtons) {
+  button.addEventListener('click', () => {
+    selectedHand = button.dataset.hand === 'left' ? 'left' : 'right';
+    renderSettings();
+  });
+}
+sensitivityInput.addEventListener('input', renderSettings);
+
 function renderColours(): void {
   const taken = new Set(otherPlayers.map((p) => p.colour));
   if (taken.has(selectedColour)) selectedColour = SHIRT_COLOURS.find((c) => !taken.has(c)) ?? selectedColour;
@@ -220,7 +244,10 @@ function connect(): void {
       case 'joined':
         profile.name = msg.player.name;
         profile.colour = msg.player.colour;
+        profile.handedness = msg.player.handedness;
+        profile.sensitivity = msg.player.sensitivity;
         saveProfile(profile);
+        play.setSensitivity(profile.sensitivity);
         showJoined(msg.player);
         break;
       case 'lobby_state':
@@ -276,7 +303,15 @@ joinForm.addEventListener('submit', (event) => {
   }
   void keepScreenAwake(); // must start from a tap
   if (!room) return;
-  send({ type: 'join', room, playerId: profile.playerId, name, colour: selectedColour });
+  send({
+    type: 'join',
+    room,
+    playerId: profile.playerId,
+    name,
+    colour: selectedColour,
+    handedness: selectedHand,
+    sensitivity: Number(sensitivityInput.value),
+  });
 });
 
 document.getElementById('change-profile')!.addEventListener('click', () => showJoinForm());
@@ -311,12 +346,23 @@ function loadProfile(): Profile {
         playerId: saved.playerId,
         name: typeof saved.name === 'string' ? saved.name : '',
         colour: typeof saved.colour === 'string' ? saved.colour : SHIRT_COLOURS[0],
+        handedness: saved.handedness === 'left' ? 'left' : 'right',
+        sensitivity:
+          typeof saved.sensitivity === 'number'
+            ? Math.min(SENSITIVITY_MAX, Math.max(SENSITIVITY_MIN, saved.sensitivity))
+            : SENSITIVITY_DEFAULT,
       };
     }
   } catch {
     // Storage blocked or corrupted: start fresh.
   }
-  const fresh = { playerId: crypto.randomUUID(), name: '', colour: SHIRT_COLOURS[0] };
+  const fresh: Profile = {
+    playerId: crypto.randomUUID(),
+    name: '',
+    colour: SHIRT_COLOURS[0],
+    handedness: 'right',
+    sensitivity: SENSITIVITY_DEFAULT,
+  };
   saveProfile(fresh);
   return fresh;
 }

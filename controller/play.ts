@@ -18,6 +18,8 @@ export type PlayScreen = {
   /** Stops a tapped swing (e.g. the turn moved on). */
   cancel: () => void;
   showStatus: (text: string) => void;
+  /** The player's swing sensitivity in percent (100 = normal). */
+  setSensitivity: (percent: number) => void;
 };
 
 export function initPlayScreen(send: (msg: ClientMessage) => void): PlayScreen {
@@ -224,7 +226,7 @@ export function initPlayScreen(send: (msg: ClientMessage) => void): PlayScreen {
     if (!activeButton || mode !== 'slingshot') return;
     const pull = Math.max(0, e.clientY - pullStartY);
     const cfg = TUNING.slingshot;
-    pullPower = powerFromValue(pull, cfg.minPullPx, cfg.maxPullPx, cfg.curveExponent);
+    pullPower = Math.min(100, Math.round(powerFromValue(pull, cfg.minPullPx, cfg.maxPullPx, cfg.curveExponent) * detector.playerSensitivity));
     activeButton.style.setProperty('--pull', `${Math.min(pull, cfg.maxPullPx) * 0.3}px`);
     setMeter(pullPower);
   }
@@ -351,6 +353,9 @@ export function initPlayScreen(send: (msg: ClientMessage) => void): PlayScreen {
     },
     showStatus: (text) => {
       statusEl.textContent = text;
+    },
+    setSensitivity: (percent) => {
+      detector.playerSensitivity = percent / 100;
     },
   };
 }

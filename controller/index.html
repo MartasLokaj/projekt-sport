@@ -21,12 +21,20 @@
       h1 { margin: 0 0 8px; font-size: 34px; font-weight: 900; }
       p { margin: 8px 0; font-size: 20px; color: var(--soft); max-width: 340px; }
       label { display: block; font-size: 20px; font-weight: 800; margin: 20px 0 8px; }
-      input {
+      input:not([type='range']) {
         font: inherit; font-size: 26px; font-weight: 700; text-align: center; color: var(--ink);
         width: 100%; max-width: 320px; box-sizing: border-box; padding: 14px; border-radius: 18px;
         border: 4px solid #ffffff; background: #ffffff; outline: none; -webkit-user-select: text; user-select: text;
       }
-      input:focus { border-color: #00a6ed; }
+      input:not([type='range']):focus { border-color: #00a6ed; }
+      .toggle { display: flex; gap: 10px; justify-content: center; }
+      .toggle button {
+        font: inherit; font-size: 18px; font-weight: 800; color: var(--ink); background: #ffffff;
+        border: 4px solid #ffffff; border-radius: 16px; padding: 10px 14px; flex: 1; max-width: 155px;
+      }
+      .toggle button.selected { border-color: var(--ink); }
+      input[type='range'] { width: 100%; max-width: 320px; accent-color: #ff8a3d; height: 32px; }
+      .hint { font-size: 16px; margin: 4px auto 0; }
       #colours { display: grid; grid-template-columns: repeat(3, 64px); gap: 14px; justify-content: center; }
       .swatch { width: 64px; height: 64px; border-radius: 50%; border: 5px solid #ffffff; padding: 0; }
       .swatch.selected { box-shadow: 0 0 0 5px var(--ink); }
@@ -117,6 +125,14 @@
         <input id="name" maxlength="12" enterkeyhint="done" autocapitalize="words" spellcheck="false" />
         <label>Shirt colour</label>
         <div id="colours"></div>
+        <label>Putting hand</label>
+        <div id="hands" class="toggle">
+          <button type="button" data-hand="right">Right-handed</button>
+          <button type="button" data-hand="left">Left-handed</button>
+        </div>
+        <label for="sensitivity">Swing sensitivity: <span id="sensitivity-value">100 %</span></label>
+        <input id="sensitivity" type="range" min="50" max="150" step="5" />
+        <p class="hint">Gentle swinger? Turn it up. Strong swinger? Turn it down.</p>
         <button class="big" type="submit">Join</button>
         <p id="join-error" class="error"></p>
       </form>
