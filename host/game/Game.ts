@@ -1,11 +1,16 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import type { BallResult, GameState, PlayerInfo, SwingProgress } from '../../shared/protocol.ts';
 import { TUNING } from '../../shared/tuning.ts';
 import { applyCurve, applyRollingResistance, createBall, curveFromTwist, shotSpeed } from './ball.ts';
 import { ADDRESS_DISTANCE, Character } from './character.ts';
 import { buildHole, HOLES, isInCup, loadKit, type BuiltHole, type Kit } from './course.ts';
 import { DistancePreview } from './preview.ts';
+import { Scenery } from './scenery.ts';
 
 // Three holes built from the Kenney kit, for 1–4 players. The host owns the ball physics; the server decides
 // whose turn it is and counts strokes (see syncState). Each player has their own ball: the current
@@ -66,6 +71,9 @@ export class Game {
   private readonly holes: BuiltHole[];
   private hole: BuiltHole;
   private readonly sun: THREE.DirectionalLight;
+  private readonly scenery: Scenery;
+  private readonly composer: EffectComposer;
+  private readonly bloom: UnrealBloomPass;
   private state: State = 'waiting';
   private readonly players = new Map<string, PlayerBall>();
   /** Whose ball is on the course right now. */
@@ -117,17 +125,23 @@ export class Game {
     private readonly hud: GameHud,
     kit: Kit,
   ) {
+    const look = TUNING.scenery;
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, look.maxPixelRatio));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.toneMapping = THREE.NeutralToneMapping; // keeps colours bright and cheerful
+    this.renderer.toneMappingExposure = look.exposure;
     container.appendChild(this.renderer.domElement);
 
-    this.scene.background = new THREE.Color('#9fd8ff');
-    this.scene.add(new THREE.HemisphereLight('#ffffff', '#8a9a7a', 1.6));
-    const sun = new THREE.DirectionalLight('#fff3dd', 2.2);
+    // Soft daylight: a sky-blue fill from above, warm sunshine with soft shadows, haze in the distance.
+    this.scene.fog = new THREE.Fog(look.skyHorizon, look.fogNear, look.fogFar);
+    this.scene.add(new THREE.HemisphereLight('#d6ecff', '#7fbf6e', 1.35));
+    const sun = new THREE.DirectionalLight('#fff0d4', 2.6);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.bias = -0.0004;
+    sun.shadow.normalBias = 0.02;
     Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 16, bottom: -16, near: 1, far: 60 });
     this.sun = sun;
     this.scene.add(sun, sun.target);
@@ -141,6 +155,15 @@ export class Game {
       return built;
     });
     this.hole = this.holes[0];
+    this.scenery = new Scenery(this.holes);
+    this.scene.add(this.scenery.group);
+
+    // Gentle glow on the brightest things (the ball, clouds, sunlit white), then colour correction.
+    this.composer = new EffectComposer(this.renderer);
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), look.bloomStrength, look.bloomRadius, look.bloomThreshold);
+    this.composer.addPass(this.bloom);
+    this.composer.addPass(new OutputPass());
     this.distancePreview = new DistancePreview(RAPIER);
 
     // Ball
@@ -598,8 +621,9 @@ export class Game {
     this.updateAimLine();
     this.updateCharacters(dt);
     this.updateOccluders(dt);
+    this.scenery.update(dt, this.camera);
     this.updateCamera(dt);
-    this.renderer.render(this.scene, this.camera);
+    this.composer.render(dt);
   }
 
   private updateAimLine(): void {
@@ -747,6 +771,8 @@ export class Game {
     const w = this.container.clientWidth || window.innerWidth;
     const h = this.container.clientHeight || window.innerHeight;
     this.renderer.setSize(w, h);
+    this.composer.setSize(w, h);
+    this.bloom.resolution.set(w / 2, h / 2);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
   };

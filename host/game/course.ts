@@ -93,6 +93,8 @@ export type BuiltHole = {
   floorCollider: RAPIER.Collider;
   /** Big pieces that may hide the ball from the camera; the game fades them out when they do. */
   occluders: THREE.Object3D[];
+  /** Centres of the hole's tiles (world, on the ground), so scenery can keep off the course. */
+  footprint: THREE.Vector3[];
 };
 
 export async function loadKit(): Promise<Kit> {
@@ -212,6 +214,7 @@ export function buildHole(def: HoleDef, kit: Kit, origin: THREE.Vector3, world: 
     update: (dt) => updates.forEach((u) => u(dt)),
     floorCollider,
     occluders,
+    footprint: def.pieces.map((p) => new THREE.Vector3(origin.x + p.x * S, origin.y, origin.z + p.z * S)),
   };
 }
 

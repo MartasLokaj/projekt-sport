@@ -138,6 +138,34 @@ export const TUNING = {
     smoothing: 3,
   },
 
+  // The world around the course and the overall look.
+  scenery: {
+    /** Change this number for a different (but always repeatable) arrangement of trees and flowers. */
+    seed: 42,
+    skyTop: '#3f9de6',
+    skyHorizon: '#d9f1ff',
+    grass: '#6cc05c',
+    /** The meadow lies this far below the course floor (the thickness of the course tiles). */
+    groundDepth: 0.21,
+    /** Decorations fill this much space around each hole. */
+    decorationMargin: 6,
+    treesPerHole: 14,
+    bushesPerHole: 12,
+    rocksPerHole: 10,
+    flowersPerHole: 80,
+    clouds: 18,
+    /** Haze in the distance: starts at fogNear, fully hazy at fogFar. */
+    fogNear: 40,
+    fogFar: 130,
+    /** Overall brightness, and the soft glow on bright things (strength, spread, from which brightness). */
+    exposure: 1.0,
+    bloomStrength: 0.28,
+    bloomRadius: 0.55,
+    bloomThreshold: 0.88,
+    /** Sharpness on retina screens. Lower = faster. */
+    maxPixelRatio: 1.75,
+  },
+
   character: {
     /** Height of a character (the ball is 0.2 wide). */
     height: 0.9,
