@@ -8,6 +8,7 @@ import {
   SENSITIVITY_MIN,
   SHIRT_COLOURS,
   SKIN_TONES,
+  type BadmintonSwing,
   type ClientMessage,
   type Handedness,
   type JoinError,
@@ -50,6 +51,10 @@ export class Lobby {
   /** Phones that know the right room code (joined or looking at the join form). */
   private phones = new Set<WebSocket>();
   private match = new Match();
+  /** Whether the Badminton Swing Lab is open (phones then show the swing test). */
+  private lab = false;
+  /** Called for every badminton swing, so the server can save it for tuning. */
+  onBadmintonSwing: ((entry: object) => void) | null = null;
   private readonly isConnected = (id: string): boolean => this.seats.get(id)?.socket != null;
 
   constructor(
@@ -64,6 +69,7 @@ export class Lobby {
         send(ws, this.hostInfo);
         send(ws, this.lobbyState());
         send(ws, this.gameState());
+        send(ws, { type: 'lab_state', on: this.lab });
         return;
       case 'rejoin':
         if (!this.checkRoom(ws, msg.room)) return;
@@ -147,6 +153,23 @@ export class Lobby {
         this.match.ballResult(msg.result, this.isConnected);
         this.broadcastGame();
         return;
+      case 'lab_mode':
+        if (!this.hosts.has(ws) || this.match.playing) return;
+        this.lab = msg.on === true;
+        for (const socket of [...this.hosts, ...this.phones]) send(socket, { type: 'lab_state', on: this.lab });
+        return;
+      case 'clock_ping':
+        if (Number.isFinite(msg.t)) send(ws, { type: 'clock_pong', t: msg.t, server: Date.now() });
+        return;
+      case 'badminton_swing': {
+        const seat = this.seatOf(ws);
+        const swing = cleanBadmintonSwing(msg);
+        if (!seat || !swing || !this.lab) return;
+        const receivedAt = Date.now();
+        this.sendToHosts({ type: 'player_badminton_swing', playerId: seat.id, receivedAt, ...swing });
+        this.onBadmintonSwing?.({ player: seat.name, handedness: seat.handedness, sensitivity: seat.sensitivity, receivedAt, ...swing });
+        return;
+      }
       case 'host_stroke': {
         const current = this.match.currentPlayer;
         if (!this.hosts.has(ws) || current === null) return;
@@ -245,6 +268,7 @@ export class Lobby {
     }
     seat.socket = ws;
     send(ws, { type: 'joined', player: toInfo(seat) });
+    send(ws, { type: 'lab_state', on: this.lab });
     this.broadcastLobby();
     this.broadcastGame(); // the leader may have changed
   }
@@ -279,6 +303,25 @@ function cleanStroke(msg: Stroke): Stroke | null {
     backswing: Number.isFinite(msg.backswing) ? msg.backswing : null,
     speed: Number.isFinite(msg.speed) ? msg.speed : null,
     radius: Number.isFinite(msg.radius) ? msg.radius : null,
+  };
+}
+
+/** Checks the numbers a phone sent for a badminton swing. */
+function cleanBadmintonSwing(msg: BadmintonSwing): BadmintonSwing | null {
+  if (![msg.speed, msg.power, msg.tilt, msg.at].every(Number.isFinite)) return null;
+  const trace = Array.isArray(msg.trace)
+    ? msg.trace
+        .slice(0, 200)
+        .filter((p): p is [number, number, number] => Array.isArray(p) && p.length === 3 && p.every(Number.isFinite))
+    : [];
+  return {
+    kind: msg.kind === 'overhead' ? 'overhead' : 'underhand',
+    speed: clamp(msg.speed, 0, 5000),
+    power: clamp(msg.power, 0, 100),
+    tilt: clamp(msg.tilt, -90, 90),
+    at: msg.at,
+    fused: msg.fused === true,
+    trace,
   };
 }
 

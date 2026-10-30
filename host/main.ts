@@ -3,6 +3,7 @@ import { TUNING } from '../shared/tuning.ts';
 import { Game } from './game/Game.ts';
 import { Hub } from './hub/Hub.ts';
 import type { FaceInfo } from './hub/faces.ts';
+import { Lab } from './lab/Lab.ts';
 
 // The big screen. The lobby is Cube World: a cube floating in space with one game on each side,
 // the QR code to join, and the players' characters standing on top. "Play" asks the server to start
@@ -35,8 +36,29 @@ let lastState: GameState | null = null;
 
 let hub: Hub | null = null;
 
+// Badminton Swing Lab (phase B1): opened from the Badminton side of the cube, or with L.
+const labScreen = document.getElementById('lab-screen')!;
+const labEmpty = document.getElementById('lab-empty')!;
+const lab = new Lab(document.getElementById('lab-drill') as HTMLCanvasElement, document.getElementById('lab-cards')!);
+let labOpen = false;
+
+function showLab(on: boolean): void {
+  if (on === labOpen) return;
+  labOpen = on;
+  labScreen.hidden = !on;
+  lobbyScreen.hidden = on;
+  if (on) {
+    hub?.stop();
+    lab.start();
+  } else {
+    lab.stop();
+    hub?.start();
+  }
+}
+
 function showHostInfo(msg: Extract<ServerMessage, { type: 'host_info' }>): void {
   roomCodeEl.textContent = msg.room;
+  document.getElementById('lab-room')!.textContent = msg.room;
   if (msg.qrDataUrl && msg.joinUrl) {
     qrEl.src = msg.qrDataUrl;
     qrEl.hidden = false;
@@ -64,6 +86,12 @@ function showPick(face: FaceInfo | null): void {
   pickPlayers.textContent = face.available
     ? `${face.players} · ${ready === 0 ? 'waiting for players to join' : `${ready} ready`}`
     : face.players;
+  if (face.id === 'badminton') {
+    // Not playable yet, but its swing test is.
+    startButton.textContent = 'Swing Lab (Enter)';
+    startButton.disabled = false;
+    return;
+  }
   startButton.textContent = face.available ? 'Play (Enter)' : 'Coming soon';
   startButton.disabled = !face.available || ready === 0;
 }
@@ -82,6 +110,10 @@ function showJoined(): void {
 }
 
 function startSelected(): void {
+  if (hub?.selected?.id === 'badminton') {
+    send({ type: 'lab_mode', on: true });
+    return;
+  }
   if (hub?.selected?.available && players.some((p) => p.connected)) send({ type: 'start_game' });
 }
 
@@ -107,6 +139,8 @@ function connect(): void {
       showJoined();
       if (hub) showPick(hub.selected);
       game?.setPlayers(players);
+      lab.setPlayers(players);
+      labEmpty.hidden = players.length > 0;
     } else if (msg.type === 'game_state') void onGameState(msg);
     else if (msg.type === 'player_aim') {
       if (playing) game?.onPhoneAim(msg.angle);
@@ -117,7 +151,8 @@ function connect(): void {
       if (playing) game?.onPhonePractice(msg.power, msg.angle, msg.twist);
     } else if (msg.type === 'player_swing_progress') {
       if (playing) game?.onPhoneSwingProgress(msg);
-    }
+    } else if (msg.type === 'lab_state') showLab(msg.on);
+    else if (msg.type === 'player_badminton_swing') lab.onSwing(msg);
   });
   ws.addEventListener('close', () => {
     offlineBanner.hidden = false;
@@ -241,7 +276,15 @@ document.getElementById('turn-left')!.addEventListener('click', () => hub?.cycle
 document.getElementById('turn-right')!.addEventListener('click', () => hub?.cycle(1));
 window.addEventListener('keydown', (e) => {
   const phase = lastState?.phase ?? 'lobby';
+  if (labOpen) {
+    if (e.key === 'Escape' || e.key === 'l' || e.key === 'L') send({ type: 'lab_mode', on: false });
+    return;
+  }
   if (phase === 'lobby' && !playing) {
+    if (e.key === 'l' || e.key === 'L') {
+      send({ type: 'lab_mode', on: true });
+      return;
+    }
     if (e.key === 'ArrowLeft') hub?.cycle(-1);
     else if (e.key === 'ArrowRight') hub?.cycle(1);
     else if (e.key === 'Escape') hub?.select(null);
@@ -261,7 +304,7 @@ void Hub.create(document.getElementById('hub-canvas')!).then((created) => {
   hub.onSelect = showPick;
   hub.setPlayers(players);
   showPick(hub.selected);
-  if (!playing) hub.start();
+  if (!playing && !labOpen) hub.start();
   if (import.meta.env.DEV) Object.assign(window, { hub }); // for debugging in the browser console
 });
 connect();

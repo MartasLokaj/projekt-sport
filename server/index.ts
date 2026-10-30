@@ -1,3 +1,4 @@
+import { appendFile, mkdir } from 'node:fs/promises';
 import { createServer } from 'node:https';
 import QRCode from 'qrcode';
 import { createServer as createViteServer } from 'vite';
@@ -37,6 +38,14 @@ const room = makeRoomCode();
 const joinUrl = lanAddresses.length > 0 ? `https://${lanAddresses[0]}:${PORT}/play?room=${room}` : null;
 const qrDataUrl = joinUrl ? await QRCode.toDataURL(joinUrl, { margin: 1, width: 512 }) : null;
 const lobby = new Lobby(room, { type: 'host_info', room, joinUrl, qrDataUrl });
+
+// Badminton Swing Lab: every swing is saved (one JSON line each) for tuning the detection.
+const SWING_LOG = 'logs/badminton-swings.jsonl';
+lobby.onBadmintonSwing = (entry) => {
+  void mkdir('logs', { recursive: true })
+    .then(() => appendFile(SWING_LOG, JSON.stringify(entry) + '\n'))
+    .catch((err) => console.error('Could not save the swing log:', err));
+};
 
 // WebSocket hub. Vite has its own WebSocket for reloading, so only take ours.
 const wss = new WebSocketServer({ noServer: true });

@@ -90,6 +90,20 @@ running log of where we are, what the user decided, and what comes next).
   rotation with arrows/Enter/click and phone swipe, dive transition into the game, "Back to Cube". Plan first, list
   files, wait for OK.
 
+### Badminton (SPEC §13) — started 2026-10-30 on the user's request (hub 2a still untested on phones)
+- User decisions: beach venue; all shots fly to the back for now, later a big phone button = "short shot".
+- **B1 Swing Lab — built, waiting for the user's test on real phones.** `L` in the lobby (or Badminton side → Enter)
+  opens it; phones switch to "Badminton swing test". The phone is held like a racket handle (top = racket head),
+  no button: a turn faster than `triggerSpeed` is a swing, reported right after its fastest moment (~50 ms).
+  Overhead = top of the phone above `overheadMinTilt` at the fastest moment (tilt from the fused orientation sensor,
+  gravity as fallback; iPhone gravity sign is flipped). Power from peak speed. Phone↔server clock sync
+  (`clock_ping`/`clock_pong`, fastest answer wins), so `at` is in server time. The big screen drops a shuttle to a hit
+  line every `fallMs+pauseMs` and judges Early/Perfect/Late; cards show kind, band (soft/medium/hard → Clear/Smash/
+  Lift), timing, delay, speed+tilt graph. Every swing → `logs/badminton-swings.jsonl` (gitignored) for tuning.
+  - Not verified on real phones: tilt sign on iPhone/Android, whether `triggerSpeed`/`maxSpeed` fit, whether the
+    follow-through/arm coming back makes double swings (`cooldownMs`), whether timing feels fair (`displayLatencyMs`).
+  - Next: user tests → read the log → tune → B2 (graybox rally vs CPU).
+
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.
 - Plan first for bigger changes, list files, wait for OK. Phase by phase; the user tests on real phones before approval.
@@ -145,5 +159,7 @@ running log of where we are, what the user decided, and what comes next).
 - Turf brightness/tint can still be tuned (`turfTint`, `bumperTint`, `islandGrassTint`).
 
 ## Next action
+**Badminton B1:** get the user's test of the Swing Lab on real phones, then read `logs/badminton-swings.jsonl` and tune.
+Older (paused):
 Cube World: 2a (host hub) is built — get the user's test on the TV with real phones, then 2b (registry + phone control), then 2c.
 After that 4c (juice, incl. **wind**: trees and grass swaying), then ask the user to approve Phase 4.

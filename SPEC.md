@@ -162,6 +162,8 @@ Status: decisions so far are recorded here. Do not start building Badminton unti
 - **Split screen:** the screen splits vertically into a left and a right half. Each side gets its own camera from behind its own character, so the shuttle flies towards the player. 1v1: one half per player. 2v2: one half per team (both teammates visible). 1 player vs CPU: full screen.
 - Keep the badminton scene lighter than minigolf, because split screen renders the scene twice. Target 60 fps on the MacBook Air.
 - Reuse everything shared: Cube World lobby, phone connection, seats, chibi characters, handedness and per-player swing sensitivity.
+- **Setting: a beach.** Sand court with a net, palm trees, gentle waves rolling in, sunny sky — a cousin of the minigolf islands, same soft art style. This is the only venue for now.
+- **Later (not now):** choose the venue in the game menu. Ideas the user liked: a court on a cloud high above the sea, a cosy gym with a wooden floor and a stand of cute spectators, a backyard with the net strung between two trees at sunset. Keep venue-specific code separate so more venues can be added later.
 
 **Proposed (user agreed in principle, details to tune)**
 - Modes: 1v1, 2v2 and 1 player vs CPU (CPU difficulty levels).
@@ -169,8 +171,9 @@ Status: decisions so far are recorded here. Do not start building Badminton unti
 - Short party matches: rally scoring to 11 points.
 - The shuttle is slow, so Wi-Fi delay matters less than in tennis. Badminton needs **instant** swing detection, unlike minigolf's "wait until still" flow. Use a generous, tunable hit window and compensate for network delay (timestamps).
 
+- **Shot depth (user, 2026-10-30):** for now every shot flies to the back of the court. Later the phone gets a big button that means "play a short shot" (drop).
+
 **OPEN**
-- Setting and look of the court (to be chosen by the user).
 - Exact swing-to-shot mapping, after testing on real phones.
 
 **Phase plan (when the user starts Badminton)**

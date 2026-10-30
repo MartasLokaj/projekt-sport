@@ -41,6 +41,30 @@
         font-size: clamp(24px, 2.6vw, 40px); font-weight: 900; letter-spacing: 1px; text-shadow: 0 0 24px rgba(127, 243, 255, 0.7);
       }
       #hub-keys { position: absolute; bottom: 2vh; right: 2vw; color: rgba(255, 255, 255, 0.7); font-size: 16px; font-weight: 600; }
+      #lab-screen {
+        position: fixed; inset: 0; display: grid; grid-template-columns: minmax(260px, 30vw) 1fr; gap: 2vw; padding: 3vh 2vw;
+        box-sizing: border-box; background: linear-gradient(#8fd3ff, #ffe7a8);
+      }
+      #lab-left { display: flex; flex-direction: column; min-height: 0; }
+      #lab-left h1 { margin: 0; font-size: clamp(26px, 2.6vw, 42px); font-weight: 900; }
+      #lab-left p { margin: 4px 0 0; font-size: 18px; color: var(--soft); }
+      #lab-drill { flex: 1; width: 100%; min-height: 0; margin-top: 12px; border-radius: 28px; background: rgba(255, 255, 255, 0.35); }
+      #lab-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 18px; align-content: start; overflow: auto; }
+      .lab-card { background: rgba(255, 255, 255, 0.92); border-radius: 24px; padding: 16px 20px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15); transition: transform 0.15s; }
+      .lab-card.flash { transform: scale(1.03); }
+      .lab-card.away { opacity: 0.5; }
+      .lab-name { font-size: 26px; font-weight: 900; display: flex; align-items: center; gap: 10px; }
+      .lab-name::before { content: ''; width: 22px; height: 22px; border-radius: 50%; background: var(--colour, #ccc); }
+      .lab-shot { font-size: 30px; font-weight: 900; margin-top: 6px; color: var(--soft); }
+      .lab-shot.overhead { color: #d9480f; }
+      .lab-shot.underhand { color: #1971c2; }
+      .lab-timing { font-size: 26px; font-weight: 800; min-height: 1.2em; color: var(--soft); }
+      .lab-timing.perfect { color: #2b8a00; }
+      .lab-timing.good { color: #b07d00; }
+      .lab-timing.off { color: #d93a3f; }
+      .lab-detail, .lab-stats { font-size: 16px; color: var(--soft); margin-top: 4px; }
+      .lab-graph { width: 100%; height: auto; margin-top: 8px; background: #f3f6fa; border-radius: 12px; }
+      #lab-empty { font-size: 24px; color: var(--soft); }
       #hud-scores {
         position: absolute; top: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px;
       }
@@ -153,7 +177,17 @@
           <button class="turn" id="turn-right" type="button" aria-label="Next game">›</button>
         </div>
       </div>
-      <div id="hub-keys">Drag to spin the cube · scroll or pinch to zoom · click a side (or ← →) to choose a game · Enter play · Esc let go</div>
+      <div id="hub-keys">Drag to spin the cube · scroll or pinch to zoom · click a side (or ← →) to choose a game · Enter play · L badminton swing lab · Esc let go</div>
+    </div>
+
+    <div id="lab-screen" hidden>
+      <div id="lab-left">
+        <h1>Badminton Swing Lab</h1>
+        <p>Room <b id="lab-room">····</b> · phones show the swing test · Esc back to the cube</p>
+        <p>Graph: <b style="color:#ff8a3d">speed</b> and <b style="color:#1971c2">top of phone up/down</b> before the hit (dashed line).</p>
+        <canvas id="lab-drill"></canvas>
+      </div>
+      <div id="lab-cards"><p id="lab-empty">Join with a phone to try the swing.</p></div>
     </div>
 
     <div id="game-screen" hidden>

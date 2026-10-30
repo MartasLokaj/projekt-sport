@@ -324,4 +324,45 @@ export const TUNING = {
     bloomStrength: 0.55,
   },
 
+  // Badminton swing detection (Swing Lab, phase B1). The phone is held like a racket handle,
+  // with the top of the phone where the racket head would be. No button: a fast enough turn is a swing.
+  // Speeds in degrees per second, times in milliseconds. Every swing is saved to logs/badminton-swings.jsonl.
+  badmintonSwing: {
+    /** The phone must turn faster than this to count as a swing (ignores walking around and small waves). */
+    triggerSpeed: 350,
+    /** The swing is sent as soon as the turn slows below this share of its fastest moment (0..1). */
+    releaseRatio: 0.75,
+    /** ...or at the latest this long after it started. */
+    maxSwingMs: 250,
+    /** After a swing, ignore motion for this long (the arm coming back is not a new swing). */
+    cooldownMs: 450,
+    /** Speed for 0 % and 100 % power, and the curve between them (1 = straight). */
+    minSpeed: 350,
+    maxSpeed: 1600,
+    curveExponent: 1,
+    /** Overhead when the top of the phone points higher than this above the horizon at the fastest moment (degrees). */
+    overheadMinTilt: 25,
+    /** Power bands shown in the lab: soft below the first, hard from the second (percent). */
+    softBelow: 35,
+    hardFrom: 70,
+    /** Graph and log: how much motion before the fastest moment is kept (milliseconds). */
+    traceBeforeMs: 600,
+    /** Clock sync with the server: how often the phone asks the time (milliseconds). */
+    clockSyncIntervalMs: 4000,
+  },
+
+  // Swing Lab on the big screen: a shuttle drops to the hit line, the player swings when it gets there.
+  badmintonLab: {
+    /** Time from the shuttle appearing to reaching the hit line, and the pause before the next one (milliseconds). */
+    fallMs: 1600,
+    pauseMs: 1400,
+    /** Within this many milliseconds of the right moment it is "Perfect", within the second "Good". */
+    perfectMs: 70,
+    goodMs: 160,
+    /** Swings further than this from any shuttle are not judged (milliseconds). */
+    judgeWindowMs: 700,
+    /** The TV may show the picture a bit late; add its delay here so the timing feels fair (milliseconds). */
+    displayLatencyMs: 0,
+  },
+
 } as const;

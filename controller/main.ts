@@ -15,6 +15,7 @@ import {
   type ServerMessage,
 } from '../shared/protocol.ts';
 import { TUNING } from '../shared/tuning.ts';
+import { initLabScreen } from './badminton/lab.ts';
 import { initPlayScreen } from './play.ts';
 
 // The phone controller: join the game (room code from the QR code link, or typed in),
@@ -39,6 +40,7 @@ const screens = {
   room: document.getElementById('screen-room')!,
   join: document.getElementById('screen-join')!,
   play: document.getElementById('screen-play')!,
+  lab: document.getElementById('screen-lab')!,
 };
 const messageTitle = document.getElementById('message-title')!;
 const messageText = document.getElementById('message-text')!;
@@ -70,6 +72,8 @@ let otherPlayers: PlayerInfo[] = [];
 let allPlayers: PlayerInfo[] = [];
 let gameState: GameState | null = null;
 let lastTurn = -1;
+/** The big screen has the Badminton Swing Lab open. */
+let labOpen = false;
 
 // ---------- Screens ----------
 
@@ -85,12 +89,14 @@ function showMessage(title: string, text = ''): void {
 
 function showRoomForm(error = ''): void {
   joined = false;
+  lab.setOpen(false);
   roomError.textContent = error;
   show('room');
 }
 
 function showJoinForm(error = ''): void {
   joined = false;
+  lab.setOpen(false);
   if (!nameInput.value) nameInput.value = profile.name;
   selectedHand = profile.handedness;
   selectedSkin = profile.skinTone;
@@ -106,9 +112,18 @@ function showJoined(player: PlayerInfo): void {
   meDot.style.background = player.colour;
   meName.textContent = player.name;
   wakeTip.hidden = 'wakeLock' in navigator;
-  show('play');
+  show(labOpen ? 'lab' : 'play');
+  lab.setOpen(labOpen);
   play.onJoined();
   renderTurn();
+}
+
+/** While joined, the lab replaces the play screen. */
+function renderLab(): void {
+  lab.setOpen(joined && labOpen);
+  if (!joined) return;
+  if (labOpen) play.cancel();
+  show(labOpen ? 'lab' : 'play');
 }
 
 // ---------- Whose turn ----------
@@ -260,6 +275,7 @@ function send(msg: ClientMessage): void {
 }
 
 const play = initPlayScreen(send);
+const lab = initLabScreen(send);
 
 function connect(): void {
   clearTimeout(reconnectTimer);
@@ -280,6 +296,7 @@ function connect(): void {
         profile.sensitivity = msg.player.sensitivity;
         saveProfile(profile);
         play.setSensitivity(profile.sensitivity);
+        lab.setSensitivity(profile.sensitivity);
         showJoined(msg.player);
         break;
       case 'lobby_state':
@@ -294,6 +311,13 @@ function connect(): void {
         break;
       case 'join_error':
         handleJoinError(msg.reason);
+        break;
+      case 'lab_state':
+        labOpen = msg.on;
+        renderLab();
+        break;
+      case 'clock_pong':
+        lab.onClockPong(msg.t, msg.server);
         break;
     }
   });

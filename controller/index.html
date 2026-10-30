@@ -99,6 +99,17 @@
         position: fixed; top: 0; left: 0; right: 0; padding: max(10px, env(safe-area-inset-top)) 10px 10px;
         background: #ff5a5f; color: #ffffff; font-size: 18px; font-weight: 800; text-align: center;
       }
+      #screen-lab { gap: 10px; background: linear-gradient(#ffd98a, #fff3d6); }
+      #screen-lab h1 { font-size: 30px; }
+      #lab-kind { font-size: 46px; font-weight: 900; margin-top: 18px; min-height: 1.2em; color: var(--soft); }
+      #lab-kind.overhead { color: #d9480f; }
+      #lab-kind.underhand { color: #1971c2; }
+      #lab-power { font-size: 64px; font-weight: 900; line-height: 1; }
+      #lab-detail { font-size: 17px; }
+      #lab-live { width: 100%; max-width: 320px; height: 22px; border-radius: 11px; background: rgba(255, 255, 255, 0.8); overflow: hidden; margin-top: 18px; }
+      #lab-live-fill { height: 100%; width: 0; background: linear-gradient(90deg, #3ec300, #ffb400 60%, #ff5a5f); }
+      #lab-tilt, #lab-clock { font-size: 17px; margin: 2px 0; }
+      #lab-motion[hidden] { display: none; }
     </style>
   </head>
   <body>
@@ -175,6 +186,21 @@
         <p id="turn-text"></p>
         <button class="big" id="turn-button" type="button" hidden></button>
         <button class="link" id="turn-edit" type="button" hidden>Change name or colour</button>
+      </div>
+    </section>
+
+    <section id="screen-lab" hidden>
+      <h1>Badminton swing test</h1>
+      <p>Hold the phone like a racket handle: grip the bottom, the top is the racket head. Then swing, no button needed.</p>
+      <div id="lab-kind">Swing!</div>
+      <div id="lab-power"></div>
+      <p id="lab-detail">Overhead or underhand, soft or hard. Watch the big screen too.</p>
+      <div id="lab-live"><div id="lab-live-fill"></div></div>
+      <p id="lab-tilt"></p>
+      <p id="lab-clock">Syncing clock…</p>
+      <div id="lab-motion" hidden>
+        <p>This phone needs permission to use its motion sensor.</p>
+        <button class="big" id="lab-motion-enable" type="button">Enable motion</button>
       </div>
     </section>
 

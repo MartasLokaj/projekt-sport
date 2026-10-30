@@ -61,6 +61,26 @@ export type SwingProgress = {
   power: number;
 };
 
+/**
+ * Badminton swing (Swing Lab, phase B1). The phone detects it instantly, with no button.
+ * kind: overhead = the top of the phone (where the racket head would be) points up at the fastest moment.
+ * speed: fastest turn of the phone (degrees per second). power: 0..100 from the speed and sensitivity.
+ * tilt: angle of the top of the phone above the horizon at the fastest moment (degrees, -90..90).
+ * at: when the fastest moment happened, in the server's clock (milliseconds since 1970), so timing
+ * can be judged without the Wi-Fi delay. trace: the last moments of motion, for the graph and the log.
+ */
+export type BadmintonSwing = {
+  kind: 'overhead' | 'underhand';
+  speed: number;
+  power: number;
+  tilt: number;
+  at: number;
+  /** true when the tilt came from the fused orientation sensor, false when from gravity only. */
+  fused: boolean;
+  /** Samples: [ms relative to the fastest moment, speed deg/s, tilt deg]. */
+  trace: [number, number, number][];
+};
+
 /** What happened to the ball after a stroke, reported by the host. */
 export type BallResult = 'rest' | 'holed' | 'out';
 
@@ -129,7 +149,12 @@ export type ClientMessage =
   /** From the host: the current player's ball stopped, dropped in or went out of bounds. */
   | { type: 'ball_result'; result: BallResult }
   /** From the host: the current player hit with the Mac keyboard (for testing without a phone). */
-  | { type: 'host_stroke' };
+  | { type: 'host_stroke' }
+  /** From the host: open or close the Badminton Swing Lab (phones switch to the swing test). */
+  | { type: 'lab_mode'; on: boolean }
+  /** From a phone: what time is it on the server? t = the phone's clock when sent. */
+  | { type: 'clock_ping'; t: number }
+  | ({ type: 'badminton_swing' } & BadmintonSwing);
 
 /** Sent by the server. */
 export type ServerMessage =
@@ -144,4 +169,10 @@ export type ServerMessage =
   | ({ type: 'player_practice'; playerId: string } & Stroke)
   | ({ type: 'player_swing_progress'; playerId: string } & SwingProgress)
   /** To everyone, whenever the match changes. */
-  | ({ type: 'game_state' } & GameState);
+  | ({ type: 'game_state' } & GameState)
+  /** To everyone: whether the Badminton Swing Lab is open. */
+  | { type: 'lab_state'; on: boolean }
+  /** Answer to clock_ping: t = the phone's time it sent, server = the server's clock. */
+  | { type: 'clock_pong'; t: number; server: number }
+  /** Forwarded to the host page. receivedAt = server clock when it arrived (to show the delay). */
+  | ({ type: 'player_badminton_swing'; playerId: string; receivedAt: number } & BadmintonSwing);
