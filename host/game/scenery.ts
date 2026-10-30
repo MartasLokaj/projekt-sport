@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { TUNING } from '../../shared/tuning.ts';
 import { grassMaterial, type BuiltHole } from './course.ts';
+import { plantIsland, Planter, type Forest } from './vegetation.ts';
 
 // The world around the course: a sunny sky with puffy clouds, a cute sea with rolling waves,
 // sparkles and foam, and a grassy island with a sandy beach under every hole, so from one hole
@@ -14,6 +15,7 @@ export class Scenery {
   private readonly sea: THREE.Mesh;
   private readonly seaMaterial: THREE.ShaderMaterial;
   private readonly clouds: { cloud: THREE.Group; speed: number; minX: number; maxX: number }[] = [];
+  private readonly planter: Planter;
 
   /** Direction towards the sun (unit vector). The game puts its sunlight here too. */
   static sunDirection(): THREE.Vector3 {
@@ -23,9 +25,11 @@ export class Scenery {
     return new THREE.Vector3(Math.sin(azimuth) * Math.cos(elevation), Math.sin(elevation), Math.cos(azimuth) * Math.cos(elevation));
   }
 
-  constructor(holes: BuiltHole[]) {
+  constructor(holes: BuiltHole[], forest: Forest) {
     const random = seededRandom(TUNING.scenery.seed);
+    this.planter = new Planter(forest);
     const islands = holes.map((hole) => this.addIsland(hole, random));
+    this.group.add(...this.planter.build());
     this.sky = makeSky();
     this.seaMaterial = makeSeaMaterial(islands);
     const centre = new THREE.Vector3();
@@ -81,19 +85,23 @@ export class Scenery {
     const uvs: number[] = [];
     const reaches: number[] = [];
     const bumpers = hole.lane.outerEdge;
+    const groundAt = (x: number, z: number): number => {
+      const r = reach(x, z);
+      // Flat top, gentle beach down into the sea, small natural bumps on the grass.
+      let y = THREE.MathUtils.lerp(top, c.seaLevel - 0.9, THREE.MathUtils.smoothstep(r, 0.9, 1.35));
+      y += Math.sin(x * 0.9 + wobble[0]) * Math.sin(z * 0.7 + wobble[1]) * 0.06 * (1 - THREE.MathUtils.smoothstep(r, 0.6, 0.95));
+      // Near the course the ground follows the lane (on a hill too); the bumpers' slopes sink into it.
+      const spot = hole.lane.nearest(x, z);
+      const fromEdge = spot.distance - spot.width;
+      const blend = THREE.MathUtils.smoothstep(-fromEdge, -(bumpers + 1.6), -bumpers * 0.6);
+      return THREE.MathUtils.lerp(y, Math.max(y, spot.height - c.groundDepth), blend);
+    };
     for (let j = 0; j <= nz; j++) {
       for (let i = 0; i <= nx; i++) {
         const x = x0 + i * cell;
         const z = z0 + j * cell;
         const r = reach(x, z);
-        // Flat top, gentle beach down into the sea, small natural bumps on the grass.
-        let y = THREE.MathUtils.lerp(top, c.seaLevel - 0.9, THREE.MathUtils.smoothstep(r, 0.9, 1.35));
-        y += Math.sin(x * 0.9 + wobble[0]) * Math.sin(z * 0.7 + wobble[1]) * 0.06 * (1 - THREE.MathUtils.smoothstep(r, 0.6, 0.95));
-        // Near the course the ground follows the lane (on a hill too); the bumpers' slopes sink into it.
-        const spot = hole.lane.nearest(x, z);
-        const fromEdge = spot.distance - spot.width;
-        const blend = THREE.MathUtils.smoothstep(-fromEdge, -(bumpers + 1.6), -bumpers * 0.6);
-        y = THREE.MathUtils.lerp(y, Math.max(y, spot.height - c.groundDepth), blend);
+        const y = groundAt(x, z);
         positions.push(x, y, z);
         uvs.push(x, z); // scaled per material below
         reaches.push(r);
@@ -125,6 +133,7 @@ export class Scenery {
     island.receiveShadow = true;
     this.group.add(island);
     this.addRocks(hole, centre, radius, reach, top, random);
+    plantIsland(this.planter, { hole, centre, radius, reach, groundAt }, random);
     return { centre: new THREE.Vector2(centre.x, centre.z), radius: radius.clone().multiplyScalar(1.02) };
   }
 

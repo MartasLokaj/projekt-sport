@@ -35,9 +35,12 @@ running log of where we are, what the user decided, and what comes next).
       tree_small_02 101 MB) — not usable on a MacBook Air. Light enough: `shrub_02` 2.0 MB, `shrub_03` 1.6 MB,
       `shrub_04` 1.9 MB, `fern_02` 1.1 MB, `grass_bermuda_01` 1.5 MB, `flower_gazania` 2.8 MB (gltf 1k totals,
       via `https://api.polyhaven.com/files/<id>`).
-    - User wants **cute, "pixelated" (low-poly, simple texture) trees**. Proposed: KayKit Forest (Kay Lousberg, CC0,
-      itch.io, free tier 6.1 MB, 100+ trees/rocks/bushes/grass, glTF). Alternatives: Kenney Nature Kit (CC0, ~10.5 MB
-      zip on OpenGameArt), Quaternius Stylized Nature MegaKit (CC0, 99 MB zip). Waiting for the user's choice.
+    - **Done (waiting for the user's look test):** user chose **KayKit Forest Nature Pack** (Kay Lousberg, CC0, free
+      tier). 24 models copied to `host/assets/forest/` (500 KB, licence included, credited in README).
+      `host/game/vegetation.ts` plants groves of trees (bigger further from the lane), bushes at tree feet and along
+      the bumpers, grass tufts everywhere; one InstancedMesh per model. Keeps clear of the lane and the camera's view
+      behind the tee. Counts/sizes/tint in `TUNING.vegetation`. CPU ~1.25 ms/frame in the dev browser.
+    - Possible follow-ups: a tree may still block the camera mid-lane at bends (could fade like the windmill).
     - **Wind** (swaying trees/grass) — the user wants it in 4c.
     - Still need a **light CC0 tree source** (e.g. Quaternius stylized nature packs, or another CC0 set). Propose
       options with sizes to the user. Use instancing; keep 60 fps.
@@ -103,7 +106,5 @@ running log of where we are, what the user decided, and what comes next).
 - Turf brightness/tint can still be tuned (`turfTint`, `bumperTint`, `islandGrassTint`).
 
 ## Next action
-Start **Phase 4b step 2**: find light CC0 trees, propose a download list with exact sizes (plus the Poly Haven shrubs/
-ferns/grass/flowers above), wait for the user's yes, then place dense instanced vegetation on the islands around the
-lanes (keep off the lanes and out of the camera's view of the ball), check fps, commit, give test steps.
-Then 4c (juice), then ask the user to approve Phase 4.
+Get the user's feedback on the trees (density, size, colour) and tune `TUNING.vegetation`. Then 4c (juice, incl.
+**wind**: trees and grass swaying), then ask the user to approve Phase 4.

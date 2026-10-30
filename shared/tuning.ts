@@ -205,6 +205,29 @@ export const TUNING = {
     maxPixelRatio: 1.75,
   },
 
+  // Trees, bushes and grass tufts on the islands (KayKit Forest Nature Pack models).
+  vegetation: {
+    /** How many of each go on one island (fewer = faster). */
+    treesPerIsland: 24,
+    bushesPerIsland: 34,
+    grassPerIsland: 160,
+    /** Trees grow in little groves: this many groves per island. */
+    grovesPerIsland: 7,
+    /** Size of the models compared with the original pack (smallest, biggest). Trees grow bigger further from the lane. */
+    treeScale: [0.38, 0.62],
+    bushScale: [0.3, 0.5],
+    grassScale: [0.35, 0.55],
+    /** Gap kept between the foot of the bumpers' slope and a tree trunk / a bush. */
+    treeGap: 1.1,
+    bushGap: 0.25,
+    /** No trees or bushes within this distance of the camera's spot behind the tee. */
+    teeClearance: 3,
+    /** Trees and bushes stay on the grass, up to this part of the island's size (grass ends at grassReach). */
+    maxReach: 0.8,
+    /** Colour boost on the pack's colours (1 = as made). */
+    tint: [1.15, 1.22, 1.05],
+  },
+
   character: {
     /** Height of a character (the ball is 0.2 wide). */
     height: 0.9,

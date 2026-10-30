@@ -11,6 +11,7 @@ import { ADDRESS_DISTANCE, Character } from './character.ts';
 import { buildHole, HOLES, isInCup, loadKit, type BuiltHole, type Kit } from './course.ts';
 import { DistancePreview } from './preview.ts';
 import { Scenery } from './scenery.ts';
+import { loadForest, type Forest } from './vegetation.ts';
 
 // Three holes built from the Kenney kit, for 1–4 players. The host owns the ball physics; the server decides
 // whose turn it is and counts strokes (see syncState). Each player has their own ball: the current
@@ -116,14 +117,15 @@ export class Game {
   private readonly followDir = new THREE.Vector3(0, 0, 1);
 
   static async create(container: HTMLElement, hud: GameHud): Promise<Game> {
-    const [kit] = await Promise.all([loadKit(), RAPIER.init()]);
-    return new Game(container, hud, kit);
+    const [kit, forest] = await Promise.all([loadKit(), loadForest(), RAPIER.init()]);
+    return new Game(container, hud, kit, forest);
   }
 
   private constructor(
     private readonly container: HTMLElement,
     private readonly hud: GameHud,
     kit: Kit,
+    forest: Forest,
   ) {
     const look = TUNING.scenery;
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -155,7 +157,7 @@ export class Game {
       return built;
     });
     this.hole = this.holes[0];
-    this.scenery = new Scenery(this.holes);
+    this.scenery = new Scenery(this.holes, forest);
     this.scene.add(this.scenery.group);
 
     // Gentle glow on the brightest things (the ball, clouds, sunlit white), then colour correction.
