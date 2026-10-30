@@ -1,5 +1,5 @@
 // All tuning values live in this one file so they are easy to tweak.
-// Later: ball friction, camera speeds, ...
+// Distances are in metres-ish game units (the ball is 0.2 wide), times in seconds unless the name says otherwise.
 
 export const TUNING = {
   network: {
@@ -43,6 +43,68 @@ export const TUNING = {
     sensitivity: 1,
     /** How long to wait for the first motion sensor reading before using touch controls (milliseconds). */
     sensorProbeMs: 1000,
+  },
+
+  ball: {
+    radius: 0.1,
+    /** Ball speed for a 0 % and a 100 % hit (units per second). */
+    minShotSpeed: 0.3,
+    maxShotSpeed: 9,
+    /** Shape of power -> speed. 0.5 makes the rolling distance grow evenly with power. */
+    shotCurveExponent: 0.5,
+    /** How strongly the grass slows the ball (units per second, every second). Bigger = shorter rolls. */
+    rollingResistance: 2.2,
+    /** Extra slow-down that grows with speed, a bit like air. */
+    linearDamping: 0.1,
+    angularDamping: 0.3,
+    /** How bouncy the ball is (combined with the wall bounce). */
+    bounce: 0.4,
+    /** The ball counts as stopped below this speed... */
+    restSpeed: 0.06,
+    /** ...for this long (milliseconds). */
+    restTimeMs: 400,
+  },
+
+  course: {
+    floorColour: '#a9b4bc',
+    wallColour: '#6f7d88',
+    floorThickness: 0.2,
+    wallHeight: 0.25,
+    floorFriction: 0.6,
+    wallFriction: 0.1,
+    /** How bouncy the walls are (0 = dead, 1 = perfect bounce). */
+    wallBounce: 0.65,
+    /** Size of the square opening of the cup. The ball is 0.2 wide. */
+    cupGap: 0.3,
+    cupDepth: 0.3,
+  },
+
+  physics: {
+    gravity: 9.81,
+    /** Physics steps per second. More = more accurate, a little slower. */
+    stepsPerSecond: 120,
+    /** A ball below this height has left the course (out of bounds). */
+    outOfBoundsY: -1,
+  },
+
+  camera: {
+    /** While aiming: distance behind the ball and height above it. */
+    aimDistance: 3.2,
+    aimHeight: 1.7,
+    /** While the ball rolls: distance and height. */
+    followDistance: 3.6,
+    followHeight: 2.4,
+    /** How quickly the camera catches up (bigger = snappier). */
+    smoothing: 3,
+  },
+
+  aimLine: {
+    length: 2.2,
+    dots: 12,
+    /** Arrow keys on the Mac turn the aim this fast (degrees per second). */
+    keyboardDegreesPerSecond: 70,
+    /** Holding Space on the Mac charges a hit from 0 to 100 % in this time (seconds). */
+    keyboardChargeTime: 1.5,
   },
 
   slingshot: {

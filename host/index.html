@@ -12,12 +12,31 @@
         --font: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
       }
       html, body { margin: 0; height: 100%; }
-      body {
-        font-family: var(--font);
-        color: var(--ink);
+      [hidden] { display: none !important; }
+      body { font-family: var(--font); color: var(--ink); margin: 0; overflow: hidden; }
+      #lobby-screen {
+        height: 100%;
         background: linear-gradient(#8fd3ff, #d9f2ff 60%, #b8e986);
         display: flex; flex-direction: column; align-items: center;
-        padding: 4vh 4vw; box-sizing: border-box; overflow: hidden;
+        padding: 4vh 4vw; box-sizing: border-box;
+      }
+      #start {
+        margin-top: 3vh; font: inherit; font-size: 30px; font-weight: 900; color: #ffffff; background: #3ec300;
+        border: none; border-radius: 24px; padding: 18px 48px; box-shadow: 0 8px 0 #2b8a00; cursor: pointer;
+      }
+      #start:active { transform: translateY(6px); box-shadow: 0 2px 0 #2b8a00; }
+      #game-screen { position: fixed; inset: 0; }
+      #game-canvas { position: absolute; inset: 0; }
+      #hud-info, #hud-power, #hud-keys {
+        position: absolute; background: rgba(255, 255, 255, 0.88); border-radius: 18px; padding: 10px 20px; font-weight: 800;
+      }
+      #hud-info { top: 20px; left: 20px; font-size: 28px; }
+      #hud-power { top: 20px; right: 20px; font-size: 28px; }
+      #hud-power:empty { display: none; }
+      #hud-keys { bottom: 20px; left: 20px; font-size: 16px; font-weight: 600; color: var(--soft); }
+      #hud-message {
+        position: absolute; top: 38%; left: 50%; transform: translate(-50%, -50%); white-space: pre-line; text-align: center;
+        font-size: 64px; font-weight: 900; color: #ffffff; text-shadow: 0 4px 0 rgba(0, 0, 0, 0.25), 0 0 30px rgba(0, 0, 0, 0.2);
       }
       h1 { margin: 0 0 3vh; font-size: clamp(36px, 5vw, 72px); font-weight: 900; letter-spacing: 1px; }
       #lobby { display: flex; gap: 4vw; align-items: flex-start; width: 100%; max-width: 1400px; flex: 1; }
@@ -63,6 +82,7 @@
   </head>
   <body>
     <div id="offline-banner" hidden>Lost connection to the game server. Reconnecting…</div>
+    <div id="lobby-screen">
     <h1>Minigolf Party</h1>
     <div id="lobby">
       <div id="join">
@@ -77,6 +97,16 @@
       <b>Phone can't connect?</b> Use the same Wi-Fi as this computer (guest networks often block devices from seeing each other).
       The first time, the phone shows a security warning: tap "Show Details" / "Advanced" and continue to the website.
       If the Mac asks whether "node" may accept incoming connections, click "Allow".
+    </div>
+    <button id="start" type="button">Start practice (Enter)</button>
+    </div>
+
+    <div id="game-screen" hidden>
+      <div id="game-canvas"></div>
+      <div id="hud-info"></div>
+      <div id="hud-power"></div>
+      <div id="hud-message" hidden></div>
+      <div id="hud-keys">Mac keys: ← → aim · hold Space to hit · R reset ball · Esc back to lobby</div>
     </div>
     <script type="module" src="/host/main.ts"></script>
   </body>

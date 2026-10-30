@@ -7,15 +7,22 @@ import {
   type Stroke,
 } from '../shared/protocol.ts';
 import { TUNING } from '../shared/tuning.ts';
+import { Game } from './game/Game.ts';
 
-// Phase 1: the lobby. Shows the QR code and the players who joined from their phones,
-// with a live readout of each phone's aim and the power of its last hit.
+// The big screen. The lobby shows the QR code and the players who joined from their phones,
+// with a live readout of each phone's aim and last hit. "Start practice" opens the graybox hole.
 
 const qrEl = document.getElementById('qr') as HTMLImageElement;
 const joinUrlEl = document.getElementById('join-url')!;
 const roomCodeEl = document.getElementById('room-code')!;
 const playersEl = document.getElementById('players')!;
 const offlineBanner = document.getElementById('offline-banner')!;
+const lobbyScreen = document.getElementById('lobby-screen')!;
+const gameScreen = document.getElementById('game-screen')!;
+const startButton = document.getElementById('start') as HTMLButtonElement;
+
+let game: Game | null = null;
+let playing = false;
 
 type Readout = { angle: number; stroke: Stroke | null };
 type CardRefs = { card: HTMLElement; arrow: HTMLElement; aimText: HTMLElement; powerFill: HTMLElement; powerText: HTMLElement; detail: HTMLElement };
@@ -124,8 +131,10 @@ function connect(): void {
     else if (msg.type === 'player_aim') {
       readoutOf(msg.playerId).angle = msg.angle;
       renderReadout(msg.playerId);
+      if (playing) game?.onPhoneAim(msg.angle);
     } else if (msg.type === 'player_stroke') {
       const { type: _type, playerId, ...stroke } = msg;
+      if (playing) game?.onPhoneStroke(stroke.power, stroke.angle);
       readoutOf(playerId).stroke = stroke;
       renderReadout(playerId);
       const refs = cards.get(playerId);
@@ -137,6 +146,38 @@ function connect(): void {
     setTimeout(connect, TUNING.network.reconnectDelayMs);
   });
 }
+
+// ---------- Lobby <-> game ----------
+
+async function startGame(): Promise<void> {
+  if (playing) return;
+  startButton.disabled = true;
+  game ??= await Game.create(document.getElementById('game-canvas')!, {
+    info: document.getElementById('hud-info')!,
+    message: document.getElementById('hud-message')!,
+    power: document.getElementById('hud-power')!,
+  });
+  if (import.meta.env.DEV) Object.assign(window, { game }); // for debugging in the browser console
+  startButton.disabled = false;
+  lobbyScreen.hidden = true;
+  gameScreen.hidden = false;
+  playing = true;
+  game.start();
+}
+
+function backToLobby(): void {
+  if (!playing) return;
+  playing = false;
+  game?.stop();
+  gameScreen.hidden = true;
+  lobbyScreen.hidden = false;
+}
+
+startButton.addEventListener('click', () => void startGame());
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !playing) void startGame();
+  else if (e.key === 'Escape') backToLobby();
+});
 
 showPlayers([]);
 connect();

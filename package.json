@@ -9,6 +9,7 @@
     "check": "tsc --noEmit"
   },
   "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.21.0",
     "qrcode": "^1.5.4",
     "selfsigned": "^5.5.0",
     "three": "^0.187.0",
