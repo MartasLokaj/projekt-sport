@@ -167,11 +167,12 @@ Status: decisions so far are recorded here. Do not start building Badminton unti
 
 **Proposed (user agreed in principle, details to tune)**
 - Modes: 1v1, 2v2 and 1 player vs CPU (CPU difficulty levels).
-- ~~Shot type comes from the swing~~ (replaced, see Decided: shot type from court position). Power comes from the swing speed. Hitting early/late sends the shuttle left/right.
+- ~~Shot type comes from the swing~~ (replaced, see Decided: shot type from court position). Power comes from the swing speed. ~~Hitting early/late sends the shuttle left/right~~ (replaced: the swing direction aims, see Decided).
 - Short party matches: rally scoring to 11 points.
 - The shuttle is slow, so Wi-Fi delay matters less than in tennis. Badminton needs **instant** swing detection, unlike minigolf's "wait until still" flow. Use a generous, tunable hit window and compensate for network delay (timestamps).
 
 - **Shot type comes from the court position, not from the phone (user, 2026-10-30, after Swing Lab test 2 showed the phone cannot tell overhead from underhand reliably):** a character at the back of the court plays overhead; a character at the front plays underhand, unless a smash is possible (shuttle high enough near the net). The phone only gives: a swing happened, its power and its exact time.
+- **Aiming (user, 2026-10-30):** the direction of the swing aims: swinging more to the left sends the shuttle left, more to the right sends it right. Timing only decides whether the shuttle is hit and how well (a "Perfect" hit is faster and more precise); a swing too early or too late misses. (Measured on the phone as the turn around the vertical axis during the swing, so it works for any grip and either hand.)
 - **Shot depth (user, 2026-10-30):** for now every shot flies to the back of the court. Later the phone gets a big button that means "play a short shot" (drop).
 
 **OPEN**

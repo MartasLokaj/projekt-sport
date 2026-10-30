@@ -66,6 +66,21 @@
       .lab-detail, .lab-stats { font-size: 16px; color: var(--soft); margin-top: 4px; }
       .lab-graph { width: 100%; height: auto; margin-top: 8px; background: #f3f6fa; border-radius: 12px; }
       #lab-empty { font-size: 24px; color: var(--soft); }
+      #badminton-screen { position: fixed; inset: 0; }
+      #badminton-canvas { position: absolute; inset: 0; }
+      #badminton-score {
+        position: absolute; top: 18px; left: 50%; transform: translateX(-50%); background: rgba(255, 255, 255, 0.9);
+        border-radius: 18px; padding: 8px 26px; font-size: 34px; font-weight: 900; white-space: nowrap;
+      }
+      #badminton-message {
+        position: absolute; top: 30%; left: 50%; transform: translateX(-50%); text-align: center; white-space: pre-line;
+        font-size: 52px; font-weight: 900; color: #ffffff; text-shadow: 0 4px 0 rgba(0, 0, 0, 0.25), 0 0 24px rgba(0, 0, 0, 0.25);
+      }
+      #badminton-feedback {
+        position: absolute; bottom: 14%; left: 50%; transform: translateX(-50%); background: rgba(255, 255, 255, 0.9);
+        border-radius: 16px; padding: 8px 22px; font-size: 30px; font-weight: 900; white-space: nowrap;
+      }
+      #badminton-keys { position: absolute; bottom: 14px; left: 20px; font-size: 16px; font-weight: 600; color: var(--soft); }
       #hud-scores {
         position: absolute; top: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px;
       }
@@ -189,6 +204,14 @@
         <canvas id="lab-drill"></canvas>
       </div>
       <div id="lab-cards"><p id="lab-empty">Join with a phone to try the swing.</p></div>
+    </div>
+
+    <div id="badminton-screen" hidden>
+      <div id="badminton-canvas"></div>
+      <div id="badminton-score"></div>
+      <div id="badminton-message" hidden></div>
+      <div id="badminton-feedback" hidden></div>
+      <div id="badminton-keys">Prototype · swing your phone when the shuttle reaches you · Mac: Space swings (hold ← → to aim) · Esc back to the cube</div>
     </div>
 
     <div id="game-screen" hidden>

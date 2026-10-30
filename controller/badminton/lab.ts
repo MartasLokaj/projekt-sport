@@ -25,6 +25,12 @@ function eventTime(e: Event): number {
   return e.timeStamp > 1e12 ? e.timeStamp : performance.timeOrigin + e.timeStamp;
 }
 
+/** "left 40 %", "straight", "right 25 %" (aim -1..1). */
+export function aimText(aim: number): string {
+  if (Math.abs(aim) < TUNING.badmintonSwing.aimDeadzone) return 'straight';
+  return `${aim < 0 ? 'left' : 'right'} ${Math.round(Math.abs(aim) * 100)} %`;
+}
+
 export function initLabScreen(send: (msg: ClientMessage) => void): LabScreen {
   const kindEl = document.getElementById('lab-kind')!;
   const powerEl = document.getElementById('lab-power')!;
@@ -59,18 +65,21 @@ export function initLabScreen(send: (msg: ClientMessage) => void): LabScreen {
     syncTimer = window.setInterval(ping, cfg.clockSyncIntervalMs);
   }
 
-  // ---------- Where the top of the phone points ----------
-  // Preferred: the orientation sensor (it combines gyroscope and accelerometer, so it stays right
-  // during a fast swing). Fallback: the gravity direction from the accelerometer.
+  // ---------- Which way is up, in the phone's own axes ----------
+  // Needed for the tilt (only logged) and for aiming: the turn around the vertical axis tells whether
+  // the swing went to the left or to the right. Preferred: the orientation sensor (it combines gyroscope
+  // and accelerometer, so it stays right during a fast swing). Fallback: gravity from the accelerometer.
 
-  let orientationTilt: { tilt: number; t: number } | null = null;
+  let orientationUp: { up: [number, number, number]; t: number } | null = null;
   window.addEventListener('deviceorientation', (e) => {
-    if (e.beta === null) return;
-    // The top of the phone rises sin(beta) above the horizon, whatever gamma and alpha are.
-    orientationTilt = { tilt: (Math.asin(Math.sin((e.beta * Math.PI) / 180)) * 180) / Math.PI, t: eventTime(e) };
+    if (e.beta === null || e.gamma === null) return;
+    const b = (e.beta * Math.PI) / 180;
+    const g = (e.gamma * Math.PI) / 180;
+    // The world's "up" seen from the phone (x right, y towards the top, z out of the screen).
+    orientationUp = { up: [-Math.cos(b) * Math.sin(g), Math.sin(b), Math.cos(b) * Math.cos(g)], t: eventTime(e) };
   });
 
-  function gravityTilt(e: DeviceMotionEvent): number | null {
+  function gravityUp(e: DeviceMotionEvent): [number, number, number] | null {
     const g = e.accelerationIncludingGravity;
     const a = e.acceleration;
     if (!g || g.x === null || g.y === null || g.z === null) return null;
@@ -78,8 +87,8 @@ export function initLabScreen(send: (msg: ClientMessage) => void): LabScreen {
     const len = Math.hypot(v[0], v[1], v[2]);
     if (len < 1) return null;
     // Android reports the upward push (+y when the phone stands upright), iPhone the downward pull.
-    const up = (isIos ? -v[1] : v[1]) / len;
-    return (Math.asin(Math.max(-1, Math.min(1, up))) * 180) / Math.PI;
+    const sign = isIos ? -1 : 1;
+    return [(sign * v[0]) / len, (sign * v[1]) / len, (sign * v[2]) / len];
   }
 
   // ---------- Motion ----------
@@ -90,11 +99,11 @@ export function initLabScreen(send: (msg: ClientMessage) => void): LabScreen {
     sensorSeen = true;
     if (!open) return;
     const t = eventTime(e);
-    const fused = orientationTilt !== null && Math.abs(t - orientationTilt.t) < 150;
-    const tilt = fused ? orientationTilt!.tilt : gravityTilt(e);
+    const fused = orientationUp !== null && Math.abs(t - orientationUp.t) < 150;
+    const up = fused ? orientationUp!.up : gravityUp(e);
     // rotationRate: beta turns around x, gamma around y, alpha around z.
-    const swing = detector.sample({ t, rate: [r.beta, r.gamma, r.alpha], tilt });
-    renderLive(tilt);
+    const swing = detector.sample({ t, rate: [r.beta, r.gamma, r.alpha], up });
+    renderLive(up ? (Math.asin(Math.max(-1, Math.min(1, up[1]))) * 180) / Math.PI : null);
     if (!swing) return;
 
     const { at, ...rest } = swing;
@@ -107,7 +116,7 @@ export function initLabScreen(send: (msg: ClientMessage) => void): LabScreen {
     if ('vibrate' in navigator) navigator.vibrate(30); // not supported on iPhone
     kindEl.textContent = 'HIT!';
     powerEl.textContent = `${Math.round(swing.power)} %`;
-    detailEl.textContent = `Swing ${swings} · ${swing.speed}°/s`;
+    detailEl.textContent = `Swing ${swings} · ${swing.speed}°/s · aim ${aimText(swing.aim)}`;
   });
 
   let lastLive = 0;

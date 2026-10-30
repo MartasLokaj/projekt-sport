@@ -120,8 +120,24 @@ running log of where we are, what the user decided, and what comes next).
     **Changes:** no overhead/underhand and no direction learning; `minHitSpeed` 750 (slower = ignored, still logged);
     swings ≥ `instantSpeed` 1100 are sent at once (~50 ms after the peak), softer ones wait `confirmMs`;
     power from 750..1800°/s.
-  - Next: user test 3 (does every real swing count once, are reaches ignored, does power feel right, does the
-    timing verdict feel fair) → then B1 is done → B2 (graybox rally vs CPU, hit window ~±200–250 ms).
+  - **Test 3 (53 swings, `logs/badminton-swings-session3.jsonl`): approved ("pecka").** 30 hits, no doubles,
+    23 reaches ignored (max 639°/s vs min hit 812°/s), delay ~80 ms median, 19/30 within ±150 ms. **B1 done.**
+- **Aiming (user):** the swing direction aims (more left / more right); timing only decides hit/miss and quality.
+  Measured as the share of the turn around the world's vertical axis near the peak (`aim` -1..1, `aimGain`,
+  `aimDeadzone`, `aimSign` to swap if a phone reports it mirrored). Shown in the lab and on the phone.
+  **Not verified on real phones yet** (sign on iPhone vs Android, whether left/right swings really differ).
+- **B2 prototype — built, waiting for the user's test.** Badminton side of the cube → Enter "Play prototype"
+  (L = Swing Lab). `host/badminton/`: `Badminton.ts` (rally rules, CPU, running, racket arm, camera, HUD),
+  `shuttle.ts` (on-rails flight curve: fast start, slows, steep drop; `makeShot`, `findContact`), `court.ts`
+  (graybox sand court, net, shuttle, racket — the only venue file). Tuning: `TUNING.badminton`.
+  Rules: contact = where the shuttle descends through `overheadHeight` on the receiver's half (back → clear, or
+  smash if power ≥ `smashPower`; front (< `frontZone`) → smash), else underhand lift at `underhandHeight`.
+  Hit if |swing time − contact time| ≤ `hitWindowMs` (250); ≤ `perfectMs` (100) = Perfect (faster, no scatter).
+  While waiting for the phone after the contact moment the shuttle creeps at `waitSlowdown`; miss after
+  `hitWindowMs + lateGraceMs`. CPU: `cpu.hitChance` etc. Rally scoring to 11, winner serves (player serves by
+  swinging). Plays the first connected phone; Mac Space = swing (← → aim). Character got `armPose`, `handArm` and a
+  `putter: false` option. Tested in the dev browser with a scripted player (rallies, misses, scoring, Esc).
+  - Next: user test on the TV with a phone → tune feel (timing window, shot speeds, CPU) → B3 split screen 1v1.
 
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.
@@ -178,7 +194,7 @@ running log of where we are, what the user decided, and what comes next).
 - Turf brightness/tint can still be tuned (`turfTint`, `bumperTint`, `islandGrassTint`).
 
 ## Next action
-**Badminton B1:** get the user's test of the Swing Lab on real phones, then read `logs/badminton-swings.jsonl` and tune.
+**Badminton B2:** get the user's test of the prototype (and of aiming in the lab), tune, then B3 (split screen 1v1).
 Older (paused):
 Cube World: 2a (host hub) is built — get the user's test on the TV with real phones, then 2b (registry + phone control), then 2c.
 After that 4c (juice, incl. **wind**: trees and grass swaying), then ask the user to approve Phase 4.

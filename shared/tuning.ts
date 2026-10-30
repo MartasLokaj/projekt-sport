@@ -357,10 +357,88 @@ export const TUNING = {
     /** Power bands shown in the lab: soft below the first, hard from the second (percent). */
     softBelow: 35,
     hardFrom: 70,
+    /**
+     * Aim: the share of the swing's turn around the vertical axis, times `aimGain` (then clamped to -1..1).
+     * Measured over this many milliseconds around the fastest moment. Below `aimDeadzone` counts as straight.
+     * aimSign: -1 swaps left and right, in case a phone reports it the other way round.
+     */
+    aimGain: 1.5,
+    aimWindowMs: 120,
+    aimDeadzone: 0.15,
+    aimSign: 1,
     /** Graph and log: how much motion before the fastest moment is kept (milliseconds). */
     traceBeforeMs: 600,
     /** Clock sync with the server: how often the phone asks the time (milliseconds). */
     clockSyncIntervalMs: 4000,
+  },
+
+  // Badminton prototype (phase B2): one player against the computer on a plain court.
+  // Distances in metres (net at z = 0, the player's half at +z), times in milliseconds unless the name says otherwise.
+  badminton: {
+    /** Singles court: half of the width and half of the length; net height. */
+    courtHalfWidth: 2.6,
+    courtHalfLength: 6.7,
+    netHeight: 1.55,
+    /** Characters are the minigolf chibis scaled up this much (1 = 0.9 m tall). */
+    characterScale: 1.8,
+    /** Where a character waits between shots (distance from the net). */
+    homeDepth: 3.6,
+    /** Running: normal top speed, and the speed allowed when it is the only way to get there in time (m/s). */
+    runSpeed: 5,
+    maxRunSpeed: 9,
+    /** How far beside the shuttle the character stands, so the racket meets it (m). */
+    racketReach: 0.55,
+    /** Heights where the racket meets the shuttle: overhead and underhand (m). */
+    overheadHeight: 2.1,
+    underhandHeight: 0.6,
+    /** Overhead contact closer to the net than this is a "high shuttle at the front": a smash is possible (m). */
+    frontZone: 2.2,
+
+    // Hitting (timing only decides hit or miss and how good the hit is; the swing direction aims).
+    /** A swing this close to the right moment hits (either side, milliseconds). */
+    hitWindowMs: 250,
+    /** This close is "Perfect": the shot is as fast and as precise as it gets. */
+    perfectMs: 100,
+    /** After the right moment, wait this much longer for the phone's message before calling it a miss (Wi-Fi delay). */
+    lateGraceMs: 300,
+    /** While waiting for the phone, the shuttle creeps on at this share of its speed. */
+    waitSlowdown: 0.25,
+    /** Power at or above this (percent) makes an overhead shot a smash. */
+    smashPower: 70,
+    /** Aim -1..1 moves the target this far sideways, as a share of the half width (1 = to the sideline). */
+    aimReach: 0.9,
+    /** A shot that was not Perfect lands up to this far from where it was aimed (m). */
+    scatter: 1.0,
+    /** Mac keyboard (testing without a phone): Space swings with this power, arrows held = aim. */
+    keyPower: 60,
+
+    // Shots. depth = landing distance from the net (min at 0 % power, max at 100 %), apex = extra height of the arc (m),
+    // seconds = flight time (slow at 0 % power, fast at 100 %), drag = how much the shuttle slows down in flight.
+    serve: { depth: [5.2, 6.3], apex: 3.2, seconds: [2.0, 1.6], drag: 2.2 },
+    clear: { depth: [5.0, 6.3], apex: 3.4, seconds: [2.0, 1.5], drag: 2.4 },
+    lift: { depth: [4.8, 6.2], apex: 3.6, seconds: [2.1, 1.6], drag: 2.2 },
+    smash: { depth: [2.6, 4.2], apex: 0, seconds: [0.95, 0.6], drag: 0.6 },
+    /** Every shot clears the net by at least this much (m). */
+    netClearance: 0.35,
+    /** A Perfect hit flies this much faster. */
+    perfectSpeedup: 0.9,
+
+    /** The computer: chance to return a normal shot and a smash, its power range (percent), and serve delay (ms). */
+    cpu: { hitChance: 0.85, smashReturnChance: 0.55, power: [30, 85], smashChance: 0.35, serveDelayMs: 1300 },
+
+    /** Rally scoring: first to this many points wins. Pause after a point (ms). */
+    pointsToWin: 11,
+    pointPauseMs: 1600,
+
+    /** Camera behind the player: height, distance behind the baseline, and how far down the court it looks. */
+    cameraHeight: 4.2,
+    cameraBack: 5.0,
+    cameraLookAt: -3,
+    cameraFov: 50,
+    /** Look: sand, court, lines, sky. */
+    sandColour: '#ecd3a0',
+    courtColour: '#e3bf85',
+    skyColour: '#9fd8ff',
   },
 
   // Swing Lab on the big screen: a shuttle drops to the hit line, the player swings when it gets there.

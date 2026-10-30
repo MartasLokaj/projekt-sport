@@ -3,6 +3,7 @@ import { TUNING } from '../shared/tuning.ts';
 import { Game } from './game/Game.ts';
 import { Hub } from './hub/Hub.ts';
 import type { FaceInfo } from './hub/faces.ts';
+import { Badminton } from './badminton/Badminton.ts';
 import { Lab } from './lab/Lab.ts';
 
 // The big screen. The lobby is Cube World: a cube floating in space with one game on each side,
@@ -36,22 +37,48 @@ let lastState: GameState | null = null;
 
 let hub: Hub | null = null;
 
-// Badminton Swing Lab (phase B1): opened from the Badminton side of the cube, or with L.
+// Badminton: the prototype game (Badminton side of the cube → Enter) and the Swing Lab (L).
+// Both put the phones into the badminton swing screen (the server's lab mode); Esc goes back to the cube.
 const labScreen = document.getElementById('lab-screen')!;
 const labEmpty = document.getElementById('lab-empty')!;
 const lab = new Lab(document.getElementById('lab-drill') as HTMLCanvasElement, document.getElementById('lab-cards')!);
+const badmintonScreen = document.getElementById('badminton-screen')!;
+let badminton: Badminton | null = null;
+/** Which badminton screen to show when the server confirms (or null while on the cube). */
+let badmintonWanted: 'game' | 'lab' = 'lab';
 let labOpen = false;
+/** The phone that plays the prototype: the first connected player. */
+let badmintonPlayerId: string | null = null;
+
+function openBadminton(view: 'game' | 'lab'): void {
+  badmintonWanted = view;
+  send({ type: 'lab_mode', on: true });
+}
 
 function showLab(on: boolean): void {
   if (on === labOpen) return;
   labOpen = on;
-  labScreen.hidden = !on;
+  const game = on && badmintonWanted === 'game';
+  labScreen.hidden = !on || game;
+  badmintonScreen.hidden = !game;
   lobbyScreen.hidden = on;
   if (on) {
     hub?.stop();
-    lab.start();
+    if (game) {
+      const player = players.find((p) => p.connected) ?? null;
+      badmintonPlayerId = player?.id ?? null;
+      badminton ??= new Badminton(document.getElementById('badminton-canvas')!, {
+        score: document.getElementById('badminton-score')!,
+        message: document.getElementById('badminton-message')!,
+        feedback: document.getElementById('badminton-feedback')!,
+      });
+      if (import.meta.env.DEV) Object.assign(window, { badminton }); // for debugging in the browser console
+      badminton.start(player);
+    } else lab.start();
   } else {
     lab.stop();
+    badminton?.stop();
+    badmintonWanted = 'lab';
     hub?.start();
   }
 }
@@ -87,9 +114,10 @@ function showPick(face: FaceInfo | null): void {
     ? `${face.players} · ${ready === 0 ? 'waiting for players to join' : `${ready} ready`}`
     : face.players;
   if (face.id === 'badminton') {
-    // Not playable yet, but its swing test is.
-    startButton.textContent = 'Swing Lab (Enter)';
+    // The prototype: one player against the computer (the keyboard works without a phone too).
+    startButton.textContent = 'Play prototype (Enter)';
     startButton.disabled = false;
+    pickPlayers.textContent = 'Prototype · 1 player vs CPU · L: Swing Lab';
     return;
   }
   startButton.textContent = face.available ? 'Play (Enter)' : 'Coming soon';
@@ -111,7 +139,7 @@ function showJoined(): void {
 
 function startSelected(): void {
   if (hub?.selected?.id === 'badminton') {
-    send({ type: 'lab_mode', on: true });
+    openBadminton('game');
     return;
   }
   if (hub?.selected?.available && players.some((p) => p.connected)) send({ type: 'start_game' });
@@ -140,6 +168,7 @@ function connect(): void {
       if (hub) showPick(hub.selected);
       game?.setPlayers(players);
       lab.setPlayers(players);
+      if (badmintonPlayerId) badminton?.setPlayer(players.find((p) => p.id === badmintonPlayerId) ?? null);
       labEmpty.hidden = players.length > 0;
     } else if (msg.type === 'game_state') void onGameState(msg);
     else if (msg.type === 'player_aim') {
@@ -152,7 +181,11 @@ function connect(): void {
     } else if (msg.type === 'player_swing_progress') {
       if (playing) game?.onPhoneSwingProgress(msg);
     } else if (msg.type === 'lab_state') showLab(msg.on);
-    else if (msg.type === 'player_badminton_swing') lab.onSwing(msg);
+    else if (msg.type === 'player_badminton_swing') {
+      if (!badmintonScreen.hidden) {
+        if (msg.playerId === badmintonPlayerId && !msg.ignored) badminton?.onSwing(msg.at, msg.power, msg.aim);
+      } else lab.onSwing(msg);
+    }
   });
   ws.addEventListener('close', () => {
     offlineBanner.hidden = false;
@@ -277,12 +310,13 @@ document.getElementById('turn-right')!.addEventListener('click', () => hub?.cycl
 window.addEventListener('keydown', (e) => {
   const phase = lastState?.phase ?? 'lobby';
   if (labOpen) {
-    if (e.key === 'Escape' || e.key === 'l' || e.key === 'L') send({ type: 'lab_mode', on: false });
+    const inLab = badmintonScreen.hidden;
+    if (e.key === 'Escape' || (inLab && (e.key === 'l' || e.key === 'L'))) send({ type: 'lab_mode', on: false });
     return;
   }
   if (phase === 'lobby' && !playing) {
     if (e.key === 'l' || e.key === 'L') {
-      send({ type: 'lab_mode', on: true });
+      openBadminton('lab');
       return;
     }
     if (e.key === 'ArrowLeft') hub?.cycle(-1);

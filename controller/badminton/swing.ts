@@ -9,6 +9,8 @@ import { TUNING } from '../../shared/tuning.ts';
 // 3. A strong swing is sent as soon as the turn slows down. A softer one waits `confirmMs` first:
 //    reaching back with the racket is often followed straight away by the real, faster swing,
 //    which then replaces it.
+// 4. Aim: how much of the turn goes around the vertical axis. Swinging across to the left turns the
+//    racket anticlockwise seen from above. Works for any grip and either hand.
 // Overhead or underhand is not read from the phone: the game picks it from where the character stands.
 
 export type BadmintonSample = {
@@ -16,8 +18,8 @@ export type BadmintonSample = {
   t: number;
   /** Gyroscope, degrees per second, around the phone's x, y and z axes. */
   rate: [number, number, number];
-  /** Angle of the top of the phone above the horizon (degrees), or null when unknown. Only logged. */
-  tilt: number | null;
+  /** The world's "up" direction in the phone's axes (unit vector), or null when unknown. */
+  up: [number, number, number] | null;
 };
 
 export type DetectedSwing = {
@@ -25,6 +27,8 @@ export type DetectedSwing = {
   ignored: boolean;
   speed: number;
   power: number;
+  /** -1 = fully to the left, 0 = straight, 1 = fully to the right. */
+  aim: number;
   /** Tilt of the top of the phone at the fastest moment (degrees). */
   tilt: number;
   /** Phone clock time of the fastest moment. */
@@ -33,7 +37,8 @@ export type DetectedSwing = {
   trace: number[][];
 };
 
-type Point = { t: number; speed: number; tilt: number | null; rate: [number, number, number] };
+/** spin: turn around the vertical axis (degrees per second, positive = anticlockwise seen from above). */
+type Point = { t: number; speed: number; tilt: number | null; spin: number | null; rate: [number, number, number] };
 
 export class BadmintonSwingDetector {
   /** This player's own sensitivity (1 = 100 %), set from their profile. */
@@ -51,7 +56,14 @@ export class BadmintonSwingDetector {
 
   sample(s: BadmintonSample): DetectedSwing | null {
     const cfg = TUNING.badmintonSwing;
-    const point: Point = { t: s.t, speed: Math.hypot(...s.rate), tilt: s.tilt, rate: s.rate };
+    const up = s.up;
+    const point: Point = {
+      t: s.t,
+      speed: Math.hypot(...s.rate),
+      tilt: up ? (Math.asin(Math.max(-1, Math.min(1, up[1]))) * 180) / Math.PI : null,
+      spin: up ? s.rate[0] * up[0] + s.rate[1] * up[1] + s.rate[2] * up[2] : null,
+      rate: s.rate,
+    };
     this.recent.push(point);
     const keep = cfg.traceBeforeMs + cfg.maxSwingMs + cfg.confirmMs;
     while (this.recent.length > 0 && this.recent[0].t < s.t - keep) this.recent.shift();
@@ -93,15 +105,28 @@ export class BadmintonSwingDetector {
     if (!ignored) this.quietUntil = now + cfg.cooldownMs;
     const t = Math.min(1, Math.max(0, (peak.speed - cfg.minSpeed) / (cfg.maxSpeed - cfg.minSpeed)));
     const power = ignored ? 0 : Math.min(100, Math.max(1, Math.round(Math.pow(t, cfg.curveExponent) * this.playerSensitivity * 1000) / 10));
+    // Aim from the fast part of the swing around the fastest moment: the share of the turn around "up".
+    const fast = this.recent.filter(
+      (p) => Math.abs(p.t - peak.t) <= cfg.aimWindowMs && p.speed >= peak.speed * 0.5 && p.spin !== null,
+    );
+    const share = fast.length ? fast.reduce((sum, p) => sum + p.spin! / p.speed, 0) / fast.length : 0;
+    const aim = Math.max(-1, Math.min(1, -share * cfg.aimGain * cfg.aimSign));
     return {
       ignored,
       speed: Math.round(peak.speed),
       power,
+      aim: Math.round(aim * 100) / 100,
       tilt: Math.round(peak.tilt ?? 0),
       at: Math.round(peak.t),
       trace: this.recent
         .filter((p) => p.t >= peak.t - cfg.traceBeforeMs)
-        .map((p) => [Math.round(p.t - peak.t), Math.round(p.speed), Math.round(p.tilt ?? 0), ...p.rate.map(Math.round)]),
+        .map((p) => [
+          Math.round(p.t - peak.t),
+          Math.round(p.speed),
+          Math.round(p.tilt ?? 0),
+          ...p.rate.map(Math.round),
+          Math.round(p.spin ?? 0),
+        ]),
     };
   }
 }

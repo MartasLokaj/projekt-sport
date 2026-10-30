@@ -32,6 +32,12 @@ export class Character {
   private readonly skinMaterial = new THREE.MeshStandardMaterial({ roughness: 0.7 });
   private readonly shirtMaterial = new THREE.MeshStandardMaterial({ roughness: 0.75 });
 
+  /**
+   * Overrides the racket (or putter) arm while standing: turn around the shoulder in radians,
+   * x = forwards/backwards (negative = forwards), z = out to the side. null = the usual animation.
+   */
+  armPose: { x: number; z: number } | null = null;
+
   private stance: 'address' | 'stand' = 'stand';
   private mood: Mood = 'idle';
   private moodTime = 0;
@@ -49,13 +55,14 @@ export class Character {
   private targetYaw = 0;
   private hopPhase = 0;
 
-  constructor(look: CharacterLook) {
+  /** putter: false = no putter in the hand (other sports hold their own gear, see handArm). */
+  constructor(look: CharacterLook, options: { putter?: boolean } = {}) {
     this.build();
     this.setLook(look);
     this.root.add(this.body);
     this.standArms = [this.makeArm(1), this.makeArm(-1)];
     this.torso.add(...this.standArms);
-    this.addHangingPutter(this.standArms[1]);
+    if (options.putter !== false) this.addHangingPutter(this.standArms[1]);
     this.root.traverse((o) => (o.castShadow = true));
   }
 
@@ -64,6 +71,11 @@ export class Character {
     this.shirtMaterial.color.set(look.shirt);
     this.handedness = look.handedness;
     this.applyScale();
+  }
+
+  /** The arm whose hand holds the putter (the character's right arm). Its hand is at (0, -0.17, 0). */
+  get handArm(): THREE.Group {
+    return this.standArms[1];
   }
 
   /** Puts the character somewhere right away (no hopping). */
@@ -204,6 +216,7 @@ export class Character {
         jump = Math.abs(Math.sin(t * Math.PI * 1.5)) * 0.04;
         break;
     }
+    if (this.armPose) right.rotation.set(this.armPose.x, 0, this.armPose.z);
     this.body.position.y = Math.max(this.body.position.y, jump);
     if (this.mood !== 'idle' && t > MOOD_SECONDS[this.mood]) this.mood = 'idle';
   }

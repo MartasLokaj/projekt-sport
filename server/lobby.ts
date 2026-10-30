@@ -308,16 +308,17 @@ function cleanStroke(msg: Stroke): Stroke | null {
 
 /** Checks the numbers a phone sent for a badminton swing. */
 function cleanBadmintonSwing(msg: BadmintonSwing): BadmintonSwing | null {
-  if (![msg.speed, msg.power, msg.tilt, msg.at].every(Number.isFinite)) return null;
+  if (![msg.speed, msg.power, msg.aim, msg.tilt, msg.at].every(Number.isFinite)) return null;
   const trace = Array.isArray(msg.trace)
     ? msg.trace
         .slice(0, 200)
-        .filter((p) => Array.isArray(p) && p.length >= 3 && p.length <= 6 && p.every(Number.isFinite))
+        .filter((p) => Array.isArray(p) && p.length >= 3 && p.length <= 8 && p.every(Number.isFinite))
     : [];
   return {
     ignored: msg.ignored === true,
     speed: clamp(msg.speed, 0, 5000),
     power: clamp(msg.power, 0, 100),
+    aim: clamp(msg.aim, -1, 1),
     tilt: clamp(msg.tilt, -90, 90),
     at: msg.at,
     fused: msg.fused === true,
