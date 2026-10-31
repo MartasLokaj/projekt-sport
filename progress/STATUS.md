@@ -64,7 +64,7 @@ running log of where we are, what the user decided, and what comes next).
   castle with a narrow gate + a safe detour) and 7 (Banked U-turn, then downhill); **J3** holes 8 (narrow Bridge on
   posts to a small island) and 9 (Finale: ramp, pipe, jump, funnel round the cup). Always play all holes for now
   (a 3/9 choice in the lobby maybe later — needs a server change).
-  - **J1 — done, waiting for the user's test.** Path point flags in `course.ts`: `ramp` (straight-line height change,
+  - **J1 — done; user (after the server restart and the windmill hitbox fix): "už to funguje dobře".** Path point flags in `course.ts`: `ramp` (straight-line height change,
     so a ramp's top edge launches the ball), `gap` (no floor; wooden boards under both edges; the island dips into a
     pond there — `pondWidth/pondSlope/pondDepth/pondSpread` in `TUNING.scenery`; falling in = "Splash! +1"), `tube`
     (blue pipe resting on the borders, solid inside, fades like the windmill; `tube*` in `TUNING.course`).
@@ -461,7 +461,12 @@ running log of where we are, what the user decided, and what comes next).
 - Turf brightness/tint can still be tuned (`turfTint`, `bumperTint`, `islandGrassTint`).
 
 ## Next action
-**Badminton mechanics (BADMINTON_MECHANICS.md):** step 1 built → user's phone test → step 2. B4 (2v2) comes after step 5. (Cloud session redesigns the hub — leave `host/hub/` alone.)
-Older (paused):
-Cube World: 2a (host hub) is built — get the user's test on the TV with real phones, then 2b (registry + phone control), then 2c.
-After that 4c (juice, incl. **wind**: trees and grass swaying), then ask the user to approve Phase 4.
+Summary of what is left, given to the user on 2026-10-31 (waiting for them to pick what comes first):
+- **Badminton:** phone test of the coach (then tune from `logs/badminton-outcomes.jsonl`); beach venue steps 2–4
+  (beach outfits, shuttle look with 2 options, rackets); B4 2v2; sounds/music; intro + results screen (K4);
+  real 60 fps check on the MacBook Air with two phones; later: Badminton face on the hub (B5), other venues.
+- **Minigolf:** J2 (holes 6 Castle, 7 Banked U-turn) and J3 (8 Bridge, 9 Finale), then `HOLE_COUNT` 9 and maybe a
+  3/9 holes choice; 4c juice (hole intro, confetti, trails, camera nudge, sounds, vibration, podium, wind);
+  60 fps check; small open points (windmill tile's orange side walls, trees blocking the camera at bends).
+- **Shared:** Cube World K3 sounds, K4 dive-in/intro/results, K5 phone lobby screen; Phase 5 avatar editor
+  (AVATAR.md); Phase 6 polish (settings, playtest with friends).
