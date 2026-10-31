@@ -1,4 +1,4 @@
-import type { ClientMessage } from '../../shared/protocol.ts';
+import type { BadmintonCue, ClientMessage } from '../../shared/protocol.ts';
 import { TUNING } from '../../shared/tuning.ts';
 import { BadmintonSwingDetector } from './swing.ts';
 
@@ -15,6 +15,8 @@ export type LabScreen = {
   /** The player's swing sensitivity in percent (100 = normal). */
   setSensitivity: (percent: number) => void;
   onClockPong: (t: number, server: number) => void;
+  /** A hint from the big screen, e.g. "Smash chance!". */
+  onCue: (cue: BadmintonCue) => void;
 };
 
 /** The phone's clock in milliseconds since 1970, with sub-millisecond steps. */
@@ -208,6 +210,13 @@ export function initLabScreen(send: (msg: ClientMessage) => void): LabScreen {
     },
     setSensitivity(percent) {
       detector.playerSensitivity = percent / 100;
+    },
+    onCue(cue) {
+      if (cue !== 'smash_chance') return;
+      kindEl.textContent = '⚡ Smash chance!';
+      powerEl.textContent = '';
+      detailEl.textContent = 'A wobbly shuttle is coming: smash it hard!';
+      if ('vibrate' in navigator) navigator.vibrate([40, 60, 40]); // not supported on iPhone
     },
     onClockPong(t, server) {
       const now = phoneNow();

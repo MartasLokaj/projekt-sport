@@ -79,6 +79,10 @@ function showLab(on: boolean): void {
         feedbackNear: document.getElementById('badminton-feedback-near')!,
         feedbackFar: document.getElementById('badminton-feedback-far')!,
       });
+      badminton.onCue = (side, cue) => {
+        const playerId = badmintonIds[side === 1 ? 0 : 1];
+        if (playerId) send({ type: 'badminton_cue', playerId, cue });
+      };
       if (import.meta.env.DEV) Object.assign(window, { badminton }); // for debugging in the browser console
       badminton.start(...badmintonPlayers());
     } else lab.start();

@@ -170,6 +170,12 @@ export class Lobby {
         this.onBadmintonSwing?.({ player: seat.name, handedness: seat.handedness, sensitivity: seat.sensitivity, receivedAt, ...swing });
         return;
       }
+      case 'badminton_cue': {
+        if (!this.hosts.has(ws) || msg.cue !== 'smash_chance') return;
+        const socket = this.seats.get(msg.playerId)?.socket;
+        if (socket) send(socket, { type: 'badminton_cue', cue: msg.cue });
+        return;
+      }
       case 'host_stroke': {
         const current = this.match.currentPlayer;
         if (!this.hosts.has(ws) || current === null) return;

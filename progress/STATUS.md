@@ -189,7 +189,17 @@ running log of where we are, what the user decided, and what comes next).
   - **User test: "works well"**, but the drop was too brutal: now it passes 40 cm over the net
     (`dropNetClearance` 0.4, drop apex 0.8; short serve keeps `shortServeNetClearance` 0.12). Still met at most
     ~1 m from the net, so it can never be smashed (smash needs `smashFromDepth` 4.6).
-  - Next: step 2 (wobble shots + dive, fall, recovery) — plan first.
+  - **Mechanics step 2 (wobble + dive/fall/recovery) — built (user: "Ano, postav krok 2"), waiting for the
+    phone test.** Wobble (`wobble` shot: slower, higher, sways sideways, keeps `wobbleAimShare` of the aim, purple
+    dot trail `Trail` in `effects.ts`) when: power < `wobblePower` (not drops), timing outside `goodEarlyMs`/
+    `goodLateMs`, or a dive. Receiver sees "⚡ Smash chance!" in their half; the phone gets `badminton_cue`
+    (host → server → phone; text + Android vibration). `findContact` now returns `reach` (run / dive within
+    `diveReach` / none) and takes `availableAt` (after getting up). Swing far too early (> hitWindowEarly +
+    `diveExtraMs`), too late, out of reach, or no swing → dive and miss; a little too early or dive-reach → dive and
+    wobble. Dive = belly-flop along the dive direction + sand puff (`SandPuffs`), lying `recoveryMs` 900, can't
+    move/hit. CPU follows the same rules and plays wobbles (`cpu.wobbleChance`). Mac: W+Space = weak swing.
+    The old "Too early → swing again" is gone (now a dive).
+  - Next: user tests step 2 on the phone → step 3 (Super Smash) — plan first.
 
 ### GitHub and the cloud (2026-10-31)
 - Project is on GitHub: **private** repo `MartasLokaj/projekt-sport` (remote `origin`, branch `main`). `gh` CLI is in

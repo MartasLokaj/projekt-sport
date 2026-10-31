@@ -320,6 +320,9 @@ function connect(): void {
       case 'clock_pong':
         lab.onClockPong(msg.t, msg.server);
         break;
+      case 'badminton_cue':
+        lab.onCue(msg.cue);
+        break;
     }
   });
   socket.addEventListener('close', () => {

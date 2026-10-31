@@ -85,6 +85,9 @@ export type BadmintonSwing = {
   trace: number[][];
 };
 
+/** Hints from the big screen to one player's phone during badminton. */
+export type BadmintonCue = 'smash_chance';
+
 /** What happened to the ball after a stroke, reported by the host. */
 export type BallResult = 'rest' | 'holed' | 'out';
 
@@ -158,7 +161,9 @@ export type ClientMessage =
   | { type: 'lab_mode'; on: boolean }
   /** From a phone: what time is it on the server? t = the phone's clock when sent. */
   | { type: 'clock_ping'; t: number }
-  | ({ type: 'badminton_swing' } & BadmintonSwing);
+  | ({ type: 'badminton_swing' } & BadmintonSwing)
+  /** From the host: tell one player's phone something (it shows it and vibrates on Android). */
+  | { type: 'badminton_cue'; playerId: string; cue: BadmintonCue };
 
 /** Sent by the server. */
 export type ServerMessage =
@@ -179,4 +184,6 @@ export type ServerMessage =
   /** Answer to clock_ping: t = the phone's time it sent, server = the server's clock. */
   | { type: 'clock_pong'; t: number; server: number }
   /** Forwarded to the host page. receivedAt = server clock when it arrived (to show the delay). */
-  | ({ type: 'player_badminton_swing'; playerId: string; receivedAt: number } & BadmintonSwing);
+  | ({ type: 'player_badminton_swing'; playerId: string; receivedAt: number } & BadmintonSwing)
+  /** To one phone, from the host. */
+  | { type: 'badminton_cue'; cue: BadmintonCue };

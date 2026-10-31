@@ -412,6 +412,16 @@ export const TUNING = {
     reachHeight: 3.0,
     /** How high the racket reaches with the arm up, standing (our chibis are small: about 1.8 m). */
     standingReach: 1.8,
+    /**
+     * Dive: when a shuttle is out of running reach by at most diveReach (m), the character can still dive for it
+     * (and returns a wobble). A swing up to diveExtraMs earlier than the hit window also dives (and catches it
+     * as a wobble); earlier than that, the dive misses. A dive takes diveMs; afterwards, and after a complete
+     * miss, the character lies in the sand for recoveryMs (counted from the landing) and can't move or hit.
+     */
+    diveReach: 1.6,
+    diveExtraMs: 150,
+    diveMs: 350,
+    recoveryMs: 900,
     /** A jump takes this long to go up (and the same to come down, milliseconds). */
     jumpRiseMs: 320,
     /**
@@ -452,6 +462,8 @@ export const TUNING = {
     scatter: 1.0,
     /** Mac keyboard (testing without a phone): Space swings with this power, arrows held = aim. */
     keyPower: 60,
+    /** Mac keyboard: Space with W held swings this weakly (a wobble). */
+    keyWeakPower: 15,
 
     // Shots. depth = landing distance from the net (min at 0 % power, max at 100 %), apex = extra height of the arc (m),
     // seconds = flight time (slow at 0 % power, fast at 100 %), drag = how much the shuttle slows down in flight
@@ -479,13 +491,30 @@ export const TUNING = {
     shortShotScatterBack: 1.2,
     shortShotNetChanceBack: 0.15,
     shortShotScatterMid: 0.35,
+    /**
+     * Wobble shot: what a bad hit becomes (too weak, timing outside the Good part, or a dive). Slow, high and
+     * wobbly with a wavy trail, so the other side sees its chance coming. It mostly ignores the aim.
+     */
+    wobble: { depth: [4.0, 6.5], apex: 4.5, seconds: [2.9, 2.6], drag: 0.8 },
+    /** A swing weaker than this (percent) gives a wobble shot (not for drops). */
+    wobblePower: 25,
+    /** The Good part of the hit window: further than this early or late (but still a hit) gives a wobble (ms). */
+    goodEarlyMs: 220,
+    goodLateMs: 170,
+    /** How much of the aim a wobble keeps (0..1), how far it sways sideways (m) and how many sways per flight. */
+    wobbleAimShare: 0.3,
+    wobbleSway: 0.35,
+    wobbleSwaysPerFlight: 5,
+    /** Wavy trail behind a wobble shot: colour and length (ms). */
+    wobbleTrailColour: '#c45cff',
+    trailMs: 600,
     /** Every shot clears the net by at least this much (m). */
     netClearance: 0.35,
     /** A Perfect hit flies this much faster. */
     perfectSpeedup: 0.9,
 
     /** The computer: chance to return a normal shot and a smash, its power range (percent), and serve delay (ms). */
-    cpu: { hitChance: 0.85, smashReturnChance: 0.55, power: [30, 85], smashChance: 0.35, dropChance: 0.15, shortServeChance: 0.25, serveDelayMs: 1300, aimRange: 1 },
+    cpu: { hitChance: 0.85, smashReturnChance: 0.55, power: [30, 85], smashChance: 0.35, dropChance: 0.15, shortServeChance: 0.25, wobbleChance: 0.12, serveDelayMs: 1300, aimRange: 1 },
 
     /** Rally scoring: first to pointsToWin, but you must lead by winBy (4 : 4 → 5 : 4 → 6 : 4 wins). Pause after a point (ms). */
     pointsToWin: 4,

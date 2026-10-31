@@ -8,7 +8,7 @@ import { TUNING } from '../../shared/tuning.ts';
 //
 // Court coordinates: net along x at z = 0, the player's half at z > 0, the computer's at z < 0.
 
-export type ShotKind = 'serve' | 'shortServe' | 'clear' | 'lift' | 'drive' | 'smash' | 'drop';
+export type ShotKind = 'serve' | 'shortServe' | 'clear' | 'lift' | 'drive' | 'smash' | 'drop' | 'wobble';
 
 export class Flight {
   constructor(
@@ -37,12 +37,18 @@ export class Flight {
   }
 
   positionAt(u: number, out = new THREE.Vector3()): THREE.Vector3 {
-    const k = this.across(Math.min(1, Math.max(0, u)));
+    const t = Math.min(1, Math.max(0, u));
+    const k = this.across(t);
     out.set(
       this.from.x + (this.to.x - this.from.x) * k,
-      this.heightAt(Math.min(1, Math.max(0, u))),
+      this.heightAt(t),
       this.from.z + (this.to.z - this.from.z) * k,
     );
+    if (this.kind === 'wobble') {
+      // Sways from side to side, most in the middle of the flight.
+      const cfg = TUNING.badminton;
+      out.x += Math.sin(t * Math.PI * 2 * cfg.wobbleSwaysPerFlight) * Math.sin(t * Math.PI) * cfg.wobbleSway;
+    }
     return out;
   }
 
@@ -102,7 +108,8 @@ export function makeShot(
   // The hitter looks towards the other half: for the player (+z half, looking at -z) "right" is +x,
   // for the computer (looking at +z) "right" is -x.
   const scatter = (1 - quality) * cfg.scatter + extraScatter;
-  const worldAim = side * aim * cfg.aimReach; // -1..1 across the court in world x
+  const aimShare = kind === 'wobble' ? cfg.wobbleAimShare : 1;
+  const worldAim = side * aim * aimShare * cfg.aimReach; // -1..1 across the court in world x
   const [lo, hi] = xRange;
   const x = lo + ((worldAim + 1) / 2) * (hi - lo) + (Math.random() * 2 - 1) * scatter;
   const z = -side * Math.max(0.4, depth + (Math.random() * 2 - 1) * scatter * 0.5);
@@ -141,31 +148,40 @@ export type Contact = {
    * drive = about chest height (a flat, fast shot); lift = low (underhand).
    */
   stroke: 'overhead' | 'drive' | 'lift';
+  /** run = can get there running; dive = only with a dive (a wobble at best); none = out of reach. */
+  reach: 'run' | 'dive' | 'none';
 };
 
 /**
- * Where the receiver on `side`, now standing at `at`, meets this flight. Like real players it takes the
- * shuttle as early as it can: the first point in its half that is low enough to reach and that it can
- * get to in time at a normal run (so it does not dash at the net to block a smash). Failing that, the
- * first point it can reach at full sprint; failing that, just before the shuttle lands.
+ * Where the receiver on `side`, standing at `at` and free to move from `availableAt` (host clock; later
+ * than now while it gets up after a fall), meets this flight. Like real players it takes the shuttle as
+ * early as it can: the first point in its half that is low enough to reach and that it can get to in time
+ * at a normal run (so it does not dash at the net to block a smash). Failing that, the first point it can
+ * reach at full sprint; failing that, the first one a dive can reach; failing that, out of reach.
  */
-export function findContact(flight: Flight, side: number, at: THREE.Vector3, now: number): Contact {
+export function findContact(flight: Flight, side: number, at: THREE.Vector3, availableAt: number): Contact {
   const cfg = TUNING.badminton;
   const p = new THREE.Vector3();
-  const earliest = (speed: number): number | null => {
+  const earliest = (speed: number, extraReach: number): number | null => {
     for (let i = 0; i <= 200; i++) {
       const u = i / 200;
       flight.positionAt(u, p);
       if (Math.sign(p.z) !== side || Math.abs(p.z) < cfg.minContactDepth) continue;
       if (p.y > cfg.reachHeight || p.y < cfg.lowestContact) continue;
       if (Math.abs(p.z) > cfg.courtHalfLength + 0.6 || Math.abs(p.x) > cfg.courtHalfWidth + 0.7) continue;
-      const runSeconds = Math.hypot(p.x - at.x, p.z - at.z) / speed;
-      if (flight.timeAt(u) - now >= cfg.reactionMs + runSeconds * 1000) return u;
+      const runSeconds = Math.max(0, Math.hypot(p.x - at.x, p.z - at.z) - extraReach) / speed;
+      if (flight.timeAt(u) - availableAt >= cfg.reactionMs + runSeconds * 1000) return u;
     }
     return null;
   };
-  const chosen = earliest(cfg.runSpeed) ?? earliest(cfg.maxRunSpeed) ?? 0.98;
+  let reach: Contact['reach'] = 'run';
+  let chosen = earliest(cfg.runSpeed, 0) ?? earliest(cfg.maxRunSpeed, 0);
+  if (chosen === null) {
+    chosen = earliest(cfg.maxRunSpeed, cfg.diveReach);
+    reach = chosen === null ? 'none' : 'dive';
+  }
+  chosen ??= 0.98;
   const position = flight.positionAt(chosen);
   const stroke = position.y >= cfg.overheadFrom ? 'overhead' : position.y >= cfg.driveFrom ? 'drive' : 'lift';
-  return { position, time: flight.timeAt(chosen), stroke };
+  return { position, time: flight.timeAt(chosen), stroke, reach };
 }

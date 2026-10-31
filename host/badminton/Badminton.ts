@@ -3,6 +3,7 @@ import { SKIN_TONES, type PlayerInfo } from '../../shared/protocol.ts';
 import { TUNING } from '../../shared/tuning.ts';
 import { Character } from '../game/character.ts';
 import { buildCourt, buildRacket, buildShuttle } from './court.ts';
+import { SandPuffs, Trail } from './effects.ts';
 import { findContact, makeShot, type Contact, type Flight, type ShotKind } from './shuttle.ts';
 
 // Badminton (phases B2–B3): two sides of the net, each played by a phone or by the computer.
@@ -17,6 +18,9 @@ import { findContact, makeShot, type Contact, type Flight, type ShotKind } from 
 // - Shot type comes from where the character meets the shuttle (see findContact).
 // - Rally scoring: every rally gives a point, the winner serves, first to pointsToWin.
 // - SHORT button on the phone (Shift on the Mac): a drop shot just over the net, or a short serve.
+// - A bad hit (too weak, timing outside the Good part, or a dive) becomes a slow, wobbly "wobble" shot with
+//   a wavy trail: the other side's chance. A swing far too early, a shuttle out of reach or a complete miss
+//   makes the character dive and fall in the sand; it needs recoveryMs to get up.
 // Mac keyboard for testing: Space swings for the near player (hold ← or → to aim), ↑ swings for the
 // far player, Enter plays again after a match.
 
@@ -48,6 +52,9 @@ type Athlete = {
   swing: { stroke: Stroke | 'serve'; start: number } | null;
   pose: { x: number; z: number };
   score: number;
+  /** Diving and lying in the sand: when it started and which way (world, flat). Can't move or hit until busyUntil. */
+  down: { start: number; dir: THREE.Vector3; landed: boolean } | null;
+  busyUntil: number;
 };
 
 export type BadmintonHud = {
@@ -102,6 +109,10 @@ export class Badminton {
   private pointEndsAt = 0;
   private cpuServeAt = 0;
   private readonly keys = new Set<string>();
+  private readonly trail = new Trail();
+  private readonly puffs = new SandPuffs(TUNING.badminton.sandColour);
+  /** Tells a phone something (e.g. "Smash chance!"); set by host/main.ts. */
+  onCue: ((side: Side, cue: 'smash_chance') => void) | null = null;
 
   constructor(
     private readonly container: HTMLElement,
@@ -132,7 +143,7 @@ export class Badminton {
     this.shadow.rotation.x = -Math.PI / 2;
     this.shuttle.scale.setScalar(cfg.shuttleScale);
     this.shadow.scale.setScalar(cfg.shuttleScale);
-    this.scene.add(this.shuttle, this.shadow);
+    this.scene.add(this.shuttle, this.shadow, this.trail.mesh, this.puffs.group);
 
     this.near = this.makeAthlete(1, hud.feedbackNear);
     this.far = this.makeAthlete(-1, hud.feedbackFar);
@@ -186,7 +197,31 @@ export class Badminton {
       return;
     }
     if (this.phase !== 'rally' || this.receiver !== side || this.decided || !this.contact || !this.flight) return;
-    const off = at - this.contact.time;
+    if (now < a.busyUntil) return; // still lying in the sand
+    const contact = this.contact;
+    const off = at - contact.time;
+    // Out of reach, far too early or too late: a dive into the sand, and a miss.
+    const missedBy =
+      contact.reach === 'none'
+        ? 'Out of reach!'
+        : off < -(cfg.hitWindowEarlyMs + cfg.diveExtraMs)
+          ? `Way too early! (${Math.round(-off)} ms)`
+          : off > cfg.hitWindowMs
+            ? `Too late! (${Math.round(off)} ms)`
+            : null;
+    if (missedBy) {
+      this.showFeedback(a, missedBy);
+      this.dive(a, now, contact.position);
+      this.miss();
+      return;
+    }
+    // Only just reachable, or a little too early: a dive that just catches it, as a wobble shot.
+    if (contact.reach === 'dive' || off < -cfg.hitWindowEarlyMs) {
+      this.dive(a, now, contact.position);
+      this.hit(a, power, aim, 0.3, contact.stroke, now, false, true);
+      this.showFeedback(a, 'Dive! · Wobble');
+      return;
+    }
     // The character only jumps with the player's own swing, as high as the shuttle is at that moment:
     // swing early and it jumps (and may miss), swing late and the shuttle is lower, so it stays on the ground.
     const there = this.flight.positionAt(this.flight.progressAt(at));
@@ -194,21 +229,16 @@ export class Badminton {
     const jump = Math.min(cfg.reachHeight, there.y) - cfg.standingReach;
     a.jump = jump > 0 ? { height: jump, peak: now + cfg.swingJumpRiseMs, rise: cfg.swingJumpRiseMs } : null;
     a.swing = { stroke, start: now + (jump > 0 ? cfg.swingJumpRiseMs - 140 : 0) };
-    if (off < -cfg.hitWindowEarlyMs) {
-      this.showFeedback(a, `Too early! (${Math.round(-off)} ms)`);
-      return;
-    }
-    if (off > cfg.hitWindowMs) {
-      this.showFeedback(a, `Too late! (${Math.round(off)} ms)`);
-      this.miss();
-      return;
-    }
     const size = Math.abs(off);
     const window = off < 0 ? cfg.hitWindowEarlyMs : cfg.hitWindowMs;
     const quality = size <= cfg.perfectMs ? 1 : 1 - (size - cfg.perfectMs) / (window - cfg.perfectMs);
-    const kind = this.hit(a, power, aim, quality, stroke, jump > 0 ? now + cfg.swingJumpRiseMs : now, short);
-    const verdict = quality >= 1 ? 'Perfect!' : `Good · ${Math.round(size)} ms ${off < 0 ? 'early' : 'late'}`;
-    this.showFeedback(a, `${shotName(kind)} · ${verdict}`);
+    // A hit outside the Good part of the window, or a weak swing (not a drop), wobbles.
+    const offGood = off < -cfg.goodEarlyMs || off > cfg.goodLateMs;
+    const weak = !short && power < cfg.wobblePower;
+    const kind = this.hit(a, power, aim, quality, stroke, jump > 0 ? now + cfg.swingJumpRiseMs : now, short, offGood || weak);
+    const timing = quality >= 1 ? 'Perfect!' : `${Math.round(size)} ms ${off < 0 ? 'early' : 'late'}`;
+    const verdict = kind === 'wobble' ? `Wobble · ${weak ? 'too soft' : timing}` : quality >= 1 ? 'Perfect!' : `Good · ${timing}`;
+    this.showFeedback(a, kind === 'wobble' ? verdict : `${shotName(kind)} · ${verdict}`);
   }
 
   // ---------- Rally ----------
@@ -227,6 +257,11 @@ export class Badminton {
     this.contact = null;
     this.decided = false;
     this.pendingHit = null;
+    for (const a of [this.near, this.far]) {
+      a.down = null;
+      a.busyUntil = 0;
+      a.bob.rotation.set(0, 0, 0);
+    }
     const server = this.athlete(this.server);
     const other = this.athlete(-this.server as Side);
     // Even score: serve from the right service court, odd: from the left (right = +x for the near side, -x for the far side).
@@ -257,12 +292,29 @@ export class Badminton {
    * The return shot starts from wherever the shuttle is then: the shuttle never slows down to wait.
    * short: the SHORT button was held, a drop shot from any height (less precise from the back of the court).
    */
-  private hit(athlete: Athlete, power: number, aim: number, quality: number, stroke: Stroke, when: number, short: boolean): ShotKind {
+  private hit(
+    athlete: Athlete,
+    power: number,
+    aim: number,
+    quality: number,
+    stroke: Stroke,
+    when: number,
+    short: boolean,
+    wobble = false,
+  ): ShotKind {
     const cfg = TUNING.badminton;
     const there = this.flight!.positionAt(this.flight!.progressAt(when));
     // A smash only from the back of the court; elsewhere a hard overhead is a clear.
     const back = Math.abs(there.z) >= cfg.smashFromDepth;
-    const kind: ShotKind = short ? 'drop' : stroke !== 'overhead' ? stroke : back && power >= cfg.smashPower ? 'smash' : 'clear';
+    const kind: ShotKind = wobble
+      ? 'wobble'
+      : short
+        ? 'drop'
+        : stroke !== 'overhead'
+          ? stroke
+          : back && power >= cfg.smashPower
+            ? 'smash'
+            : 'clear';
     const extraScatter = short ? (back ? cfg.shortShotScatterBack : cfg.shortShotScatterMid) : 0;
     const netChance = short && back ? cfg.shortShotNetChanceBack : 0;
     this.decided = true;
@@ -292,8 +344,12 @@ export class Badminton {
       this.decided = true;
       return;
     }
-    this.contact = findContact(flight, this.receiver, receiver.wrapper.position, Date.now());
+    this.contact = findContact(flight, this.receiver, receiver.wrapper.position, Math.max(Date.now(), receiver.busyUntil));
     this.decided = false;
+    if (flight.kind === 'wobble' && receiver.human) {
+      this.showFeedback(receiver, '⚡ Smash chance!');
+      this.onCue?.(receiver.side, 'smash_chance');
+    }
     const spot = this.contact.position.clone();
     spot.x -= receiver.handSign * cfg.reach[this.contact.stroke];
     spot.y = 0;
@@ -301,6 +357,62 @@ export class Badminton {
     // The computer jumps by itself; a player's character only jumps with the player's swing (see onSwing).
     const jump = this.contact.position.y - cfg.standingReach;
     receiver.jump = jump > 0 && !receiver.human ? { height: jump, peak: this.contact.time, rise: cfg.jumpRiseMs } : null;
+  }
+
+  /** The athlete dives towards `towards` (flat), lands in the sand and lies there for recoveryMs. */
+  private dive(a: Athlete, now: number, towards: THREE.Vector3): void {
+    const cfg = TUNING.badminton;
+    const dir = towards.clone().sub(a.wrapper.position).setY(0);
+    if (dir.lengthSq() < 1e-4) dir.set(0, 0, -a.side);
+    a.down = { start: now, dir: dir.normalize(), landed: false };
+    a.busyUntil = now + cfg.diveMs + cfg.recoveryMs;
+    a.jump = null;
+    a.swing = null;
+    a.target.copy(a.wrapper.position).setY(0);
+    a.deadline = null;
+  }
+
+  /**
+   * Dive animation: a belly-flop along the dive direction, a little sand puff on landing, lying still,
+   * then a quick scramble back up. Returns true while it is busy with it (no running or bouncing).
+   */
+  private updateDown(a: Athlete, now: number, dt: number): boolean {
+    const cfg = TUNING.badminton;
+    const d = a.down;
+    if (!d) return false;
+    const t = now - d.start;
+    const getUp = 280;
+    let pitch: number;
+    if (t < cfg.diveMs) {
+      const k = t / cfg.diveMs;
+      pitch = 1.45 * easeOut(k);
+      a.wrapper.position.addScaledVector(d.dir, (cfg.diveReach / (cfg.diveMs / 1000)) * dt);
+      a.bob.position.y = Math.sin(k * Math.PI) * 0.35;
+    } else {
+      if (!d.landed) {
+        d.landed = true;
+        this.puffs.burst(a.wrapper.position.clone().addScaledVector(d.dir, 0.6), now);
+      }
+      a.bob.position.y = 0;
+      const upFrom = a.busyUntil - getUp;
+      pitch = now < upFrom ? 1.45 : 1.45 * (1 - Math.min(1, (now - upFrom) / getUp));
+    }
+    if (now >= a.busyUntil) {
+      a.down = null;
+      a.bob.rotation.set(0, 0, 0);
+      a.target.copy(a.wrapper.position).setY(0);
+      return false;
+    }
+    // Turn the body towards the dive (in the character's own, possibly mirrored, frame) and tip it forward.
+    const local = d.dir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), -a.wrapper.rotation.y);
+    if (a.wrapper.scale.x < 0) local.x = -local.x;
+    a.bob.rotation.order = 'YXZ';
+    a.bob.rotation.set(pitch, Math.atan2(local.x, local.z), 0);
+    a.pose = { x: -2.8, z: -0.4 }; // arms out in front, like a superhero
+    a.character.armPose = a.pose;
+    a.character.update(dt);
+    a.wrapper.position.y = 0;
+    return true;
   }
 
   /** Nobody hits it: the shuttle just flies on and lands. */
@@ -313,9 +425,16 @@ export class Badminton {
     const cfg = TUNING.badminton.cpu;
     const contact = this.contact!;
     const incomingSmash = this.flight?.kind === 'smash';
+    if (now < cpu.busyUntil) return; // still getting up: the shuttle will just fall
     cpu.swing = { stroke: contact.stroke, start: now };
-    if (Math.random() > (incomingSmash ? cfg.smashReturnChance : cfg.hitChance)) {
+    const hits = contact.reach !== 'none' && Math.random() <= (incomingSmash ? cfg.smashReturnChance : cfg.hitChance);
+    if (!hits || contact.reach === 'dive') this.dive(cpu, now, contact.position);
+    if (!hits) {
       this.miss();
+      return;
+    }
+    if (contact.reach === 'dive') {
+      this.hit(cpu, 40, 0, 0.3, contact.stroke, now, false, true);
       return;
     }
     let power = cfg.power[0] + Math.random() * (cfg.power[1] - cfg.power[0]);
@@ -324,7 +443,8 @@ export class Badminton {
       power = Math.random() < cfg.smashChance ? Math.max(power, smashPower + 5) : Math.min(power, smashPower - 5);
     }
     const short = Math.random() < cfg.dropChance;
-    this.hit(cpu, power, (Math.random() * 2 - 1) * cfg.aimRange, 0.5 + Math.random() * 0.5, contact.stroke, now, short);
+    const wobble = Math.random() < cfg.wobbleChance;
+    this.hit(cpu, power, (Math.random() * 2 - 1) * cfg.aimRange, 0.5 + Math.random() * 0.5, contact.stroke, now, short, wobble);
   }
 
   private pointTo(winner: Side): void {
@@ -363,9 +483,13 @@ export class Badminton {
       if (this.pendingHit && now >= this.pendingHit.when) this.launchPendingHit();
       if (!this.decided && this.contact) {
         const receiver = this.athlete(this.receiver);
-        if (!receiver.human && now >= this.contact.time) this.cpuTurn(receiver, now);
+        if (!receiver.human && now >= this.contact.time) {
+          if (now < receiver.busyUntil) this.miss();
+          else this.cpuTurn(receiver, now);
+        }
         else if (receiver.human && now > this.contact.time + cfg.hitWindowMs + cfg.lateGraceMs) {
           this.showFeedback(receiver, 'Missed!');
+          if (now >= receiver.busyUntil) this.dive(receiver, now, this.shuttle.position);
           this.miss();
         }
       }
@@ -378,6 +502,9 @@ export class Badminton {
     }
 
     this.updateShuttle(now);
+    const wobbling = this.phase === 'rally' && this.flight?.kind === 'wobble' && this.flight.progressAt(now) < 1;
+    this.trail.update(this.shuttle.position, now, wobbling, cfg.wobbleTrailColour, cfg.trailMs);
+    this.puffs.update(now, dt);
     for (const a of [this.near, this.far]) {
       this.updateAthlete(a, now, dt);
       if (now > a.feedbackUntil) a.feedback.hidden = true;
@@ -430,6 +557,7 @@ export class Badminton {
 
   private updateAthlete(a: Athlete, now: number, dt: number): void {
     const cfg = TUNING.badminton;
+    if (this.updateDown(a, now, dt)) return;
     // Run towards the target, fast enough to get there in time.
     const toTarget = a.target.clone().sub(a.wrapper.position).setY(0);
     const distance = toTarget.length();
@@ -524,6 +652,8 @@ export class Badminton {
       swing: null,
       pose: { ...READY_POSE },
       score: 0,
+      down: null,
+      busyUntil: 0,
     };
   }
 
@@ -596,7 +726,8 @@ export class Badminton {
     if (e.key === ' ') {
       e.preventDefault();
       const aim = (this.keys.has('ArrowRight') ? 0.7 : 0) - (this.keys.has('ArrowLeft') ? 0.7 : 0);
-      this.onSwing(1, Date.now(), TUNING.badminton.keyPower, aim, e.shiftKey);
+      const power = this.keys.has('w') || this.keys.has('W') ? TUNING.badminton.keyWeakPower : TUNING.badminton.keyPower;
+      this.onSwing(1, Date.now(), power, aim, e.shiftKey);
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       this.onSwing(-1, Date.now(), TUNING.badminton.keyPower, 0, e.shiftKey);
@@ -617,7 +748,7 @@ function strokeAt(height: number): Stroke {
 }
 
 function shotName(kind: ShotKind): string {
-  return { serve: 'Serve', shortServe: 'Short serve', clear: 'Clear', lift: 'Lift', drive: 'Drive', smash: 'Smash!', drop: 'Drop' }[kind];
+  return { serve: 'Serve', shortServe: 'Short serve', clear: 'Clear', lift: 'Lift', drive: 'Drive', smash: 'Smash!', drop: 'Drop', wobble: 'Wobble' }[kind];
 }
 
 function easeOut(t: number): number {
