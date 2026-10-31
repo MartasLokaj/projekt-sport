@@ -9,7 +9,7 @@ import type { PlayerInfo } from '../../shared/protocol.ts';
 import { TUNING } from '../../shared/tuning.ts';
 import { Character } from '../game/character.ts';
 import { loadForest } from '../game/vegetation.ts';
-import { buildFace, canvasTexture, FACES, seededRandom, type FaceInfo, type FaceKit } from './faces.ts';
+import { buildFace, canvasTexture, FACES, seededRandom, type FaceInfo, type FaceKit, type Tick } from './faces.ts';
 
 // Cube World: the lobby is a cute cube floating in starry space, one little world per side for each
 // game. Drag it with the mouse to spin it round. Click a side (or use the arrows) to choose that game:
@@ -32,8 +32,18 @@ export class Hub {
   private readonly planet = new THREE.Group();
   private readonly spinner = new THREE.Group();
   private readonly halo: THREE.Sprite;
-  private readonly stars: THREE.Points;
+  /** Star layers, nearest first: they turn a little with the cube, the near ones more (depth). */
+  private readonly starLayers: THREE.Points[];
+  private readonly dust: THREE.Points;
   private readonly faces: THREE.Group[] = [];
+  /** A glowing frame around each side, lit while that side's game is chosen. */
+  private readonly frames: THREE.Mesh[] = [];
+  private readonly haloColour = new THREE.Color(TUNING.hub.glowColour);
+  /** Seconds since a game was chosen (drives the little pop of the cube). */
+  private chosenAge = 10;
+  /** Fingers on the screen, for the two-finger pinch zoom. */
+  private readonly touches = new Map<number, { x: number; y: number }>();
+  private pinch = 0;
   /** For every side: the cube's pose that puts that side up, tipped towards the camera. */
   private readonly poses: THREE.Quaternion[] = [];
   private readonly guests = new Map<string, Guest>();
@@ -83,10 +93,11 @@ export class Hub {
     this.camera.position.set(0, c.cameraHeight, c.cameraDistance);
     this.camera.lookAt(0, 0, 0);
 
-    this.scene.add(makeSky());
-    this.stars = makeStars();
-    this.scene.add(this.stars, ...makePlanets());
-    this.halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(c.glowColour), transparent: true, depthWrite: false, opacity: 0.55 }));
+    this.scene.add(makeSky(), ...makeNebula());
+    this.starLayers = [makeStars(0, 0.55, 1.5), makeStars(1, 0.35, 1.0), makeStars(2, 0.1, 0.7)];
+    this.dust = makeDust();
+    this.scene.add(...this.starLayers, this.dust, ...makePlanets());
+    this.halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('#ffffff'), color: c.glowColour, transparent: true, depthWrite: false, opacity: 0.55 }));
     this.halo.scale.setScalar(c.cubeSize * 3);
     this.halo.renderOrder = -1;
     this.scene.add(this.halo);
@@ -105,7 +116,7 @@ export class Hub {
     const size = c.cubeSize;
     const body = new THREE.Mesh(
       new RoundedBoxGeometry(size, size, size, 6, c.cubeRounding),
-      new THREE.MeshStandardMaterial({ color: c.cubeColour, roughness: 0.35 }),
+      new THREE.MeshPhysicalMaterial({ color: c.cubeColour, roughness: 0.4, clearcoat: 0.6, clearcoatRoughness: 0.3, sheen: 0.4, sheenColor: new THREE.Color('#ffffff') }),
     );
     body.receiveShadow = true;
     this.spinner.add(body);
@@ -120,6 +131,15 @@ export class Hub {
       world.position.copy(normal).multiplyScalar(size / 2 + 0.1);
       world.userData.face = i;
       this.faces.push(world);
+      const frame = new THREE.Mesh(
+        frameGeometry(size - 0.25, size - 0.62, 0.55),
+        new THREE.MeshBasicMaterial({ color: face.accent, transparent: true, opacity: 0, depthWrite: false, toneMapped: false }),
+      );
+      frame.rotation.x = -Math.PI / 2;
+      frame.position.y = 0.16;
+      frame.renderOrder = 2;
+      world.add(frame);
+      this.frames.push(frame);
       this.spinner.add(world);
       // Turning the cube by the opposite of that puts the side up, facing us; then tip it towards us.
       this.poses.push(tilt.clone().multiply(world.quaternion.clone().invert()));
@@ -164,6 +184,7 @@ export class Hub {
     const index = id === null ? -1 : FACES.findIndex((f) => f.id === id);
     if (index === this.chosen) return;
     this.chosen = index;
+    this.chosenAge = 0;
     this.spin.set(0, 0);
     this.clearGuests();
     this.addGuests();
@@ -200,6 +221,8 @@ export class Hub {
   frame(dt = Math.min(this.clock.getDelta(), 0.05)): void {
     const c = TUNING.hub;
     this.time += dt;
+    this.chosenAge += dt;
+    const before = this.spinner.quaternion.clone();
     if (this.chosen >= 0) {
       // Turn the chosen side up towards us.
       this.spinner.quaternion.slerp(this.poses[this.chosen], 1 - Math.exp(-c.turnSpeed * dt));
@@ -215,7 +238,32 @@ export class Hub {
     this.camera.lookAt(0, 0, 0);
     this.planet.position.y = Math.sin(this.time * c.bobSpeed) * c.bobHeight;
     this.halo.position.copy(this.planet.position).add(new THREE.Vector3(0, 0, -c.cubeSize));
-    this.stars.rotation.y += dt * 0.01;
+
+    // The little worlds move; the chosen side's frame glows in its game's colour, and so does the halo.
+    for (const face of this.faces) (face.userData.tick as Tick | undefined)?.(this.time, dt);
+    this.frames.forEach((frame, i) => {
+      const material = frame.material as THREE.MeshBasicMaterial;
+      const want = i === this.chosen ? c.frameOpacity * (0.8 + 0.2 * Math.sin(this.time * 3)) : 0;
+      material.opacity += (want - material.opacity) * (1 - Math.exp(-6 * dt));
+      frame.visible = material.opacity > 0.01;
+    });
+    this.haloColour.lerp(new THREE.Color(this.chosen >= 0 ? FACES[this.chosen].accent : c.glowColour), 1 - Math.exp(-3 * dt));
+    this.halo.material.color.copy(this.haloColour);
+    // A small happy pop when a game is chosen.
+    const pop = this.chosenAge < 0.5 ? Math.sin((this.chosenAge / 0.5) * Math.PI) * c.choosePop : 0;
+    this.spinner.scale.setScalar(1 + pop);
+
+    // Depth: when the cube turns, the near stars turn a little with it and the far ones barely.
+    const turned = before.invert().premultiply(this.spinner.quaternion);
+    const yaw = new THREE.Euler().setFromQuaternion(turned, 'YXZ');
+    this.starLayers.forEach((layer, i) => {
+      const depth = c.starParallax[i];
+      layer.rotation.y += yaw.y * depth + dt * 0.006;
+      layer.rotation.x += yaw.x * depth;
+      (layer.material as THREE.ShaderMaterial).uniforms.time.value = this.time;
+    });
+    this.dust.rotation.y += dt * 0.04;
+    (this.dust.material as THREE.ShaderMaterial).uniforms.time.value = this.time;
 
     // Characters wait until their side has (nearly) turned up, then pop up one after another.
     const settled = this.chosen >= 0 && this.spinner.quaternion.angleTo(this.poses[this.chosen]) < 0.2;
@@ -253,13 +301,36 @@ export class Hub {
   /** Drag to spin the cube; a click (no drag) on a side chooses that game, a click into space lets go. */
   private listenToPointer(): void {
     const canvas = this.renderer.domElement;
+    const zoomTo = (distance: number): void => {
+      const c = TUNING.hub;
+      this.targetDistance = THREE.MathUtils.clamp(distance, c.zoomMin, c.zoomMax);
+    };
+    const spread = (): number => {
+      const [a, b] = [...this.touches.values()];
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    };
     canvas.addEventListener('pointerdown', (e) => {
+      this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (this.touches.size === 2) {
+        // A second finger: stop turning, pinch to zoom instead.
+        this.drag = null;
+        this.spin.set(0, 0);
+        this.pinch = spread();
+        return;
+      }
       canvas.setPointerCapture(e.pointerId);
       canvas.style.cursor = 'grabbing';
       this.drag = { x: e.clientX, y: e.clientY, moved: 0, time: performance.now() };
       this.spin.set(0, 0);
     });
     canvas.addEventListener('pointermove', (e) => {
+      if (this.touches.has(e.pointerId)) this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (this.touches.size === 2) {
+        const now = spread();
+        if (this.pinch > 0 && now > 0) zoomTo(this.targetDistance * (this.pinch / now));
+        this.pinch = now;
+        return;
+      }
       if (!this.drag) return;
       const dx = e.clientX - this.drag.x;
       const dy = e.clientY - this.drag.y;
@@ -274,6 +345,7 @@ export class Hub {
       Object.assign(this.drag, { x: e.clientX, y: e.clientY, time: performance.now() });
     });
     const release = (e: PointerEvent): void => {
+      this.touches.delete(e.pointerId);
       if (!this.drag) return;
       const click = this.drag.moved < 6;
       // A drag that stopped before letting go doesn't keep spinning.
@@ -289,7 +361,7 @@ export class Hub {
         e.preventDefault();
         const c = TUNING.hub;
         const amount = e.deltaY * (e.ctrlKey ? 4 : 1) * c.zoomSpeed; // a pinch sends small steps, so it counts more
-        this.targetDistance = THREE.MathUtils.clamp(this.targetDistance * Math.exp(amount), c.zoomMin, c.zoomMax);
+        zoomTo(this.targetDistance * Math.exp(amount));
       },
       { passive: false },
     );
@@ -384,16 +456,102 @@ function makeSky(): THREE.Mesh {
   );
 }
 
-function makeStars(): THREE.Points {
-  const random = seededRandom(7);
+/** One layer of stars that twinkle (each at its own pace). Layer 0 is the nearest and brightest. */
+function makeStars(layer: number, share: number, size: number): THREE.Points {
+  const random = seededRandom(7 + layer * 13);
+  const count = Math.round(TUNING.hub.stars * share);
   const positions: number[] = [];
-  for (let k = 0; k < TUNING.hub.stars; k++) {
-    const v = new THREE.Vector3(random() - 0.5, random() - 0.5, random() - 0.5).normalize().multiplyScalar(120 + random() * 60);
+  const phases: number[] = [];
+  const radius = 110 + layer * 30;
+  for (let k = 0; k < count; k++) {
+    const v = new THREE.Vector3(random() - 0.5, random() - 0.5, random() - 0.5).normalize().multiplyScalar(radius + random() * 20);
     positions.push(v.x, v.y, v.z);
+    phases.push(random() * 100);
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  return new THREE.Points(geometry, new THREE.PointsMaterial({ color: '#ffffff', size: 1.1, sizeAttenuation: true }));
+  geometry.setAttribute('phase', new THREE.Float32BufferAttribute(phases, 1));
+  return new THREE.Points(geometry, pointMaterial(size * 2.2, '#ffffff', 0.35, 1.0, false));
+}
+
+/** Soft glowing specks drifting slowly round the cube. */
+function makeDust(): THREE.Points {
+  const random = seededRandom(31);
+  const positions: number[] = [];
+  const phases: number[] = [];
+  for (let k = 0; k < TUNING.hub.dust; k++) {
+    const a = random() * Math.PI * 2;
+    const r = 6 + random() * 9;
+    positions.push(Math.cos(a) * r, (random() - 0.5) * 10, Math.sin(a) * r);
+    phases.push(random() * 100);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('phase', new THREE.Float32BufferAttribute(phases, 1));
+  return new THREE.Points(geometry, pointMaterial(9, TUNING.hub.glowColour, 0.0, 0.5, true));
+}
+
+/** Round soft points whose brightness breathes between `low` and `high`. */
+function pointMaterial(size: number, colour: string, low: number, high: number, attenuate: boolean): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    uniforms: { time: { value: 0 }, colour: { value: new THREE.Color(colour) }, size: { value: size * Math.min(window.devicePixelRatio, 2) } },
+    vertexShader: `
+      attribute float phase; uniform float time; uniform float size; varying float glow;
+      void main() {
+        glow = mix(${low.toFixed(2)}, ${high.toFixed(2)}, 0.5 + 0.5 * sin(time * (0.6 + fract(phase) * 1.8) + phase));
+        vec4 view = modelViewMatrix * vec4(position, 1.0);
+        gl_Position = projectionMatrix * view;
+        gl_PointSize = ${attenuate ? 'size * 10.0 / -view.z' : 'size'};
+      }`,
+    fragmentShader: `
+      uniform vec3 colour; varying float glow;
+      void main() {
+        float d = length(gl_PointCoord - 0.5) * 2.0;
+        float a = smoothstep(1.0, 0.0, d);
+        gl_FragColor = vec4(colour * glow, a * a * glow);
+      }`,
+  });
+}
+
+/** Big faint clouds of colour far behind the cube, so space has depth without stealing the show. */
+function makeNebula(): THREE.Sprite[] {
+  const clouds: [string, number, number, number, number][] = [
+    ['#6b3fd1', -70, 25, -120, 120],
+    ['#2a6ad8', 80, -20, -130, 110],
+    ['#c4479b', 30, 45, -150, 90],
+  ];
+  return clouds.map(([colour, x, y, z, scale]) => {
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: glowTexture(colour), transparent: true, opacity: TUNING.hub.nebulaOpacity, depthWrite: false, blending: THREE.AdditiveBlending }),
+    );
+    sprite.position.set(x, y, z);
+    sprite.scale.setScalar(scale);
+    return sprite;
+  });
+}
+
+/** A square ring (a frame around one side of the cube) with rounded corners. */
+function frameGeometry(outer: number, inner: number, corner: number): THREE.ShapeGeometry {
+  const rounded = (size: number, r: number): THREE.Shape | THREE.Path => {
+    const h = size / 2;
+    const shape = new THREE.Shape();
+    shape.moveTo(-h + r, -h);
+    shape.lineTo(h - r, -h);
+    shape.quadraticCurveTo(h, -h, h, -h + r);
+    shape.lineTo(h, h - r);
+    shape.quadraticCurveTo(h, h, h - r, h);
+    shape.lineTo(-h + r, h);
+    shape.quadraticCurveTo(-h, h, -h, h - r);
+    shape.lineTo(-h, -h + r);
+    shape.quadraticCurveTo(-h, -h, -h + r, -h);
+    return shape;
+  };
+  const shape = rounded(outer, corner) as THREE.Shape;
+  shape.holes.push(rounded(inner, corner * 0.6) as THREE.Path);
+  return new THREE.ShapeGeometry(shape, 12);
 }
 
 /** Two little pastel planets far away. */

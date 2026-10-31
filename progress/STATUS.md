@@ -1,6 +1,6 @@
 # Project status — read this first in a new chat
 
-Last updated: 2026-10-30. Read `CLAUDE.md` and `SPEC.md` too (SPEC is the source of truth; this file is the
+Last updated: 2026-10-31. Read `CLAUDE.md` and `SPEC.md` too (SPEC is the source of truth; this file is the
 running log of where we are, what the user decided, and what comes next).
 
 ## Where we are
@@ -89,6 +89,33 @@ running log of where we are, what the user decided, and what comes next).
 - **Then:** the real hub: game registry, cube scene in `host/`, face
   rotation with arrows/Enter/click and phone swipe, dive transition into the game, "Back to Cube". Plan first, list
   files, wait for OK.
+
+### Cube World 2.0 redesign — started 2026-10-31 on the user's request
+- The user pasted a big "Cube World 2.0" brief (premium Wii-Sports-level platform: menu, lobby, phones, games,
+  sound, intro/results). Agreed plan (user: "ano, začni s K1 a pokračuj podle plánu"; font = my choice; sounds
+  will be downloaded later from somewhere — ask with file names/sizes first):
+  - **K1 lobby UI — done (commit "Cube World 2.0 K1"), waiting for the user's test.** Design system
+    `host/ui/theme.css` (colour/type/spacing/radius/shadow/motion tokens, panels, buttons, chips, keycaps, toasts,
+    avatars), font **Nunito Sans** (OFL, `host/assets/fonts/`, 93 KB, credited in README), lobby styles
+    `host/ui/lobby.css`, logic `host/hub/lobbyUi.ts`. Join panel: QR on white, room code boxes, 4 seats
+    (avatar in shirt/skin colours, Connected / Joining / Away, ★ Leader = first connected player = the server's
+    leader, P1–P4), folded "Phone can't connect?". Game card: artwork (own SVG icons), status chip
+    (Ready / Prototype / Coming soon), players, controls, modes (the one matching the joined phones is lit),
+    Play button with Enter keycap, note line, ‹ dots ›. Toasts: joined / lost connection / is back / left.
+    Registry fields in `faces.ts`: status, accent, icon, min/maxPlayers, controls, modes. Layouts for small
+    laptops, tablets (join bar on top, card as bottom sheet) and upright phones. Tuning `TUNING.lobbyUi`,
+    `TUNING.hub.fitAspect/portraitLift`. Badminton is shown as a playable **prototype** (no longer "coming soon").
+  - **K2 living cube — done, waiting for the user's test.** Each side has `userData.tick`: minigolf sea waves,
+    trees sway, windmill turns, a ball putts into a cup every few seconds; badminton: an endless rally of a glowing
+    shuttle over the net (the tarp is gone); building sites: the "?" floats, fog drifts. Chosen side: glowing
+    frame in the game's colour, halo turns that colour, a small pop. Space: 3 twinkling star layers that turn with
+    the cube at different depths, faint nebula clouds, glowing dust. Touch: drag + two-finger pinch zoom.
+    Clear-coat cube material. Tuning in `TUNING.hub` (starParallax, dust, nebulaOpacity, frameOpacity, choosePop).
+  - **K3 sounds** (menu, turn, join, countdown; volume + mute) — next; needs downloaded sounds: propose CC0 files
+    with names and sizes, ask first.
+  - **K4** dive-in transition, match intro (players + 3-2-1), results screen with Play again / Back to the cube,
+    for minigolf and badminton. **K5** phone lobby screen (avatar, status, selected game, Ready — needs a server
+    change, do last). Then the rest of the brief (game polish) phase by phase.
 
 ### Badminton (SPEC §13) — started 2026-10-30 on the user's request (hub 2a still untested on phones)
 - User decisions: beach venue; all shots fly to the back for now, later a big phone button = "short shot".

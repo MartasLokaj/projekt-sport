@@ -88,6 +88,10 @@ export const FACES: readonly FaceInfo[] = [
   { id: 'mystery-4', ...MYSTERY, normal: [0, -1, 0], forward: [0, 0, -1] },
 ];
 
+/** Every frame the hub calls this on each side, so its little world can move (time in seconds). */
+export type Tick = (time: number, dt: number) => void;
+
+/** Builds a side's little world; animated worlds keep their per-frame update in `userData.tick`. */
 export function buildFace(face: FaceInfo, kit: FaceKit, size: number): THREE.Group {
   if (face.id === 'minigolf') return minigolfWorld(kit, size);
   if (face.id === 'badminton') return badmintonWorld(size);
@@ -97,13 +101,14 @@ export function buildFace(face: FaceInfo, kit: FaceKit, size: number): THREE.Gro
 /** The minigolf side: tiny islands in a cute sea, flags, a windmill and trees. */
 function minigolfWorld(kit: FaceKit, size: number): THREE.Group {
   const g = new THREE.Group();
-  const sea = new THREE.Mesh(
-    new RoundedBoxGeometry(size - 0.5, 0.3, size - 0.5, 4, 0.14),
-    new THREE.MeshStandardMaterial({ color: '#2c9be0', roughness: 0.25, emissive: '#0d4f8a', emissiveIntensity: 0.25 }),
-  );
-  sea.position.y = -0.05;
-  sea.receiveShadow = true;
-  g.add(sea);
+  const basin = new THREE.Mesh(new RoundedBoxGeometry(size - 0.5, 0.26, size - 0.5, 4, 0.12), mat('#1d6fb8', 0.6));
+  basin.position.y = -0.16;
+  basin.receiveShadow = true;
+  g.add(basin);
+  const sea = new Sea(size - 0.62);
+  g.add(sea.mesh);
+  const swaying: THREE.Object3D[] = [];
+  let ball: { mesh: THREE.Mesh; from: THREE.Vector3; to: THREE.Vector3 } | null = null;
   const islands: [number, number, number][] = [
     [-1.0, 0.7, 1.25],
     [1.35, -1.1, 0.95],
@@ -129,12 +134,25 @@ function minigolfWorld(kit: FaceKit, size: number): THREE.Group {
       m.receiveShadow = true;
       g.add(m);
     }
+    // The lane runs along this direction (the capsule's long axis after its rotation).
+    const along = new THREE.Vector3(-Math.sin(0.6 + i), 0, Math.cos(0.6 + i));
+    const cup = new THREE.Vector3(x, 0.36, z).addScaledVector(along, r * 0.42);
+    const hole = new THREE.Mesh(new THREE.CircleGeometry(0.055, 16), mat('#16331f', 1));
+    hole.rotation.x = -Math.PI / 2;
+    hole.position.copy(cup).setY(0.385);
+    g.add(hole);
     const flag = kit.flag.scene.clone(true);
     flag.scale.setScalar(0.35);
-    flag.position.set(x + Math.cos(0.6 + i) * r * 0.45, 0.33, z - Math.sin(0.6 + i) * r * 0.45);
+    flag.position.copy(cup).setY(0.33);
     flag.traverse((o) => (o.castShadow = true));
     g.add(flag);
-    plantRing(g, kit.forest, x, z, r, 5 + i * 2);
+    swaying.push(...plantRing(g, kit.forest, x, z, r, 5 + i * 2));
+    if (i === 1) {
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 12), mat('#ffffff', 0.3));
+      mesh.castShadow = true;
+      g.add(mesh);
+      ball = { mesh, from: new THREE.Vector3(x, 0.43, z).addScaledVector(along, -r * 0.42), to: cup.clone().setY(0.43) };
+    }
   });
   const windmill = kit.windmill.scene.clone(true);
   windmill.scale.setScalar(0.5);
@@ -142,11 +160,63 @@ function minigolfWorld(kit: FaceKit, size: number): THREE.Group {
   windmill.rotation.y = 0.5;
   windmill.traverse((o) => (o.castShadow = true));
   g.add(windmill);
+  const blades = windmill.getObjectByName('blades');
+
+  const phases = swaying.map((_, k) => k * 1.7);
+  const tick: Tick = (time, dt) => {
+    sea.update(time);
+    if (blades) blades.rotation.z -= dt * 1.4;
+    // A soft breeze: every plant leans a little, each at its own moment.
+    swaying.forEach((plant, k) => {
+      plant.rotation.z = Math.sin(time * 1.3 + phases[k]) * 0.05;
+      plant.rotation.x = Math.sin(time * 0.9 + phases[k] * 1.3) * 0.03;
+    });
+    if (ball) {
+      // A putt every few seconds: roll, slow down, drop into the cup, pop back on the tee.
+      const t = (time % 4.5) / 3;
+      const roll = 1 - (1 - Math.min(1, t)) ** 2;
+      ball.mesh.position.lerpVectors(ball.from, ball.to, roll);
+      ball.mesh.position.y -= t > 1 ? Math.min(0.12, (t - 1) * 0.6) : 0;
+      ball.mesh.scale.setScalar(t > 1.35 ? 0.001 : 1);
+    }
+  };
+  g.userData.tick = tick;
   return g;
 }
 
-/** A few trees and bushes around an island's edge. */
-function plantRing(g: THREE.Group, forest: Forest, x: number, z: number, r: number, count: number): void {
+/** A small sea with soft rolling waves (a bumpy sheet moved every frame, cheap at this size). */
+class Sea {
+  readonly mesh: THREE.Mesh;
+  private readonly base: Float32Array;
+
+  constructor(width: number) {
+    const geometry = new THREE.PlaneGeometry(width, width, 36, 36);
+    geometry.rotateX(-Math.PI / 2);
+    this.base = (geometry.attributes.position.array as Float32Array).slice();
+    this.mesh = new THREE.Mesh(
+      geometry,
+      new THREE.MeshStandardMaterial({ color: '#2fa6ec', roughness: 0.18, metalness: 0.05, emissive: '#0d4f8a', emissiveIntensity: 0.3 }),
+    );
+    this.mesh.position.y = 0.06;
+    this.mesh.receiveShadow = true;
+  }
+
+  update(time: number): void {
+    const position = this.mesh.geometry.attributes.position;
+    const array = position.array as Float32Array;
+    for (let k = 0; k < array.length; k += 3) {
+      const x = this.base[k];
+      const z = this.base[k + 2];
+      array[k + 1] = Math.sin(x * 3.1 + time * 1.6) * 0.018 + Math.sin(z * 2.3 - time * 1.2) * 0.016 + Math.sin((x + z) * 5 + time * 2.4) * 0.006;
+    }
+    position.needsUpdate = true;
+    this.mesh.geometry.computeVertexNormals();
+  }
+}
+
+/** A few trees and bushes around an island's edge (returned, so they can sway in the wind). */
+function plantRing(g: THREE.Group, forest: Forest, x: number, z: number, r: number, count: number): THREE.Mesh[] {
+  const plants: THREE.Mesh[] = [];
   const names = ['Tree_1_A', 'Tree_3_A', 'Tree_4_A', 'Bush_1_B', 'Bush_2_A', 'Tree_2_A'];
   for (let k = 0; k < count; k++) {
     const a = (k / count) * Math.PI * 2 + 0.4;
@@ -156,8 +226,15 @@ function plantRing(g: THREE.Group, forest: Forest, x: number, z: number, r: numb
     m.position.set(x + Math.cos(a) * r * 0.7, 0.28, z + Math.sin(a) * r * 0.7);
     m.rotation.y = a * 3;
     m.castShadow = true;
-    g.add(m);
+    // A pivot at the plant's foot, so swaying bends it from the ground.
+    const pivot = new THREE.Group();
+    pivot.position.copy(m.position);
+    m.position.set(0, 0, 0);
+    pivot.add(m);
+    g.add(pivot);
+    plants.push(m);
   }
+  return plants;
 }
 
 /** "Coming soon": a cosy building site with cones, crates, scaffolding, soft fog and a glowing "?". */
@@ -209,12 +286,23 @@ function constructionWorld(seed: number, size: number): THREE.Group {
   question.name = 'glow';
   g.add(question);
   const fog = new THREE.MeshStandardMaterial({ color: '#ffffff', transparent: true, opacity: 0.35, roughness: 1, depthWrite: false });
+  const puffs: { mesh: THREE.Mesh; x: number; z: number; phase: number }[] = [];
   for (let k = 0; k < 7; k++) {
     const puff = new THREE.Mesh(new THREE.SphereGeometry(0.4 + random() * 0.4, 16, 12), fog);
-    puff.position.set(-2 + random() * 4, 0.25, -2 + random() * 4);
+    const x = -1.8 + random() * 3.6;
+    const z = -1.8 + random() * 3.6;
+    puff.position.set(x, 0.25, z);
     puff.scale.y = 0.5;
     g.add(puff);
+    puffs.push({ mesh: puff, x, z, phase: random() * 6 });
   }
+  const tick: Tick = (time) => {
+    // The "?" floats and breathes; the fog drifts in slow circles.
+    question.position.y = 1.25 + Math.sin(time * 1.6 + seed) * 0.12;
+    question.scale.setScalar(1.6 + Math.sin(time * 2.2 + seed) * 0.06);
+    for (const p of puffs) p.mesh.position.set(p.x + Math.sin(time * 0.3 + p.phase) * 0.25, 0.25, p.z + Math.cos(time * 0.25 + p.phase) * 0.25);
+  };
+  g.userData.tick = tick;
   return g;
 }
 
@@ -240,21 +328,44 @@ function badmintonWorld(size: number): THREE.Group {
   net.rotation.y = Math.PI / 2;
   net.position.set(0, 0.95, 0);
   g.add(net);
-  // The tarp: a soft dome over the shuttlecock, its feathers peeking out.
-  const tarp = new THREE.Mesh(new THREE.SphereGeometry(0.9, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2), mat('#3a6bd8', 0.9));
-  tarp.scale.set(1, 0.75, 1.15);
-  tarp.position.set(1.3, 0.1, 0.4);
-  tarp.castShadow = true;
-  g.add(tarp);
-  const feathers = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.6, 16, 1, true), mat('#ffffff', 0.6));
-  feathers.rotation.z = Math.PI / 2 + 0.3;
-  feathers.position.set(2.15, 0.35, 0.5);
-  feathers.castShadow = true;
-  g.add(feathers);
+  // A rally that never ends: the shuttle loops over the net from one side to the other.
+  const shuttle = new THREE.Group();
+  const skirt = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.24, 16, 1, true), new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.6, side: THREE.DoubleSide }));
+  skirt.position.y = 0.1;
+  const cork = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 12), new THREE.MeshStandardMaterial({ color: '#ff5b3a', emissive: '#ff3a1a', emissiveIntensity: 0.8 }));
+  cork.position.y = -0.04;
+  shuttle.add(skirt, cork);
+  shuttle.traverse((o) => (o.castShadow = true));
+  g.add(shuttle);
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.12, 16), new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.25, depthWrite: false }));
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = 0.105;
+  g.add(shadow);
+  const from = new THREE.Vector3();
+  const to = new THREE.Vector3();
+  const next = new THREE.Vector3();
   const sign = new THREE.Sprite(new THREE.SpriteMaterial({ map: textTexture('Badminton', '#ffffff', 'prototype'), transparent: true }));
   sign.scale.set(2.4, 1.2, 1);
   sign.position.set(-1.2, 1.2, 0);
   g.add(sign);
+  const shot = (t: number, k: number, out: THREE.Vector3): THREE.Vector3 => {
+    // Shot k goes from one baseline to the other, a little left or right each time.
+    const dir = k % 2 === 0 ? 1 : -1;
+    from.set(-1.7 * dir, 0.5, Math.sin(k * 2.1) * 1.1);
+    to.set(1.7 * dir, 0.45, Math.sin((k + 1) * 2.1) * 1.1);
+    return out.lerpVectors(from, to, t).setY(THREE.MathUtils.lerp(from.y, to.y, t) + Math.sin(t * Math.PI) * 1.5);
+  };
+  const flight = 1.5;
+  const tick: Tick = (time) => {
+    const k = Math.floor(time / flight);
+    const t = (time % flight) / flight;
+    shot(t, k, shuttle.position);
+    shot(Math.min(1, t + 0.02), k, next);
+    // Cork first, along the flight.
+    shuttle.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), next.sub(shuttle.position).normalize());
+    shadow.position.set(shuttle.position.x, 0.105, shuttle.position.z);
+  };
+  g.userData.tick = tick;
   return g;
 }
 

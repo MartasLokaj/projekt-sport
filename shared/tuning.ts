@@ -289,7 +289,15 @@ export const TUNING = {
     glowColour: '#7ff3ff',
     skyTop: '#0b0f2e',
     skyBottom: '#3a1f5c',
-    stars: 1500,
+    stars: 2200,
+    /** How much each star layer (near, middle, far) turns along with the cube: the depth effect. */
+    starParallax: [0.06, 0.03, 0.008],
+    /** Glowing specks floating round the cube, and how strong the coloured clouds far behind are. */
+    dust: 140,
+    nebulaOpacity: 0.28,
+    /** The glowing frame round the chosen side (0..1), and how much the cube pops when a game is chosen. */
+    frameOpacity: 0.85,
+    choosePop: 0.025,
     /** Camera: distance from the cube, height and field of view (degrees). Closer = bigger cube. */
     cameraDistance: 16.5,
     cameraHeight: 3.5,
