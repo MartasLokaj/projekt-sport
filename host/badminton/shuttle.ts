@@ -120,10 +120,10 @@ export function makeShot(
     return new Flight(from.clone(), net, 0.4, seconds * 600, start, 0.4, kind, true);
   }
   let flight = new Flight(from.clone(), to, shot.apex, seconds * 1000, start, shot.drag, kind);
-  // Make sure it clears the net: raise the arc until it does. Drops and short serves stay just above it.
+  // Make sure it clears the net: raise the arc until it does. Drops and short serves stay close above it.
   const u = flight.netCrossing();
   if (u !== null) {
-    const clearance = kind === 'drop' || kind === 'shortServe' ? cfg.dropNetClearance : cfg.netClearance;
+    const clearance = kind === 'drop' ? cfg.dropNetClearance : kind === 'shortServe' ? cfg.shortServeNetClearance : cfg.netClearance;
     const need = cfg.netHeight + clearance - flight.heightAt(u);
     if (need > 0) {
       flight = new Flight(from.clone(), to, shot.apex + need / (4 * u * (1 - u)), seconds * 1000, start, shot.drag, kind);

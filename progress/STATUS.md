@@ -186,7 +186,10 @@ running log of where we are, what the user decided, and what comes next).
     `shortShotNetChanceBack` → `Flight.intoNet`, point to the receiver); CPU plays drops (`cpu.dropChance`) and
     short serves (`cpu.shortServeChance`); nobody hits closer than `minContactDepth` to the net. Mac: Shift+Space.
     Lab card shows SHORT. Scripted test: drops land 1.1–1.9 m from the net, short serves at 3.2–3.4 m.
-  - Next: user tests step 1 on the phone → step 2 (wobble shots + dive, fall, recovery).
+  - **User test: "works well"**, but the drop was too brutal: now it passes 40 cm over the net
+    (`dropNetClearance` 0.4, drop apex 0.8; short serve keeps `shortServeNetClearance` 0.12). Still met at most
+    ~1 m from the net, so it can never be smashed (smash needs `smashFromDepth` 4.6).
+  - Next: step 2 (wobble shots + dive, fall, recovery) — plan first.
 
 ### GitHub and the cloud (2026-10-31)
 - Project is on GitHub: **private** repo `MartasLokaj/projekt-sport` (remote `origin`, branch `main`). `gh` CLI is in

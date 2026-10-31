@@ -463,11 +463,15 @@ export const TUNING = {
     drive: { depth: [5.75, 7.5], apex: 0.4, seconds: [1.45, 1.1], drag: 0.6 },
     smash: { depth: [3.25, 5.25], apex: 0, seconds: [1.15, 0.8], drag: 0.3 },
     /** Drop shot (SHORT button held): soft, just over the net, lands close behind it. Slower swing = shorter. */
-    drop: { depth: [0.8, 2.4], apex: 0.5, seconds: [1.8, 1.5], drag: 1.2 },
+    drop: { depth: [0.8, 2.4], apex: 0.8, seconds: [1.8, 1.5], drag: 1.2 },
     /** Short serve (SHORT held while serving): low, lands just past the short service line (depth from the net). */
     shortServe: { depth: [2.7, 3.8], apex: 0.4, seconds: [1.6, 1.35], drag: 0.8 },
-    /** Drops and short serves only need to clear the net by this much (m), so they stay low. */
-    dropNetClearance: 0.12,
+    /**
+     * How high a drop and a short serve pass over the net (m). A drop still lands close to the net, so it
+     * can never be smashed (a smash needs smashFromDepth from the net).
+     */
+    dropNetClearance: 0.4,
+    shortServeNetClearance: 0.12,
     /**
      * A drop from the back of the court (at least smashFromDepth from the net) lands up to this far from
      * where it was aimed (m) and has this chance to end in the net. From mid-court or the front it is precise.
