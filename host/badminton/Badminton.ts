@@ -36,6 +36,10 @@ type Stroke = Contact['stroke'];
 
 type Athlete = {
   side: Side;
+  /** Which phone seat plays it: 0 / 2 = near side, 1 / 3 = far side (2 and 3 only in 2 v 2). */
+  seat: number;
+  /** A glowing ring on the sand under the teammate who goes for the shuttle (2 v 2). */
+  ring: THREE.Mesh;
   /** A phone's player, or null for the computer. */
   human: boolean;
   name: string;
@@ -123,12 +127,22 @@ export class Badminton {
   private readonly clock = new THREE.Clock();
   private readonly shuttle = buildShuttle();
   private readonly shadow: THREE.Mesh;
+  /** All four seats (see Athlete.seat); near and far are seats 0 and 1, the team captains (camera, score, name). */
+  private readonly seats: Athlete[];
   private readonly near: Athlete;
   private readonly far: Athlete;
+  /** The athletes in play: seats 0–1, or all four in 2 v 2. */
+  private athletes: Athlete[] = [];
+  private doubles = false;
   private running = false;
 
   private phase: Phase = 'serve';
   private server: Side = 1;
+  /** Who serves now, and who last served for each side (in 2 v 2 the team's server changes when it wins the serve back). */
+  private serverAthlete!: Athlete;
+  private lastServer = new Map<Side, Athlete>();
+  /** The teammate going for the shuttle now (the one who can reach it first). */
+  private receiverAthlete: Athlete | null = null;
   private flight: Flight | null = null;
   /** Who the shuttle is flying to, and where/when they meet it. */
   private receiver: Side = -1;
@@ -147,7 +161,7 @@ export class Badminton {
   private landedFx = false;
   private shakeUntil = 0;
   /** The last missed contact (who and when), so a very late swing arriving after the miss can still dive. */
-  private missedContact: { side: Side; time: number } | null = null;
+  private missedContact: { athlete: Athlete; time: number } | null = null;
   /** A hit waiting for the top of the character's jump. */
   private pendingHit: {
     /** When the racket meets the shuttle; it shoots off at `when` (later for a Super Smash's hit-stop). */
@@ -170,8 +184,8 @@ export class Badminton {
   private readonly trail = new Trail();
   private readonly puffs = new SandPuffs(TUNING.badminton.sandColour);
   private readonly birds = new Birds(TUNING.badminton.birds);
-  /** Tells a phone something (e.g. "Smash chance!"); set by host/main.ts. */
-  onCue: ((side: Side, cue: BadmintonCue) => void) | null = null;
+  /** Tells the phone in this seat something (e.g. "Smash chance!"); set by host/main.ts. */
+  onCue: ((seat: number, cue: BadmintonCue) => void) | null = null;
   /** How each judged swing went, for the outcome log (set by host/main.ts). */
   onOutcome: ((outcome: Record<string, unknown>) => void) | null = null;
   /** Learns each player's timing, power, aim and Wi-Fi delay and adapts the game to them. */
@@ -210,25 +224,30 @@ export class Badminton {
     this.shadow.scale.setScalar(cfg.shuttleScale);
     this.scene.add(this.shuttle, this.shadow, this.trail.mesh, this.puffs.group, this.birds.group);
 
-    this.near = this.makeAthlete(1, hud.feedbackNear, hud.popNear);
-    this.far = this.makeAthlete(-1, hud.feedbackFar, hud.popFar);
+    this.seats = [0, 1, 2, 3].map((seat) => {
+      const side: Side = seat % 2 === 0 ? 1 : -1;
+      return side === 1 ? this.makeAthlete(1, seat, hud.feedbackNear, hud.popNear) : this.makeAthlete(-1, seat, hud.feedbackFar, hud.popFar);
+    });
+    [this.near, this.far] = this.seats;
+    this.serverAthlete = this.near;
   }
 
   // ---------- Public ----------
 
   /**
-   * Starts a new match: near = the first phone's player, far = the second phone's player or null for the
-   * computer, which plays at `level` (chosen in the lobby; keys 1 2 3 still change it during the match).
+   * Starts a new match. players = the phones' players by seat (0 = near, 1 = far, 2 = near teammate, 3 = far
+   * teammate); a missing one is the computer, which plays at `level` (chosen in the lobby; keys 1 2 3 still
+   * change it during the match). Seat 0 is always a player (a phone, or the Mac keyboard). doubles = 2 v 2.
    */
   start(
-    near: PlayerInfo | null,
-    far: PlayerInfo | null,
+    players: (PlayerInfo | null)[],
     level: keyof typeof TUNING.badminton.cpuLevels = this.level,
     length: keyof typeof TUNING.badminton.matchLengths = this.length,
+    doubles = false,
   ): void {
     this.level = level;
     this.length = length;
-    this.setPlayers(near, far);
+    this.setPlayers(players, doubles);
     this.newMatch();
     this.snapAthletes();
     if (this.running) return;
@@ -249,11 +268,18 @@ export class Badminton {
     window.removeEventListener('keyup', this.onKeyUp);
   }
 
-  /** The players' looks (colour, skin, hand) and names, e.g. after someone edited their profile. */
-  setPlayers(near: PlayerInfo | null, far: PlayerInfo | null): void {
-    this.setLook(this.near, near, true);
-    this.setLook(this.far, far, far !== null);
-    this.hud.screen.classList.toggle('split', this.far.human);
+  /** The players' looks (colour, skin, hand) and names by seat, e.g. after someone edited their profile. */
+  setPlayers(players: (PlayerInfo | null)[], doubles = this.doubles): void {
+    this.doubles = doubles;
+    this.athletes = doubles ? this.seats : this.seats.slice(0, 2);
+    for (const a of this.seats) {
+      const playing = this.athletes.includes(a);
+      a.wrapper.visible = playing;
+      a.swoosh.mesh.visible = false;
+      a.ring.visible = false;
+      if (playing) this.setLook(a, players[a.seat] ?? null, a.seat === 0 || players[a.seat] != null);
+    }
+    this.hud.screen.classList.toggle('split', this.split());
     this.hud.screen.classList.toggle('no-texts', !TUNING.badminton.screenTexts);
     this.onResize();
     this.renderScore();
@@ -263,10 +289,10 @@ export class Badminton {
    * A swing from the phone playing `side`. at = the exact hit time (server clock = this Mac's clock),
    * power 0..100, aim -1..1, receivedAt = when the swing arrived here (for the coach's Wi-Fi delay).
    */
-  onSwing(side: Side, at: number, power: number, aim: number, short = false, receivedAt?: number): void {
+  onSwing(seat: number, at: number, power: number, aim: number, short = false, receivedAt?: number): void {
     const cfg = TUNING.badminton;
-    const a = this.athlete(side);
-    if (!a.human) return;
+    const a = this.seats[seat];
+    if (!a || !a.human || !this.athletes.includes(a)) return;
     const now = Date.now();
     // The coach adapts the swing to this player (see coach.ts); the raw values go to the outcome log.
     if (receivedAt !== undefined) this.coach.noteDelay(a.name, receivedAt - at);
@@ -287,20 +313,21 @@ export class Badminton {
         },
       };
     };
-    if (this.phase === 'serve' && this.server === side) {
+    if (this.phase === 'serve' && this.serverAthlete === a) {
       this.serve(a, now, power, aim, short);
       return;
     }
     if (now < a.busyUntil) return; // still lying in the sand
     // A swing that arrives after the miss was already called: if it was really late, the character still dives.
     const missed = this.missedContact;
-    if (missed && missed.side === side && at - missed.time > cfg.veryLateMs && at - missed.time < 1200) {
+    if (missed && missed.athlete === a && at - missed.time > cfg.veryLateMs && at - missed.time < 1200) {
       note(raw.at - missed.time);
       this.missedContact = null;
       this.lateMiss(a, now, at - missed.time);
       return;
     }
-    if (this.phase !== 'rally' || this.receiver !== side || this.decided || !this.contact || !this.flight) return;
+    // Only the teammate going for the shuttle can hit it.
+    if (this.phase !== 'rally' || this.receiverAthlete !== a || this.decided || !this.contact || !this.flight) return;
     const contact = this.contact;
     const off = at - contact.time;
     const { early, late } = this.hitWindow();
@@ -379,6 +406,8 @@ export class Badminton {
     this.near.score = 0;
     this.far.score = 0;
     this.server = 1;
+    this.serverAthlete = this.near;
+    this.lastServer.clear();
     this.renderScore();
     this.startServe();
   }
@@ -393,7 +422,8 @@ export class Badminton {
     this.rallies++;
     this.hits = 0;
     this.renderRally();
-    for (const a of [this.near, this.far]) {
+    this.receiverAthlete = null;
+    for (const a of this.athletes) {
       a.down = null;
       a.busyUntil = 0;
       a.bob.rotation.set(0, 0, 0);
@@ -401,12 +431,18 @@ export class Badminton {
       a.lungeUntil = 0;
       a.splitUntil = 0;
     }
-    const server = this.athlete(this.server);
-    const other = this.athlete(-this.server as Side);
+    const cfg = TUNING.badminton;
+    const server = this.serverAthlete;
+    this.lastServer.set(this.server, server);
     // Even score: serve from the right service court, odd: from the left (right = +x for the near side, -x for the far side).
-    const x = this.server * (server.score % 2 === 0 ? 1 : -1) * 0.9;
-    this.moveTo(server, new THREE.Vector3(x, 0, this.server * TUNING.badminton.serveDepth), null);
-    this.moveTo(other, new THREE.Vector3(-x, 0, -this.server * TUNING.badminton.homeDepth), null);
+    const x = this.server * (this.athlete(this.server).score % 2 === 0 ? 1 : -1) * 0.9;
+    this.moveTo(server, new THREE.Vector3(x, 0, this.server * cfg.serveDepth), null);
+    // The receiver stands diagonally across; in 2 v 2 the partners stand in the other half, a little further back.
+    const receivers = this.team(-this.server as Side);
+    this.moveTo(receivers[0], new THREE.Vector3(-x, 0, -this.server * cfg.homeDepth), null);
+    if (receivers[1]) this.moveTo(receivers[1], new THREE.Vector3(x, 0, -this.server * (cfg.homeDepth + cfg.doubles.partnerBack)), null);
+    const partner = this.partner(server);
+    if (partner) this.moveTo(partner, new THREE.Vector3(-x, 0, this.server * (cfg.homeDepth + cfg.doubles.partnerBack)), null);
     this.cpuServeAt = Date.now() + TUNING.badminton.cpu.serveDelayMs;
     this.hud.message.textContent = server.human ? `${server.name}: swing to serve!` : `${server.name} serves`;
     this.hud.message.hidden = !TUNING.badminton.screenTexts;
@@ -420,7 +456,7 @@ export class Badminton {
     // Diagonally across: into the receiver's service court on the other side of the centre line.
     const across = -Math.sign(server.target.x || 1);
     const range: [number, number] = across > 0 ? [0.25, cfg.courtHalfWidth - 0.25] : [-cfg.courtHalfWidth + 0.25, -0.25];
-    this.launch(makeShot(short ? 'shortServe' : 'serve', from, server.side, aim, power / 100, 0.7, now, range), server.side);
+    this.launch(makeShot(short ? 'shortServe' : 'serve', from, server.side, aim, power / 100, 0.7, now, range), server);
     if (server.human && short) this.showPop(server, 'Short serve');
     this.hud.message.hidden = true;
     this.phase = 'rally';
@@ -476,7 +512,7 @@ export class Badminton {
     // Each further Super Smash in the same rally is faster, up to a limit.
     const speed = p.kind === 'superSmash' ? Math.min(cfg.superSmashMaxSpeed, Math.pow(1 + cfg.superSmashChainBoost, this.superChain++)) : 1;
     const shot = makeShot(p.kind, from, p.athlete.side, p.aim, p.power / 100, p.quality, p.when, undefined, p.extraScatter, p.netChance, speed);
-    this.launch(shot, p.athlete.side);
+    this.launch(shot, p.athlete);
   }
 
   /** "SUPER SMASH!" in the hitter's half, a flash, and the hitter's phone buzzes. */
@@ -485,44 +521,91 @@ export class Badminton {
     this.hud.flash.classList.remove('on');
     void this.hud.flash.offsetWidth; // restart the CSS animation
     this.hud.flash.classList.add('on');
-    if (a.human) this.onCue?.(a.side, 'super_smash');
+    if (a.human) this.onCue?.(a.seat, 'super_smash');
   }
 
-  /** A new flight from `hitter`'s side: the other side runs to meet it, the hitter goes back home. */
-  private launch(flight: Flight, hitter: Side): void {
+  /**
+   * A new flight from the hitter: on the other side the teammate who can reach it first runs to meet it (the
+   * other covers the rest of the court), the hitter's team goes back to its waiting spots.
+   */
+  private launch(flight: Flight, hitter: Athlete): void {
     const cfg = TUNING.badminton;
     this.flight = flight;
     this.landedFx = false;
     this.hits++;
     this.renderRally();
-    this.receiver = -hitter as Side;
-    const receiver = this.athlete(this.receiver);
+    this.receiver = -hitter.side as Side;
     if (flight.intoNet) {
       // Nothing to hit: it drops on the hitter's side and the point goes to the receiver.
-      this.moveTo(this.athlete(hitter), new THREE.Vector3(0, 0, hitter * cfg.homeDepth), null);
+      this.moveTo(hitter, new THREE.Vector3(0, 0, hitter.side * cfg.homeDepth), null);
       this.contact = null;
+      this.receiverAthlete = null;
       this.decided = true;
       return;
     }
     const now = Date.now();
-    const reaction = receiver.human ? cfg.reactionMs : cfg.cpuLevels[this.level].reactionMs;
-    this.contact = findContact(flight, this.receiver, receiver.wrapper.position, Math.max(now, receiver.busyUntil), reaction);
+    const reactionOf = (a: Athlete): number => (a.human ? cfg.reactionMs : cfg.cpuLevels[this.level].reactionMs);
+    // Each teammate works out where it could meet the shuttle; the one who gets there best and first goes
+    // (nearly the same moment: the one with less running).
+    const rank = { run: 0, dive: 1, none: 2 };
+    const score = (a: Athlete, c: Contact): number =>
+      rank[c.reach] * 1e6 + Math.round(c.time / 80) * 1000 + a.wrapper.position.distanceTo(c.position.clone().setY(0));
+    let receiver: Athlete | null = null;
+    let best = Infinity;
+    for (const a of this.team(this.receiver)) {
+      const c = findContact(flight, this.receiver, a.wrapper.position, Math.max(now, a.busyUntil), reactionOf(a));
+      const s = score(a, c);
+      if (s < best) {
+        best = s;
+        receiver = a;
+        this.contact = c;
+      }
+    }
+    receiver = receiver!;
+    const contact = this.contact!;
+    this.receiverAthlete = receiver;
+    const reaction = reactionOf(receiver);
     this.decided = false;
-    // The hitter heads for its waiting spot straight away (deeper if the other side must lift from the front).
-    this.moveTo(this.athlete(hitter), this.basePosition(hitter, this.contact), null);
+    // The hitter's team heads for its waiting spots straight away (deeper if the other side must lift from the front).
+    this.placeTeam(hitter.side, contact);
+    // The receiver's partner covers the other half of the court.
+    const cover = this.partner(receiver);
+    if (cover) {
+      const lane = contact.position.x >= 0 ? -cfg.doubles.laneOffset : cfg.doubles.laneOffset;
+      this.moveTo(cover, new THREE.Vector3(lane, 0, this.receiver * cfg.homeDepth), null);
+    }
+    // In 2 v 2 the phone of the teammate who goes buzzes: "your shuttle!".
+    if (this.doubles && receiver.human) this.onCue?.(receiver.seat, 'your_turn');
     // Split step: the receiver hops as the shuttle is hit, then runs.
     if (now >= receiver.busyUntil) receiver.splitUntil = now + reaction;
     if (flight.kind === 'wobble' && receiver.human) {
       this.showFeedback(receiver, '⚡ Smash chance!');
-      this.onCue?.(receiver.side, 'smash_chance');
+      this.onCue?.(receiver.seat, 'smash_chance');
     }
-    const spot = this.contact.position.clone();
-    spot.x -= receiver.handSign * cfg.reach[this.contact.stroke];
+    const spot = contact.position.clone();
+    spot.x -= receiver.handSign * cfg.reach[contact.stroke];
     spot.y = 0;
-    this.moveTo(receiver, spot, this.contact.time - cfg.jumpRiseMs - 60);
+    this.moveTo(receiver, spot, contact.time - cfg.jumpRiseMs - 60);
     // The computer jumps by itself; a player's character only jumps with the player's swing (see onSwing).
-    const jump = this.contact.position.y - cfg.standingReach;
-    receiver.jump = jump > 0 && !receiver.human ? { height: jump, peak: this.contact.time, rise: cfg.jumpRiseMs } : null;
+    const jump = contact.position.y - cfg.standingReach;
+    receiver.jump = jump > 0 && !receiver.human ? { height: jump, peak: contact.time, rise: cfg.jumpRiseMs } : null;
+  }
+
+  /**
+   * The team that just hit goes to its waiting spots for the return: alone, the base spot; two of them side by
+   * side, each covering its half (the one on the left stays on the left), so they never run into each other.
+   */
+  private placeTeam(side: Side, contact: Contact): void {
+    const base = this.basePosition(side, contact);
+    const team = this.team(side).filter((a) => !a.down);
+    if (team.length < 2) {
+      for (const a of team) this.moveTo(a, base, null);
+      return;
+    }
+    const lane = TUNING.badminton.doubles.laneOffset;
+    const [left, right] = [...team].sort((a, b) => a.wrapper.position.x - b.wrapper.position.x);
+    this.moveTo(left, new THREE.Vector3(base.x * 0.5 - lane, 0, base.z), null);
+    this.moveTo(right, new THREE.Vector3(base.x * 0.5 + lane, 0, base.z), null);
   }
 
   /**
@@ -612,7 +695,7 @@ export class Badminton {
 
   /** Nobody hits it: the shuttle just flies on and lands. */
   private miss(): void {
-    if (this.contact) this.missedContact = { side: this.receiver, time: this.contact.time };
+    if (this.contact && this.receiverAthlete) this.missedContact = { athlete: this.receiverAthlete, time: this.contact.time };
     this.decided = true;
     this.contact = null;
   }
@@ -669,6 +752,11 @@ export class Badminton {
     const w = this.athlete(winner);
     const loser = this.athlete(-winner as Side);
     w.score++;
+    // The winners serve. Winning the serve back, the team's other player serves (2 v 2); else the same one again.
+    if (this.server !== winner) {
+      const last = this.lastServer.get(winner);
+      this.serverAthlete = last ? (this.partner(last) ?? last) : w;
+    }
     this.server = winner;
     this.renderScore();
     const cfg = TUNING.badminton;
@@ -682,19 +770,22 @@ export class Badminton {
     const lastPoint = tied && m.cap !== null && w.score === m.cap - 1;
     const rally = this.hits >= cfg.rallyThresholds.celebrate ? `\nRally ×${this.hits}!` : '';
     this.hud.message.textContent = won
-      ? `${w.name} wins! ${this.near.score} : ${this.far.score}${rally}\nEnter: play again · Esc: back to the cube`
-      : `Point to ${w.name}!${rally}${lastPoint ? '\nNext point wins!' : tied ? '\nDeuce: win by 2' : gamePoint ? '\nGame point!' : ''}`;
+      ? `${this.teamName(winner)} win${this.team(winner).length > 1 ? '' : 's'}! ${this.near.score} : ${this.far.score}${rally}\nEnter: play again · Esc: back to the cube`
+      : `Point to ${this.teamName(winner)}!${rally}${lastPoint ? '\nNext point wins!' : tied ? '\nDeuce: win by 2' : gamePoint ? '\nGame point!' : ''}`;
     this.hud.message.classList.toggle('long-rally', rally !== '');
     // Between points nothing covers the game (unless screenTexts); the result at the end always shows.
     this.hud.message.hidden = !won && !cfg.screenTexts;
     // Beach reactions: the winner jumps and spins with both arms up, the loser slumps and kicks the sand.
     const now = Date.now();
-    w.character.play('jump');
-    w.reaction = { won: true, start: now, until: now + cfg.pointReactionMs.won };
-    if (!loser.down) {
-      loser.character.play('slump');
-      loser.reaction = { won: false, start: now, until: now + cfg.pointReactionMs.lost };
-      const front = loser.wrapper.position.clone().add(new THREE.Vector3(0, 0, -loser.side * 0.5));
+    for (const a of this.team(winner)) {
+      a.character.play('jump');
+      a.reaction = { won: true, start: now, until: now + cfg.pointReactionMs.won };
+    }
+    for (const a of this.team(loser.side)) {
+      if (a.down) continue;
+      a.character.play('slump');
+      a.reaction = { won: false, start: now, until: now + cfg.pointReactionMs.lost };
+      const front = a.wrapper.position.clone().add(new THREE.Vector3(0, 0, -a.side * 0.5));
       this.puffs.burst(front, now, 5, 0.5);
     }
   }
@@ -706,15 +797,15 @@ export class Badminton {
     const now = Date.now();
     const cfg = TUNING.badminton;
 
-    const server = this.athlete(this.server);
+    const server = this.serverAthlete;
     if (this.phase === 'serve' && !server.human && now >= this.cpuServeAt) {
       const c = cfg.cpuLevels[this.level];
       const power = c.power[0] + Math.random() * (c.power[1] - c.power[0]);
       this.serve(server, now, power, (Math.random() * 2 - 1) * c.aimRange, Math.random() < cfg.cpu.shortServeChance);
     } else if (this.phase === 'rally' && this.flight) {
       if (this.pendingHit && now >= this.pendingHit.when) this.launchPendingHit();
-      if (!this.decided && this.contact) {
-        const receiver = this.athlete(this.receiver);
+      if (!this.decided && this.contact && this.receiverAthlete) {
+        const receiver = this.receiverAthlete;
         if (!receiver.human && now >= this.contact.time && !this.pendingHit) {
           if (now < receiver.busyUntil) this.miss();
           else this.cpuTurn(receiver, now);
@@ -750,13 +841,30 @@ export class Badminton {
     }
     this.puffs.update(now, dt);
     this.venue.update(dt);
-    for (const a of [this.near, this.far]) {
+    this.keepApart();
+    for (const a of this.athletes) {
       this.updateAthlete(a, now, dt);
       this.updateGlow(a, now);
       if (now > a.feedbackUntil) a.feedback.hidden = true;
     }
     this.render(dt);
     this.placePops(now);
+  }
+
+  /** Teammates never stand inside each other: if they get too close, both step a little apart (sideways). */
+  private keepApart(): void {
+    if (!this.doubles) return;
+    const gap = TUNING.badminton.doubles.minGap;
+    for (const side of [1, -1] as const) {
+      const [a, b] = this.team(side);
+      if (!a || !b || a.down || b.down) continue;
+      const d = a.wrapper.position.distanceTo(b.wrapper.position);
+      if (d >= gap) continue;
+      const push = (gap - d) / 2;
+      const dir = Math.sign(a.wrapper.position.x - b.wrapper.position.x) || 1;
+      a.wrapper.position.x += dir * push;
+      b.wrapper.position.x -= dir * push;
+    }
   }
 
   /** One player: full screen from behind the near player. Two: left half near player, right half far player. */
@@ -767,7 +875,7 @@ export class Badminton {
     // The sun's shadows are the same for both halves: work them out once per frame.
     this.renderer.shadowMap.autoUpdate = false;
     this.renderer.shadowMap.needsUpdate = true;
-    if (!this.far.human) {
+    if (!this.split()) {
       this.renderer.setScissorTest(false);
       this.renderer.setViewport(0, 0, w, h);
       this.renderer.render(this.scene, this.near.camera);
@@ -791,7 +899,7 @@ export class Badminton {
     let position: THREE.Vector3;
     let direction: THREE.Vector3;
     if (this.phase === 'serve' || !this.flight) {
-      position = this.handPosition(this.athlete(this.server), TUNING.badminton.serveHeight);
+      position = this.handPosition(this.serverAthlete, TUNING.badminton.serveHeight);
       direction = new THREE.Vector3(0, 1, 0);
     } else {
       // During a Super Smash's hit-stop the shuttle waits at the racket.
@@ -839,7 +947,7 @@ export class Badminton {
       lean = { x: local.z > 0 ? local.z * fw.leanForward : local.z * fw.leanBack, z: -local.x * fw.leanSide };
       lean.x *= stride;
       lean.z *= stride;
-    } else if (this.phase === 'rally' && this.receiver !== a.side) {
+    } else if (this.phase === 'rally' && this.receiverAthlete !== a) {
       // Ready on the toes while the other side plays.
       a.runPhase += dt * cfg.readyBouncesPerSecond * Math.PI;
       a.bounce = Math.abs(Math.sin(a.runPhase)) * cfg.readyBounce;
@@ -853,7 +961,7 @@ export class Badminton {
     // moment after the hit.
     const c = this.contact;
     if (
-      c && this.phase === 'rally' && this.receiver === a.side && !this.decided && c.stroke !== 'overhead' &&
+      c && this.phase === 'rally' && this.receiverAthlete === a && !this.decided && c.stroke !== 'overhead' &&
       (Math.abs(c.position.z) < fw.lungeDepth || c.reach === 'dive') && c.time - now < fw.lungeLeadMs && distance < fw.lungeStartDistance
     ) {
       if (now >= a.lungeUntil) {
@@ -892,12 +1000,12 @@ export class Badminton {
       a.pose = pose;
     } else {
       if (a.swing) a.swing = null;
-      const waiting = this.phase === 'rally' && !this.decided && this.contact && this.receiver === a.side;
+      const waiting = this.phase === 'rally' && !this.decided && this.contact && this.receiverAthlete === a;
       // Racket ready as the shuttle comes: the computer just before its hit, a player as soon as the shuttle
       // crosses into their half (so the racket does not give away the moment to swing).
       const coming = a.human ? Math.sign(this.shuttle.position.z) === a.side : this.contact !== null && this.contact.time - now < 600;
       if (waiting && coming) pose = WINDUP[this.contact!.stroke];
-      else if (this.phase === 'serve' && this.server === a.side) pose = { x: 0.9, z: -0.3 };
+      else if (this.phase === 'serve' && this.serverAthlete === a) pose = { x: 0.9, z: -0.3 };
       const k = Math.min(1, dt * 12);
       a.pose = { x: a.pose.x + (pose.x - a.pose.x) * k, z: a.pose.z + (pose.z - a.pose.z) * k };
     }
@@ -916,6 +1024,9 @@ export class Badminton {
     const swinging = a.swing !== null && now >= a.swing.start && now - a.swing.start < 200;
     a.racket.getObjectByName('tip')!.getWorldPosition(this.headTip);
     a.racket.getObjectByName('throat')!.getWorldPosition(this.headThroat);
+    // 2 v 2: a ring in the player's colour under the teammate going for the shuttle.
+    a.ring.visible = this.doubles && this.phase === 'rally' && !this.decided && this.receiverAthlete === a;
+    if (a.ring.visible) a.ring.position.set(a.wrapper.position.x, 0.04, a.wrapper.position.z);
     a.swoosh.update(this.headTip, this.headThroat, now, swinging, now < a.glowUntil ? cfgSwoosh.perfectColour : cfgSwoosh.colour, cfgSwoosh.opacity, cfgSwoosh.ms);
   }
 
@@ -932,14 +1043,14 @@ export class Badminton {
   private placePops(now: number): void {
     const w = this.container.clientWidth || window.innerWidth;
     const h = this.container.clientHeight || window.innerHeight;
-    const split = this.far.human;
-    for (const a of [this.near, this.far]) {
+    const split = this.split();
+    for (const a of this.athletes) {
       const visible = a.human && now < a.popUntil;
       a.pop.hidden = !visible;
       if (!visible) continue;
       const half = split ? w / 2 : w;
       const left = split && a.side === -1 ? w / 2 : 0;
-      const head = a.wrapper.position.clone().add(new THREE.Vector3(0, 2.1, 0)).project(a.camera);
+      const head = a.wrapper.position.clone().add(new THREE.Vector3(0, 2.1, 0)).project(this.athlete(a.side).camera);
       a.pop.style.left = `${left + ((head.x + 1) / 2) * half}px`;
       a.pop.style.top = `${((1 - head.y) / 2) * h}px`;
     }
@@ -948,8 +1059,10 @@ export class Badminton {
   /** Behind the athlete's own baseline, looking down the court over the net. */
   private updateCamera(a: Athlete, dt: number): void {
     const cfg = TUNING.badminton;
-    const split = this.far.human;
-    const x = a.wrapper.position.x;
+    const split = this.split();
+    // Behind the team: one player, or the middle between two teammates.
+    const team = this.team(a.side);
+    const x = team.reduce((sum, t) => sum + t.wrapper.position.x, 0) / Math.max(1, team.length);
     const back = split ? cfg.splitCameraBack : cfg.cameraBack;
     const want = new THREE.Vector3(x * 0.5, cfg.cameraHeight, a.side * (cfg.courtHalfLength + back));
     a.camera.position.lerp(want, Math.min(1, dt * 3));
@@ -966,7 +1079,7 @@ export class Badminton {
 
   // ---------- Helpers ----------
 
-  private makeAthlete(side: Side, feedback: HTMLElement, pop: HTMLElement): Athlete {
+  private makeAthlete(side: Side, seat: number, feedback: HTMLElement, pop: HTMLElement): Athlete {
     const cfg = TUNING.badminton;
     const character = new Character({ shirt: '#9b5cff', skin: SKIN_TONES[3], handedness: 'right' }, { putter: false });
     const racket = buildRacket(side === 1 ? '#ff8a3d' : '#00a6ed');
@@ -990,8 +1103,17 @@ export class Badminton {
     wrapper.traverse((o) => (o.castShadow = true));
     const camera = new THREE.PerspectiveCamera(cfg.cameraFov, 1, 0.1, 200);
     camera.position.set(0, cfg.cameraHeight, side * (cfg.courtHalfLength + cfg.cameraBack));
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.55, 0.75, 32),
+      new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: cfg.doubles.ringOpacity, depthWrite: false }),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.visible = false;
+    this.scene.add(ring);
     return {
       side,
+      seat,
+      ring,
       human: side === 1,
       name: side === 1 ? 'You' : 'CPU',
       wrapper,
@@ -1031,7 +1153,7 @@ export class Badminton {
   /** A phone's player (or the computer, when human is false) takes this side. */
   private setLook(a: Athlete, player: PlayerInfo | null, human: boolean): void {
     a.human = human;
-    a.name = human ? (player?.name ?? (a.side === 1 ? 'You' : 'Player 2')) : 'CPU';
+    a.name = human ? (player?.name ?? (a.seat === 0 ? 'You' : `Player ${a.seat + 1}`)) : 'CPU';
     const handedness = human ? (player?.handedness ?? 'right') : 'right';
     const shirt = human ? (player?.colour ?? (a.side === 1 ? '#ff5a5f' : '#00a6ed')) : '#9b5cff';
     const skin = human ? (player?.skinTone ?? SKIN_TONES[1]) : SKIN_TONES[3];
@@ -1047,6 +1169,7 @@ export class Badminton {
       headband: outfit.headbandColour,
     });
     setRacketColour(a.racket, shirt);
+    (a.ring.material as THREE.MeshBasicMaterial).color.set(shirt);
     // A left-handed player is the mirror image, so the racket hand is on the other side.
     // The character's right hand is on its local -x side: +x in the world when facing -z (near side),
     // -x when facing +z (far side).
@@ -1063,8 +1186,23 @@ export class Badminton {
     return local;
   }
 
+  /** The side's captain (seat 0 or 1): its camera, score and half of the screen. */
   private athlete(side: Side): Athlete {
     return side === 1 ? this.near : this.far;
+  }
+
+  /** Everyone playing on this side (one, or two in 2 v 2). */
+  private team(side: Side): Athlete[] {
+    return this.athletes.filter((a) => a.side === side);
+  }
+
+  private partner(a: Athlete): Athlete | null {
+    return this.athletes.find((t) => t.side === a.side && t !== a) ?? null;
+  }
+
+  /** Split screen when both sides have a player on a phone. */
+  private split(): boolean {
+    return this.team(-1).some((a) => a.human);
   }
 
   private moveTo(a: Athlete, target: THREE.Vector3, deadline: number | null): void {
@@ -1078,7 +1216,7 @@ export class Badminton {
   }
 
   private snapAthletes(): void {
-    for (const a of [this.near, this.far]) a.wrapper.position.copy(a.target);
+    for (const a of this.athletes) a.wrapper.position.copy(a.target);
   }
 
   /** Where the athlete's racket hand holds the shuttle (for serving). */
@@ -1127,7 +1265,7 @@ export class Badminton {
   /** A Perfect hit: the racket glows gold and the phone gives a short buzz. */
   private perfect(a: Athlete): void {
     a.glowUntil = Date.now() + TUNING.badminton.perfectGlowMs;
-    if (a.human) this.onCue?.(a.side, 'perfect');
+    if (a.human) this.onCue?.(a.seat, 'perfect');
   }
 
   /** Text in the athlete's half; big = large, golden and bouncy (a Super Smash). */
@@ -1144,7 +1282,7 @@ export class Badminton {
     const cfg = TUNING.badminton.rallyThresholds;
     for (const [el, show] of [
       [this.hud.rallyNear, true],
-      [this.hud.rallyFar, this.far.human],
+      [this.hud.rallyFar, this.split()],
     ] as const) {
       el.hidden = !show || this.hits < cfg.show;
       if (el.hidden) continue;
@@ -1155,10 +1293,15 @@ export class Badminton {
     }
   }
 
+  /** "Martas", or "Martas & Eva" in 2 v 2. */
+  private teamName(side: Side): string {
+    return this.team(side).map((a) => a.name).join(' & ');
+  }
+
   private renderScore(): void {
-    this.hud.score.textContent = `${this.near.name} ${this.near.score} : ${this.far.score} ${this.far.name}`;
+    this.hud.score.textContent = `${this.teamName(1)} ${this.near.score} : ${this.far.score} ${this.teamName(-1)}`;
     const names = { easy: 'Easy', normal: 'Normal', pro: 'Pro' };
-    this.hud.level.hidden = this.far.human;
+    this.hud.level.hidden = this.athletes.every((a) => a.human);
     this.hud.level.textContent = `CPU: ${names[this.level]} · keys 1 2 3`;
   }
 
@@ -1167,7 +1310,7 @@ export class Badminton {
     const w = this.container.clientWidth || window.innerWidth;
     const h = this.container.clientHeight || window.innerHeight;
     this.renderer.setSize(w, h);
-    const split = this.far.human;
+    const split = this.split();
     for (const a of [this.near, this.far]) {
       a.camera.aspect = (split ? w / 2 : w) / h;
       a.camera.fov = split ? cfg.splitCameraFov : cfg.cameraFov;
@@ -1182,11 +1325,11 @@ export class Badminton {
       e.preventDefault();
       const aim = (this.keys.has('ArrowRight') ? 0.7 : 0) - (this.keys.has('ArrowLeft') ? 0.7 : 0);
       const power = this.keys.has('w') || this.keys.has('W') ? TUNING.badminton.keyWeakPower : TUNING.badminton.keyPower;
-      this.onSwing(1, Date.now(), power, aim, e.shiftKey);
+      this.onSwing(0, Date.now(), power, aim, e.shiftKey);
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      this.onSwing(-1, Date.now(), TUNING.badminton.keyPower, 0, e.shiftKey);
-    } else if ((e.key === '1' || e.key === '2' || e.key === '3') && !this.far.human) {
+      this.onSwing(1, Date.now(), TUNING.badminton.keyPower, 0, e.shiftKey);
+    } else if ((e.key === '1' || e.key === '2' || e.key === '3') && this.athletes.some((a) => !a.human)) {
       this.level = e.key === '1' ? 'easy' : e.key === '2' ? 'normal' : 'pro';
       this.renderScore();
     } else if (e.key === 'Enter' && this.phase === 'over') {

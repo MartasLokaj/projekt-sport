@@ -217,6 +217,12 @@ export function initLabScreen(send: (msg: ClientMessage) => void): LabScreen {
         if ('vibrate' in navigator) navigator.vibrate(25); // not supported on iPhone
         return;
       }
+      if (cue === 'your_turn') {
+        // 2 v 2: this player's character goes for the shuttle.
+        kindEl.textContent = 'Your shuttle!';
+        if ('vibrate' in navigator) navigator.vibrate(15); // not supported on iPhone
+        return;
+      }
       if (cue === 'super_smash') {
         kindEl.textContent = 'SUPER SMASH!';
         powerEl.textContent = '💥';

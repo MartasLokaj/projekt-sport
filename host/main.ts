@@ -70,12 +70,14 @@ let badminton: Badminton | null = null;
 /** Which badminton screen to show when the server confirms (or null while on the cube). */
 let badmintonWanted: 'game' | 'lab' = 'lab';
 let labOpen = false;
-/** The phones that play badminton: the first connected player (near side) and the second (far side, else the computer). */
-let badmintonIds: [string | null, string | null] = [null, null];
+/**
+ * The phones that play badminton, by seat: 1st connected player near side, 2nd far side (else the computer);
+ * with 3 or 4 phones it is 2 v 2: the 3rd joins the near side, the 4th the far side (else the computer).
+ */
+let badmintonIds: (string | null)[] = [null, null];
 
-function badmintonPlayers(): [PlayerInfo | null, PlayerInfo | null] {
-  const find = (id: string | null): PlayerInfo | null => players.find((p) => p.id === id) ?? null;
-  return [find(badmintonIds[0]), find(badmintonIds[1])];
+function badmintonPlayers(): (PlayerInfo | null)[] {
+  return badmintonIds.map((id) => players.find((p) => p.id === id) ?? null);
 }
 
 function openBadminton(view: 'game' | 'lab'): void {
@@ -94,7 +96,8 @@ function showLab(on: boolean): void {
     hub?.stop();
     if (game) {
       const connected = players.filter((p) => p.connected);
-      badmintonIds = [connected[0]?.id ?? null, connected[1]?.id ?? null];
+      const doubles = connected.length >= 3;
+      badmintonIds = [0, 1, 2, 3].slice(0, doubles ? 4 : 2).map((seat) => connected[seat]?.id ?? null);
       badminton ??= new Badminton(document.getElementById('badminton-canvas')!, {
         screen: badmintonScreen,
         score: document.getElementById('badminton-score')!,
@@ -108,13 +111,13 @@ function showLab(on: boolean): void {
         rallyNear: document.getElementById('badminton-rally-near')!,
         rallyFar: document.getElementById('badminton-rally-far')!,
       });
-      badminton.onCue = (side, cue) => {
-        const playerId = badmintonIds[side === 1 ? 0 : 1];
+      badminton.onCue = (seat, cue) => {
+        const playerId = badmintonIds[seat];
         if (playerId) send({ type: 'badminton_cue', playerId, cue });
       };
       badminton.onOutcome = (outcome) => send({ type: 'badminton_outcome', outcome });
       if (import.meta.env.DEV) Object.assign(window, { badminton }); // for debugging in the browser console
-      badminton.start(...badmintonPlayers(), lobbyUi.cpuLevel, lobbyUi.matchLength);
+      badminton.start(badmintonPlayers(), lobbyUi.cpuLevel, lobbyUi.matchLength, doubles);
     } else lab.start();
   } else {
     lab.stop();
@@ -175,7 +178,7 @@ function connect(): void {
       lobbyUi.setPlayers(players);
       game?.setPlayers(players);
       lab.setPlayers(players);
-      if (!badmintonScreen.hidden) badminton?.setPlayers(...badmintonPlayers());
+      if (!badmintonScreen.hidden) badminton?.setPlayers(badmintonPlayers());
       labEmpty.hidden = players.length > 0;
     } else if (msg.type === 'game_state') void onGameState(msg);
     else if (msg.type === 'player_aim') {
@@ -190,8 +193,8 @@ function connect(): void {
     } else if (msg.type === 'lab_state') showLab(msg.on);
     else if (msg.type === 'player_badminton_swing') {
       if (!badmintonScreen.hidden) {
-        const side = msg.playerId === badmintonIds[0] ? 1 : msg.playerId === badmintonIds[1] ? -1 : null;
-        if (side !== null && !msg.ignored) badminton?.onSwing(side, msg.at, msg.power, msg.aim, msg.short, msg.receivedAt);
+        const seat = badmintonIds.indexOf(msg.playerId);
+        if (seat >= 0 && !msg.ignored) badminton?.onSwing(seat, msg.at, msg.power, msg.aim, msg.short, msg.receivedAt);
       } else lab.onSwing(msg);
     }
   });

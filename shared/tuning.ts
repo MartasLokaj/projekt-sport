@@ -775,6 +775,13 @@ export const TUNING = {
     },
     /** Rackets: size (1 = sized for our chibis, a little bigger than real), and the swoosh behind the head on each swing. */
     racketScale: 1,
+    /**
+     * 2 v 2 (B4): teammates wait side by side, laneOffset (m) either side of the middle; the receiving team's and
+     * the server's partner stand partnerBack (m) further back at the serve. The teammate who goes for the shuttle
+     * gets a ring in their colour on the sand (ringOpacity) and their phone buzzes. Teammates keep at least
+     * minGap (m) apart.
+     */
+    doubles: { laneOffset: 1.5, partnerBack: 1.2, ringOpacity: 0.75, minGap: 0.9 },
     /** How long the reactions after a point last (milliseconds): the winner's jump and spin, the loser's slump. */
     pointReactionMs: { won: 1300, lost: 1300 },
     swoosh: { ms: 220, opacity: 0.55, colour: '#ffffff', perfectColour: '#ffd23d' },

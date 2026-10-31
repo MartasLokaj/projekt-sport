@@ -413,6 +413,26 @@ running log of where we are, what the user decided, and what comes next).
     silver shaft, T-joint, oval head with a string grid; same length from the hand as before (`racketScale` 1).
     Swoosh ribbon behind the head on every swing (`Swoosh` in `effects.ts`, `TUNING.badminton.swoosh`), gold after
     a Perfect (the frame still glows gold). Hub (`host/hub/Hub.ts`) uses the same `buildRacket`.
+  - User chose the **white (classic) shuttle**.
+
+### Badminton B4 — 2 v 2 (built 2026-10-31, user: "Bílý, postav B4"), waiting for the phone test
+- `Badminton.ts` now has 4 seats (`seats`; 0/2 near side, 1/3 far side; `near`/`far` = seats 0/1 = team captains:
+  camera, score, half of the screen); `athletes` = the ones in play (2, or 4 in 2 v 2). `start(players[], level,
+  length, doubles)`, `onSwing(seat, …)`, `onCue(seat, cue)`.
+- `host/main.ts`: 3–4 connected phones → 2 v 2 (1st + 3rd near side, 2nd + 4th far side, the computer fills
+  empty seats); 2 → 1 v 1; 1 → vs CPU. Lobby card (`host/hub/faces.ts`, only the modes list touched): "2 v 2 ·
+  Three or four phones · CPU fills in", maxPlayers 4, level row also for 2 v 2.
+- Who hits: each teammate works out its contact (`findContact`); the best reach, then the earliest (80 ms
+  buckets), then the shorter run goes (`receiverAthlete`); only that player's swing counts. Ring in their colour on
+  the sand, phone cue `your_turn` ("Your shuttle!", short buzz on Android). The partner covers the other half
+  (`laneOffset`); the hitting team goes back side by side (left stays left); `keepApart` keeps `minGap`.
+  Serve: team serving with the same server while it keeps winning; winning the serve back → the team's other player
+  serves (`lastServer`). Partners stand `partnerBack` further back at the serve. Camera follows the team's middle.
+  Score shows "Martas & Tom 3 : 1 Eva & Ana". Tuning `TUNING.badminton.doubles`. The court is not widened (it is
+  already 6.5 m wide, wider than a real doubles court).
+- Scripted tests: 4 CPUs (each seat hits 3–5 times in 35 s, teammates ≥ 1.3 m apart, serve rotation s2→s3→s0→s1),
+  two players in one team (only the receiver's swing counts, partner's ignored, cues sent), 1 v 1 and vs CPU still
+  fine, no console errors. Not tested on real phones (needs 3–4 phones).
 
 ### Badminton: deeper shots, more running (user, 2026-10-31: "the shuttle should fly to the back line, more movement"; palms: keep ours)
 - Clears, lifts and serves land right by the back line (depth up to 8.15 of 8.4) in a higher arc (apex 5.0–5.6),
