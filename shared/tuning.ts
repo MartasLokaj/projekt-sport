@@ -762,6 +762,26 @@ export const TUNING = {
     splitCameraBack: 4.0,
     /** The shuttle is drawn this much bigger than real, so it is easy to follow from the sofa. */
     shuttleScale: 2.4,
+    /**
+     * Shuttle look: 'classic' (white feathers, coral cork, thin dark outline, soft glow) or 'red' (the glowing red
+     * one, refined). glow = how much the cork/feathers shine by themselves; halo = the soft glow around it.
+     */
+    shuttleStyle: 'classic' as 'classic' | 'red',
+    shuttleLooks: {
+      classic: { cork: '#ff6b57', feathers: '#ffffff', ribs: '#c9ced6', band: '#1e3a8a', glow: 0.25, outline: '#1b1f2a', halo: 0.35, haloColour: '#fff4d6' },
+      red: { cork: '#ff1a1a', feathers: '#ff2a2a', ribs: '#b30000', band: '#ffd23d', glow: 0.7, outline: null, halo: 0.45, haloColour: '#ff5a3a' },
+    },
+    /** Rackets: size (1 = sized for our chibis, a little bigger than real), and the swoosh behind the head on each swing. */
+    racketScale: 1,
+    /** How long the reactions after a point last (milliseconds): the winner's jump and spin, the loser's slump. */
+    pointReactionMs: { won: 1300, lost: 1300 },
+    swoosh: { ms: 220, opacity: 0.55, colour: '#ffffff', perfectColour: '#ffd23d' },
+    /**
+     * Beach outfit for everyone (the avatar menu may later let players choose): top tank/tee, shorts/pants, feet
+     * bare/shoes, a headband in headbandColour (null = none). Shorts are the player's colour darkened by
+     * shortsShade (0 = same colour, 1 = shortsBase).
+     */
+    outfit: { top: 'tank', bottoms: 'shorts', feet: 'bare', headbandColour: '#ffffff' as string | null, shortsBase: '#1f2a44', shortsShade: 0.55 },
     /** Colour of the sand kicked up by the players (the beach itself is in `beach` below). */
     sandColour: '#ecd3a0',
 

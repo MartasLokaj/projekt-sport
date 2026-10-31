@@ -14,6 +14,20 @@ import { TUNING } from '../../shared/tuning.ts';
 
 export type CharacterLook = { shirt: string; skin: string; handedness: Handedness };
 export type Mood = 'idle' | 'cheer' | 'jump' | 'slump' | 'scratch' | 'clap';
+/**
+ * What the character wears (the face, hair and colours stay the same everywhere). Each game picks one, e.g. the
+ * badminton beach look: tank top, shorts, bare feet, a sports headband.
+ */
+export type Outfit = {
+  top: 'tee' | 'tank';
+  bottoms: 'pants' | 'shorts';
+  /** Colour of the trousers or shorts (default: dark blue). */
+  bottomsColour?: string;
+  feet: 'shoes' | 'bare';
+  /** A sports headband in this colour, or none. */
+  headband?: string | null;
+};
+export const DEFAULT_OUTFIT: Outfit = { top: 'tee', bottoms: 'pants', feet: 'shoes' };
 
 const MOOD_SECONDS: Record<Mood, number> = { idle: 0, cheer: 0.9, jump: 1.8, slump: 1.6, scratch: 1.6, clap: 1.6 };
 const PANTS = '#2f3a56';
@@ -31,6 +45,14 @@ export class Character {
   private readonly standArms: THREE.Group[];
   private readonly skinMaterial = new THREE.MeshStandardMaterial({ roughness: 0.7 });
   private readonly shirtMaterial = new THREE.MeshStandardMaterial({ roughness: 0.75 });
+  private readonly pantsMaterial = new THREE.MeshStandardMaterial({ color: PANTS, roughness: 0.8 });
+  private readonly shoeMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.6 });
+  /** Outfit pieces: sleeves (every arm), leg capsules, feet, the shorts/trousers top, the headband. */
+  private readonly sleeves: THREE.Mesh[] = [];
+  private readonly legMeshes: THREE.Mesh[] = [];
+  private readonly feet: THREE.Mesh[] = [];
+  private shorts!: THREE.Mesh;
+  private headband: THREE.Mesh | null = null;
 
   /**
    * Overrides the racket (or putter) arm while standing: turn around the shoulder in radians,
@@ -82,6 +104,38 @@ export class Character {
     this.shirtMaterial.color.set(look.shirt);
     this.handedness = look.handedness;
     this.applyScale();
+  }
+
+  /** Dresses the character (see Outfit). */
+  setOutfit(outfit: Outfit): void {
+    const shorts = outfit.bottoms === 'shorts';
+    for (const sleeve of this.sleeves) sleeve.material = outfit.top === 'tank' ? this.skinMaterial : this.shirtMaterial;
+    this.pantsMaterial.color.set(outfit.bottomsColour ?? PANTS);
+    // Shorts: bare legs and a longer, wider shorts top.
+    for (const leg of this.legMeshes) leg.material = shorts ? this.skinMaterial : this.pantsMaterial;
+    this.shorts.scale.set(shorts ? 1.06 : 1, shorts ? 1.7 : 1, shorts ? 1.06 : 1);
+    this.shorts.position.y = shorts ? 0.005 : 0.03;
+    const bare = outfit.feet === 'bare';
+    for (const foot of this.feet) {
+      foot.material = bare ? this.skinMaterial : this.shoeMaterial;
+      foot.scale.set(bare ? 0.85 : 1, bare ? 0.45 : 0.6, bare ? 1.25 : 1.4);
+    }
+    if (this.headband) {
+      this.head.remove(this.headband);
+      (this.headband.material as THREE.Material).dispose();
+      this.headband = null;
+    }
+    if (outfit.headband) {
+      this.headband = new THREE.Mesh(
+        new THREE.TorusGeometry(0.208, 0.02, 8, 32),
+        new THREE.MeshStandardMaterial({ color: outfit.headband, roughness: 0.85 }),
+      );
+      // Round the head just above the eyebrows, tipped back like the hair line.
+      this.headband.position.set(0, 0.232, -0.012);
+      this.headband.rotation.x = Math.PI / 2 - 0.35;
+      this.headband.castShadow = true;
+      this.head.add(this.headband);
+    }
   }
 
   /** The arm whose hand holds the putter (the character's right arm). Its hand is at (0, -0.17, 0). */
@@ -244,8 +298,8 @@ export class Character {
   // ---------- Model ----------
 
   private build(): void {
-    const pants = new THREE.MeshStandardMaterial({ color: PANTS, roughness: 0.8 });
-    const shoe = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.6 });
+    const pants = this.pantsMaterial;
+    const shoe = this.shoeMaterial;
 
     // Legs and shoes, each on a hip pivot (left = +x, right = -x, like the arms)
     const hipY = 0.15;
@@ -258,6 +312,8 @@ export class Character {
       foot.scale.set(1, 0.6, 1.4);
       foot.position.set(0, 0.03 - hipY, 0.02);
       hip.add(leg, foot);
+      this.legMeshes.push(leg);
+      this.feet.push(foot);
       this.legs.push(hip);
       this.body.add(hip);
     }
@@ -266,6 +322,7 @@ export class Character {
     this.torso.position.y = 0.17;
     const shorts = new THREE.Mesh(new THREE.CylinderGeometry(0.115, 0.11, 0.09, 18), pants);
     shorts.position.y = 0.03;
+    this.shorts = shorts;
     const shirt = new THREE.Mesh(new THREE.CapsuleGeometry(0.12, 0.12, 6, 18), this.shirtMaterial);
     shirt.position.y = 0.15;
     this.torso.add(shorts, shirt);
@@ -336,6 +393,7 @@ export class Character {
     arm.position.set(side * 0.14, 0.27, 0); // shoulder, relative to the torso
     const sleeve = new THREE.Mesh(new THREE.CapsuleGeometry(0.042, 0.05, 4, 10), this.shirtMaterial);
     sleeve.position.y = -0.045;
+    this.sleeves.push(sleeve);
     const forearm = new THREE.Mesh(new THREE.CapsuleGeometry(0.032, 0.06, 4, 10), this.skinMaterial);
     forearm.position.y = -0.115;
     const hand = new THREE.Mesh(new THREE.SphereGeometry(0.04, 12, 10), this.skinMaterial);

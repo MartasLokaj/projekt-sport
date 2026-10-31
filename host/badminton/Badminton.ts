@@ -2,9 +2,9 @@ import * as THREE from 'three';
 import { SKIN_TONES, type PlayerInfo } from '../../shared/protocol.ts';
 import { TUNING } from '../../shared/tuning.ts';
 import { Character } from '../game/character.ts';
-import { buildRacket, buildShuttle } from './court.ts';
+import { buildRacket, buildShuttle, setRacketColour } from './court.ts';
 import { buildBeach, type Venue } from './venue/beach.ts';
-import { Birds, SandPuffs, Trail } from './effects.ts';
+import { Birds, SandPuffs, Swoosh, Trail } from './effects.ts';
 import { Coach } from './coach.ts';
 import type { BadmintonCue } from '../../shared/protocol.ts';
 import { findContact, makeShot, type Contact, type Flight, type ShotKind } from './shuttle.ts';
@@ -68,6 +68,11 @@ type Athlete = {
   popUntil: number;
   /** The racket's materials (they glow gold after a Perfect hit) and until when it glows. */
   racketMaterials: THREE.MeshStandardMaterial[];
+  racket: THREE.Group;
+  /** The swoosh behind the racket head while swinging. */
+  swoosh: Swoosh;
+  /** After a point: a happy jump and spin (won) or a sad slump and a kick in the sand (lost), until `until`. */
+  reaction: { won: boolean; start: number; until: number } | null;
   glowUntil: number;
   /** The rally in which this player last got a tip, so tips stay rare. */
   lastTipRally: number;
@@ -159,6 +164,9 @@ export class Badminton {
   private pointEndsAt = 0;
   private cpuServeAt = 0;
   private readonly keys = new Set<string>();
+  /** Scratch vectors for the racket head (swoosh). */
+  private readonly headTip = new THREE.Vector3();
+  private readonly headThroat = new THREE.Vector3();
   private readonly trail = new Trail();
   private readonly puffs = new SandPuffs(TUNING.badminton.sandColour);
   private readonly birds = new Birds(TUNING.badminton.birds);
@@ -679,8 +687,16 @@ export class Badminton {
     this.hud.message.classList.toggle('long-rally', rally !== '');
     // Between points nothing covers the game (unless screenTexts); the result at the end always shows.
     this.hud.message.hidden = !won && !cfg.screenTexts;
-    w.character.play('cheer');
-    loser.character.play('slump');
+    // Beach reactions: the winner jumps and spins with both arms up, the loser slumps and kicks the sand.
+    const now = Date.now();
+    w.character.play('jump');
+    w.reaction = { won: true, start: now, until: now + cfg.pointReactionMs.won };
+    if (!loser.down) {
+      loser.character.play('slump');
+      loser.reaction = { won: false, start: now, until: now + cfg.pointReactionMs.lost };
+      const front = loser.wrapper.position.clone().add(new THREE.Vector3(0, 0, -loser.side * 0.5));
+      this.puffs.burst(front, now, 5, 0.5);
+    }
   }
 
   // ---------- Frame ----------
@@ -885,8 +901,22 @@ export class Badminton {
       const k = Math.min(1, dt * 12);
       a.pose = { x: a.pose.x + (pose.x - a.pose.x) * k, z: a.pose.z + (pose.z - a.pose.z) * k };
     }
-    a.character.armPose = a.pose;
+    // After a point both arms are free for the happy jump or the sad slump.
+    const reacting = a.reaction !== null && now < a.reaction.until;
+    a.character.armPose = reacting ? null : a.pose;
+    if (a.reaction && reacting) {
+      const t = (now - a.reaction.start) / (a.reaction.until - a.reaction.start);
+      // The winner spins round once while jumping.
+      if (a.reaction.won) a.bob.rotation.y += Math.PI * 2 * easeOut(Math.min(1, t * 1.6));
+    } else if (a.reaction) {
+      a.reaction = null;
+    }
     a.character.update(dt);
+    const cfgSwoosh = cfg.swoosh;
+    const swinging = a.swing !== null && now >= a.swing.start && now - a.swing.start < 200;
+    a.racket.getObjectByName('tip')!.getWorldPosition(this.headTip);
+    a.racket.getObjectByName('throat')!.getWorldPosition(this.headThroat);
+    a.swoosh.update(this.headTip, this.headThroat, now, swinging, now < a.glowUntil ? cfgSwoosh.perfectColour : cfgSwoosh.colour, cfgSwoosh.opacity, cfgSwoosh.ms);
   }
 
   /** The racket's gold glow after a Perfect hit, fading out. */
@@ -941,11 +971,14 @@ export class Badminton {
     const character = new Character({ shirt: '#9b5cff', skin: SKIN_TONES[3], handedness: 'right' }, { putter: false });
     const racket = buildRacket(side === 1 ? '#ff8a3d' : '#00a6ed');
     character.handArm.add(racket);
+    // Only the frame glows gold after a Perfect hit.
     const racketMaterials: THREE.MeshStandardMaterial[] = [];
     racket.traverse((o) => {
       const m = (o as THREE.Mesh).material;
-      if (m instanceof THREE.MeshStandardMaterial) racketMaterials.push(m);
+      if (m instanceof THREE.MeshStandardMaterial && m.name === 'frame' && !racketMaterials.includes(m)) racketMaterials.push(m);
     });
+    const swoosh = new Swoosh();
+    this.scene.add(swoosh.mesh);
     const bob = new THREE.Group();
     bob.add(character.root);
     const wrapper = new THREE.Group();
@@ -981,6 +1014,9 @@ export class Badminton {
       pop,
       popUntil: 0,
       racketMaterials,
+      racket,
+      swoosh,
+      reaction: null,
       glowUntil: 0,
       lastTipRally: -99,
       splitUntil: 0,
@@ -1000,6 +1036,17 @@ export class Badminton {
     const shirt = human ? (player?.colour ?? (a.side === 1 ? '#ff5a5f' : '#00a6ed')) : '#9b5cff';
     const skin = human ? (player?.skinTone ?? SKIN_TONES[1]) : SKIN_TONES[3];
     a.character.setLook({ shirt, skin, handedness: 'right' });
+    // The beach look: tank top in the player's colour, darker shorts, bare feet, a headband; racket in their colour.
+    const outfit = TUNING.badminton.outfit;
+    const shorts = new THREE.Color(shirt).lerp(new THREE.Color(outfit.shortsBase), outfit.shortsShade);
+    a.character.setOutfit({
+      top: outfit.top as 'tank' | 'tee',
+      bottoms: outfit.bottoms as 'shorts' | 'pants',
+      bottomsColour: `#${shorts.getHexString()}`,
+      feet: outfit.feet as 'bare' | 'shoes',
+      headband: outfit.headbandColour,
+    });
+    setRacketColour(a.racket, shirt);
     // A left-handed player is the mirror image, so the racket hand is on the other side.
     // The character's right hand is on its local -x side: +x in the world when facing -z (near side),
     // -x when facing +z (far side).

@@ -127,3 +127,57 @@ export class Birds {
     }
   }
 }
+
+/** A swoosh behind the racket head during a swing: a ribbon between the head's tip and throat that fades out. */
+export class Swoosh {
+  readonly mesh: THREE.Mesh;
+  private readonly samples: { tip: THREE.Vector3; throat: THREE.Vector3; time: number }[] = [];
+  private readonly positions: Float32Array;
+  private readonly alphas: Float32Array;
+  private readonly geometry = new THREE.BufferGeometry();
+  private readonly material: THREE.ShaderMaterial;
+
+  constructor(private readonly count = 16) {
+    this.positions = new Float32Array(count * 2 * 3);
+    this.alphas = new Float32Array(count * 2);
+    this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
+    this.geometry.setAttribute('alpha', new THREE.BufferAttribute(this.alphas, 1));
+    const index: number[] = [];
+    for (let i = 0; i < count - 1; i++) {
+      const a = i * 2;
+      index.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+    }
+    this.geometry.setIndex(index);
+    this.material = new THREE.ShaderMaterial({
+      uniforms: { colour: { value: new THREE.Color('#ffffff') }, opacity: { value: 0.5 } },
+      vertexShader: 'attribute float alpha; varying float vAlpha; void main() { vAlpha = alpha; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: 'uniform vec3 colour; uniform float opacity; varying float vAlpha; void main() { gl_FragColor = vec4(colour, vAlpha * opacity); }',
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    this.mesh = new THREE.Mesh(this.geometry, this.material);
+    this.mesh.frustumCulled = false;
+    this.mesh.visible = false;
+  }
+
+  /** Adds where the racket head is now (while swinging) and redraws; lengthMs = how long the swoosh lasts. */
+  update(tip: THREE.Vector3, throat: THREE.Vector3, now: number, swinging: boolean, colour: string, opacity: number, lengthMs: number): void {
+    if (swinging) this.samples.push({ tip: tip.clone(), throat: throat.clone(), time: now });
+    while (this.samples.length > 0 && (now - this.samples[0].time > lengthMs || this.samples.length > this.count)) this.samples.shift();
+    this.mesh.visible = this.samples.length >= 2;
+    if (!this.mesh.visible) return;
+    this.material.uniforms.colour.value.set(colour);
+    this.material.uniforms.opacity.value = opacity;
+    for (let i = 0; i < this.count; i++) {
+      const sample = this.samples[Math.min(i, this.samples.length - 1)];
+      const fade = i < this.samples.length ? 1 - (now - sample.time) / lengthMs : 0;
+      sample.tip.toArray(this.positions, i * 6);
+      sample.throat.toArray(this.positions, i * 6 + 3);
+      this.alphas[i * 2] = Math.max(0, fade);
+      this.alphas[i * 2 + 1] = 0; // fades towards the throat
+    }
+    this.geometry.attributes.position.needsUpdate = true;
+    this.geometry.attributes.alpha.needsUpdate = true;
+  }
+}

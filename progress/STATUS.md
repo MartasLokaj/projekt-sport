@@ -397,7 +397,22 @@ running log of where we are, what the user decided, and what comes next).
   Measured in the dev browser (software GPU, 2 phones, split screen): 201 draw calls per frame for both halves
   (was 256 with the graybox, mostly the characters), ~300k triangles per frame; venue CPU work per frame is just a
   few shader values. **Real fps on the MacBook Air not measured yet.** All values in `TUNING.badminton.beach`.
-- Next: user OK on step 1 (tweaks), then step 2 players (beach outfits), 3 shuttle (2 options), 4 rackets.
+- Step 1 approved in practice (user kept playing on it).
+- **Steps 2–4 built 2026-10-31 (user: "zahaj krok 2 3 a 4"; the avatar menu is being made in another session and
+  will offer the beach fit), waiting for the user's look + shuttle choice:**
+  - **2 Players:** `Character.setOutfit(Outfit)` in `host/game/character.ts` (tee/tank, pants/shorts + colour,
+    shoes/bare feet, optional headband; `DEFAULT_OUTFIT` = the old look, minigolf unchanged). Badminton dresses
+    everyone in `TUNING.badminton.outfit`: tank top in the player's colour, shorts = that colour darkened
+    (`shortsShade`), bare feet, white headband. Caps/visors/sunglasses are left to the avatar menu (AVATAR.md has
+    Hat and Glasses) so they are not built twice. Reactions after a point (`pointReactionMs`): the winner jumps with
+    both arms up and spins once, the loser slumps and kicks a little sand.
+  - **3 Shuttle:** `buildShuttle()` in `court.ts`, `TUNING.badminton.shuttleStyle` 'classic' (white scalloped
+    feather skirt with ribs and thread rings, coral cork with a navy band, thin dark outline, soft warm glow) or
+    'red' (same shape, glowing red, gold band). Default 'classic' until the user chooses. Flies cork first.
+  - **4 Rackets:** `buildRacket()`: grip tape (wrap texture) and frame in the player's colour (`setRacketColour`),
+    silver shaft, T-joint, oval head with a string grid; same length from the hand as before (`racketScale` 1).
+    Swoosh ribbon behind the head on every swing (`Swoosh` in `effects.ts`, `TUNING.badminton.swoosh`), gold after
+    a Perfect (the frame still glows gold). Hub (`host/hub/Hub.ts`) uses the same `buildRacket`.
 
 ### Badminton: deeper shots, more running (user, 2026-10-31: "the shuttle should fly to the back line, more movement"; palms: keep ours)
 - Clears, lifts and serves land right by the back line (depth up to 8.15 of 8.4) in a higher arc (apex 5.0–5.6),
