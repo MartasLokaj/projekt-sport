@@ -302,6 +302,23 @@ running log of where we are, what the user decided, and what comes next).
     or CPU label during play. Only the score, the rally counter and the result at the end of a match show. Visual
     cues stay (gold racket glow, flash, trails, colours, phone texts). Set `screenTexts: true` to bring them back.
   - Next: user tests → B4 (2v2) — plan first.
+  - **2026-10-31, user: "hits are good but not precise; make a system that studies the player and adapts speed,
+    swing, ping…; the character must run more — after a short shot, when a lift comes, it must already be
+    running there".** Agreed plan: step 1 footwork, step 2 a per-player "coach" (learns each player's timing
+    offset, swing strength, aim spread and Wi-Fi delay; adapts after ~5 hits; outcome of each hit added to the
+    swing log). User: "start with running, and make it do lunges like real badminton".
+  - **Footwork step — built, waiting for the user's phone test.** `TUNING.badminton.footwork`. After a shot the
+    hitter goes straight to a base: deeper (`baseDepthVsNet` 6.2) when the other side meets the shuttle near the
+    net (`frontContactDepth` 3.5) or low (a lift is coming), else `homeDepth`; shifted towards the other player's
+    side (`baseFollowX`). Split-step hop as the other side hits (as long as the reaction time). Legs now have hip
+    pivots (`Character.legPose`, shared with minigolf, null = straight): running strides, lean into the run
+    (forward / back / sideways), little sand puffs at each fast step (`SandPuffs.burst(…, size)`). **Lunge**
+    (`lunge*`): a shuttle taken below overhead height closer than `lungeDepth` 4.5 to the net, or a stretch → racket
+    leg forward, body low, leaning towards the shuttle, held `lungeHoldMs` after the hit. Checked in the dev
+    browser (CPU vs CPU, pictures from the side): drop hitters are back at 6.2 m before the reply, lunges at the net.
+    Note: the app's browser pane can't open the self-signed https server; tested with a temporary http copy.
+  - Next: user tests footwork → step 2 coach (plan already agreed, files: new `host/badminton/coach.ts`,
+    `Badminton.ts`, `shared/tuning.ts`, swing log in `server/index.ts`).
 
 ### GitHub and the cloud (2026-10-31)
 - Project is on GitHub: **private** repo `MartasLokaj/projekt-sport` (remote `origin`, branch `main`). `gh` CLI is in

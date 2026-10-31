@@ -38,6 +38,14 @@ export class Character {
    */
   armPose: { x: number; z: number } | null = null;
 
+  /**
+   * Overrides the legs: turn around each hip in radians (negative = foot forwards, positive = backwards).
+   * right is the racket/putter side. null = legs straight down.
+   */
+  legPose: { left: number; right: number } | null = null;
+  /** Hip pivots: [left, right]. */
+  private readonly legs: THREE.Group[] = [];
+
   /** What the free hand holds while standing (see setGear). */
   private gear: THREE.Object3D | null = null;
 
@@ -124,6 +132,9 @@ export class Character {
   update(dt: number): void {
     this.time += dt;
     this.updateMovement(dt);
+    const [left, right] = this.legs;
+    left.rotation.x = this.legPose?.left ?? 0;
+    right.rotation.x = this.legPose?.right ?? 0;
 
     // Breathing and a gentle bob.
     const breath = Math.sin(this.time * 2.2);
@@ -236,14 +247,19 @@ export class Character {
     const pants = new THREE.MeshStandardMaterial({ color: PANTS, roughness: 0.8 });
     const shoe = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.6 });
 
-    // Legs and shoes
-    for (const side of [-1, 1]) {
+    // Legs and shoes, each on a hip pivot (left = +x, right = -x, like the arms)
+    const hipY = 0.15;
+    for (const side of [1, -1]) {
+      const hip = new THREE.Group();
+      hip.position.set(side * 0.06, hipY, 0);
       const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.045, 0.07, 4, 10), pants);
-      leg.position.set(side * 0.06, 0.1, 0);
+      leg.position.set(0, 0.1 - hipY, 0);
       const foot = new THREE.Mesh(new THREE.SphereGeometry(0.055, 14, 10), shoe);
       foot.scale.set(1, 0.6, 1.4);
-      foot.position.set(side * 0.06, 0.03, 0.02);
-      this.body.add(leg, foot);
+      foot.position.set(0, 0.03 - hipY, 0.02);
+      hip.add(leg, foot);
+      this.legs.push(hip);
+      this.body.add(hip);
     }
 
     // Torso: shirt with shorts underneath

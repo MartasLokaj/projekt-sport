@@ -511,6 +511,41 @@ export const TUNING = {
      * shuttle more often. Stretches still exist for really far shots.
      */
     reachAssist: 0.2,
+    /**
+     * Footwork, like real badminton players.
+     * - Base: after a shot the hitter goes back to a waiting spot. When the other side has to play from near the
+     *   net or low (a lift is coming, usually deep), the spot is deeper (baseDepthVsNet) so the character is
+     *   already running back; otherwise homeDepth. baseFollowX moves the spot towards the side of the court the
+     *   other player hits from (0 = always the middle).
+     * - Split step: as the other side hits, the receiver does a small hop (as long as its reaction time) and
+     *   then runs.
+     * - Running look: legs stride (strideAngle radians at runSpeed), the body leans into the run (forward
+     *   leanForward, backwards leanBack, sideways leanSide, radians); little sand puffs at each step from
+     *   stepPuffSpeed (m/s).
+     * - Lunge (výpad): a shuttle taken below overhead height closer than lungeDepth to the net, or a stretch
+     *   (dive reach): the last step becomes a deep lunge, racket leg forward, body low and leaning towards the shuttle. It starts within lungeStartDistance
+     *   (m) of the spot and lungeLeadMs before the contact, and is held lungeHoldMs after the hit.
+     */
+    footwork: {
+      baseDepthVsNet: 6.2,
+      frontContactDepth: 3.5,
+      baseFollowX: 0.3,
+      splitHop: 0.08,
+      strideAngle: 0.9,
+      leanForward: 0.22,
+      leanBack: 0.12,
+      leanSide: 0.18,
+      stepPuffSpeed: 4.5,
+      lungeDepth: 4.5,
+      lungeStartDistance: 1.6,
+      lungeLeadMs: 450,
+      lungeHoldMs: 350,
+      lungeDrop: 0.06,
+      lungeLean: 0.55,
+      lungeStep: 0.18,
+      lungeFrontLeg: -1.15,
+      lungeBackLeg: 0.95,
+    },
     /** Contact height decides the stroke: from overheadFrom up = overhead, from driveFrom up = flat drive, lower = lift (m). */
     overheadFrom: 1.7,
     driveFrom: 1.0,

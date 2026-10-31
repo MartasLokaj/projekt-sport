@@ -70,6 +70,14 @@ type Athlete = {
   glowUntil: number;
   /** The rally in which this player last got a tip, so tips stay rare. */
   lastTipRally: number;
+  /** Footwork: split-step hop until then (host clock), body lean into the run, running bounce, lunge (0..1). */
+  splitUntil: number;
+  lean: { x: number; z: number };
+  bounce: number;
+  lunge: number;
+  lungeUntil: number;
+  /** Which way the lunge goes, in the character's own frame (radians, 0 = straight forward). */
+  lungeYaw: number;
 };
 
 export type BadmintonHud = {
@@ -352,6 +360,9 @@ export class Badminton {
       a.down = null;
       a.busyUntil = 0;
       a.bob.rotation.set(0, 0, 0);
+      a.lunge = 0;
+      a.lungeUntil = 0;
+      a.splitUntil = 0;
     }
     const server = this.athlete(this.server);
     const other = this.athlete(-this.server as Side);
@@ -449,16 +460,21 @@ export class Badminton {
     this.renderRally();
     this.receiver = -hitter as Side;
     const receiver = this.athlete(this.receiver);
-    this.moveTo(this.athlete(hitter), new THREE.Vector3(0, 0, hitter * cfg.homeDepth), null);
     if (flight.intoNet) {
       // Nothing to hit: it drops on the hitter's side and the point goes to the receiver.
+      this.moveTo(this.athlete(hitter), new THREE.Vector3(0, 0, hitter * cfg.homeDepth), null);
       this.contact = null;
       this.decided = true;
       return;
     }
+    const now = Date.now();
     const reaction = receiver.human ? cfg.reactionMs : cfg.cpuLevels[this.level].reactionMs;
-    this.contact = findContact(flight, this.receiver, receiver.wrapper.position, Math.max(Date.now(), receiver.busyUntil), reaction);
+    this.contact = findContact(flight, this.receiver, receiver.wrapper.position, Math.max(now, receiver.busyUntil), reaction);
     this.decided = false;
+    // The hitter heads for its waiting spot straight away (deeper if the other side must lift from the front).
+    this.moveTo(this.athlete(hitter), this.basePosition(hitter, this.contact), null);
+    // Split step: the receiver hops as the shuttle is hit, then runs.
+    if (now >= receiver.busyUntil) receiver.splitUntil = now + reaction;
     if (flight.kind === 'wobble' && receiver.human) {
       this.showFeedback(receiver, '⚡ Smash chance!');
       this.onCue?.(receiver.side, 'smash_chance');
@@ -472,6 +488,17 @@ export class Badminton {
     receiver.jump = jump > 0 && !receiver.human ? { height: jump, peak: this.contact.time, rise: cfg.jumpRiseMs } : null;
   }
 
+  /**
+   * Where the hitter waits for the return. If the other side meets the shuttle near the net or low, it has to
+   * lift, and a lift goes deep: wait deeper. Shifted a little towards the side the other player hits from.
+   */
+  private basePosition(side: Side, contact: Contact): THREE.Vector3 {
+    const cfg = TUNING.badminton;
+    const fw = cfg.footwork;
+    const lifting = contact.stroke === 'lift' || Math.abs(contact.position.z) < fw.frontContactDepth;
+    return new THREE.Vector3(contact.position.x * fw.baseFollowX, 0, side * (lifting ? fw.baseDepthVsNet : cfg.homeDepth));
+  }
+
   /** The athlete dives towards `towards` (flat), lands in the sand and lies there for recoveryMs. */
   private dive(a: Athlete, now: number, towards: THREE.Vector3): void {
     const cfg = TUNING.badminton;
@@ -483,6 +510,10 @@ export class Badminton {
     a.swing = null;
     a.target.copy(a.wrapper.position).setY(0);
     a.deadline = null;
+    a.lunge = 0;
+    a.lungeUntil = 0;
+    a.splitUntil = 0;
+    a.character.legPose = null;
   }
 
   /**
@@ -727,24 +758,70 @@ export class Badminton {
 
   private updateAthlete(a: Athlete, now: number, dt: number): void {
     const cfg = TUNING.badminton;
+    const fw = cfg.footwork;
     if (this.updateDown(a, now, dt)) return;
     // Run towards the target, fast enough to get there in time.
     const toTarget = a.target.clone().sub(a.wrapper.position).setY(0);
     const distance = toTarget.length();
-    if (distance > 0.02) {
+    let stride = 0;
+    let lean = { x: 0, z: 0 };
+    if (now < a.splitUntil) {
+      // Split step: a small hop on the spot as the other side hits.
+      const k = 1 - (a.splitUntil - now) / Math.max(1, cfg.reactionMs);
+      a.bounce = Math.sin(THREE.MathUtils.clamp(k, 0, 1) * Math.PI) * fw.splitHop;
+    } else if (distance > 0.02) {
       const timeLeft = a.deadline === null ? 1 : Math.max(0.05, (a.deadline - now) / 1000);
       const assist = 1 + cfg.reachAssist;
       const speed = Math.min(cfg.maxRunSpeed * assist, Math.max(cfg.runSpeed * assist, distance / timeLeft));
-      a.wrapper.position.addScaledVector(toTarget.normalize(), Math.min(distance, speed * dt));
-      a.runPhase += dt * 14;
-      a.bob.position.y = Math.abs(Math.sin(a.runPhase)) * 0.07;
+      const dir = toTarget.normalize();
+      a.wrapper.position.addScaledVector(dir, Math.min(distance, speed * dt));
+      // Faster running = quicker, longer steps; a puff of sand at each step when really running.
+      const before = Math.floor(a.runPhase / Math.PI);
+      a.runPhase += dt * (8 + speed * 1.3);
+      if (Math.floor(a.runPhase / Math.PI) !== before && speed >= fw.stepPuffSpeed) {
+        this.puffs.burst(a.wrapper.position, now, 2, 0.35);
+      }
+      a.bounce = Math.abs(Math.sin(a.runPhase)) * 0.07;
+      stride = Math.min(1.3, speed / cfg.runSpeed) * Math.min(1, distance / 0.3);
+      // Lean into the run, in the character's own frame (it faces +z, possibly mirrored).
+      const local = this.toLocal(a, dir);
+      lean = { x: local.z > 0 ? local.z * fw.leanForward : local.z * fw.leanBack, z: -local.x * fw.leanSide };
+      lean.x *= stride;
+      lean.z *= stride;
     } else if (this.phase === 'rally' && this.receiver !== a.side) {
       // Ready on the toes while the other side plays.
       a.runPhase += dt * cfg.readyBouncesPerSecond * Math.PI;
-      a.bob.position.y = Math.abs(Math.sin(a.runPhase)) * cfg.readyBounce;
+      a.bounce = Math.abs(Math.sin(a.runPhase)) * cfg.readyBounce;
     } else {
-      a.bob.position.y *= 0.8;
+      a.bounce *= 0.8;
     }
+    const kl = Math.min(1, dt * 10);
+    a.lean = { x: a.lean.x + (lean.x - a.lean.x) * kl, z: a.lean.z + (lean.z - a.lean.z) * kl };
+
+    // Lunge: the last step to a shuttle taken below the head near the net (or a stretch) is a deep lunge, held a
+    // moment after the hit.
+    const c = this.contact;
+    if (
+      c && this.phase === 'rally' && this.receiver === a.side && !this.decided && c.stroke !== 'overhead' &&
+      (Math.abs(c.position.z) < fw.lungeDepth || c.reach === 'dive') && c.time - now < fw.lungeLeadMs && distance < fw.lungeStartDistance
+    ) {
+      if (now >= a.lungeUntil) {
+        const towards = this.toLocal(a, c.position.clone().sub(a.wrapper.position).setY(0).normalize());
+        a.lungeYaw = THREE.MathUtils.clamp(Math.atan2(towards.x, towards.z), -1.2, 1.2);
+      }
+      a.lungeUntil = now + fw.lungeHoldMs;
+    }
+    const lungeWant = now < a.lungeUntil ? 1 : 0;
+    a.lunge += (lungeWant - a.lunge) * Math.min(1, dt * (lungeWant ? 14 : 6));
+    const L = a.lunge;
+    const swing = Math.sin(a.runPhase) * fw.strideAngle * stride;
+    a.character.legPose = {
+      left: swing * (1 - L) + fw.lungeBackLeg * L,
+      right: -swing * (1 - L) + fw.lungeFrontLeg * L,
+    };
+    a.bob.rotation.order = 'YXZ';
+    a.bob.rotation.set(a.lean.x * (1 - L) + fw.lungeLean * L, a.lungeYaw * L, a.lean.z * (1 - L));
+    a.bob.position.set(Math.sin(a.lungeYaw) * fw.lungeStep * L, a.bounce * (1 - L) - fw.lungeDrop * L, Math.cos(a.lungeYaw) * fw.lungeStep * L);
     // Jumping up to meet a high shuttle: up, at the top when the racket meets it, then down.
     let lift = 0;
     if (a.jump) {
@@ -871,6 +948,12 @@ export class Badminton {
       racketMaterials,
       glowUntil: 0,
       lastTipRally: -99,
+      splitUntil: 0,
+      lean: { x: 0, z: 0 },
+      bounce: 0,
+      lunge: 0,
+      lungeUntil: 0,
+      lungeYaw: 0,
     };
   }
 
@@ -889,6 +972,13 @@ export class Badminton {
     const left = handedness === 'left';
     a.wrapper.scale.set(left ? -s : s, s, s);
     a.handSign = (a.side === 1 ? 1 : -1) * (left ? -1 : 1);
+  }
+
+  /** A flat world direction in the athlete's own frame (it faces +z; mirrored for left-handers). */
+  private toLocal(a: Athlete, dir: THREE.Vector3): THREE.Vector3 {
+    const local = dir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), -a.wrapper.rotation.y);
+    if (a.wrapper.scale.x < 0) local.x = -local.x;
+    return local;
   }
 
   private athlete(side: Side): Athlete {

@@ -37,19 +37,21 @@ export class Trail {
 /** Little puffs of sand that burst and fade (where a character lands in the sand). */
 export class SandPuffs {
   readonly group = new THREE.Group();
-  private readonly puffs: { mesh: THREE.Mesh; start: number; velocity: THREE.Vector3 }[] = [];
+  private readonly puffs: { mesh: THREE.Mesh; start: number; velocity: THREE.Vector3; size: number }[] = [];
   private readonly geometry = new THREE.SphereGeometry(0.12, 8, 6);
 
   constructor(private readonly colour: string) {}
 
-  burst(at: THREE.Vector3, now: number, amount = 10): void {
+  /** size < 1 = smaller, slower puffs (footsteps). */
+  burst(at: THREE.Vector3, now: number, amount = 10, size = 1): void {
     for (let i = 0; i < amount; i++) {
       const material = new THREE.MeshStandardMaterial({ color: this.colour, roughness: 1, transparent: true });
       const mesh = new THREE.Mesh(this.geometry, material);
       mesh.position.copy(at).setY(0.1);
       const angle = Math.random() * Math.PI * 2;
-      const speed = 0.8 + Math.random() * 1.2;
-      this.puffs.push({ mesh, start: now, velocity: new THREE.Vector3(Math.cos(angle) * speed, 1 + Math.random() * 1.2, Math.sin(angle) * speed) });
+      const speed = (0.8 + Math.random() * 1.2) * size;
+      const up = (1 + Math.random() * 1.2) * size;
+      this.puffs.push({ mesh, start: now, velocity: new THREE.Vector3(Math.cos(angle) * speed, up, Math.sin(angle) * speed), size });
       this.group.add(mesh);
     }
   }
@@ -67,7 +69,7 @@ export class SandPuffs {
       p.velocity.y -= 4 * dt;
       p.mesh.position.addScaledVector(p.velocity, dt);
       p.mesh.position.y = Math.max(0.05, p.mesh.position.y);
-      p.mesh.scale.setScalar(1 + t * 1.5);
+      p.mesh.scale.setScalar((1 + t * 1.5) * p.size);
       (p.mesh.material as THREE.MeshStandardMaterial).opacity = 1 - t;
     }
   }
