@@ -14,7 +14,7 @@ obrazovky, dotažení editoru postavičky a **testování na skutečných telefo
 |---|---|---|
 | Základ (server, připojení telefonů, QR, znovupřipojení) | **100 %** | Schváleno na telefonech. |
 | Minigolf – hratelnost (fáze 0–3: míček, tahy, skóre, postavičky, levák/pravák) | **100 %** | Schváleno. |
-| Minigolf – vzhled a jamky (fáze 4a, 4b, 9 jamek) | **85 %** | Jamky 1–7 schválené, 8–9 čekají na test. |
+| Minigolf – vzhled a jamky (fáze 4a, 4b, 9 jamek) | **95 %** | Všech 9 jamek schváleno. |
 | Minigolf – „šťáva“ (fáze 4c: konfety, zvuky, úvod jamky, stupně vítězů) | **0 %** | Nezačato. |
 | Badminton – hratelnost (B1–B3, mechaniky 1–5, běhání) | **90 %** | Většina schválena. Trenér (coach) čeká na test. |
 | Badminton – 2 v 2 (B4) | **70 %** | Postaveno, **nevyzkoušeno** (chybí 3–4 telefony). |
@@ -65,7 +65,7 @@ obrazovky, dotažení editoru postavičky a **testování na skutečných telefo
 
 Tohle je teď **největší riziko**: hodně věcí je hotových jen „na Macu“, ne na skutečných telefonech.
 
-1. Minigolf jamky 8 (Most) a 9 (Finále).
+1. ~~Minigolf jamky 8 (Most) a 9 (Finále)~~ — schváleno, všech 9 jamek je top.
 2. Badminton — trenér (coach). Záznam v `logs/badminton-outcomes.jsonl` je zatím jen z klávesnice Macu,
    ne z telefonu (žádné zpoždění Wi-Fi, síla pořád 60).
 3. ~~Badminton — nová kamera a běh ke košíku~~ — schváleno.

@@ -540,8 +540,8 @@ body, round mitten hands, sturdier legs, chunky shoes).
 ### Approvals 2026-10-31 (evening)
 - User: "je to mega dobré" — **K4 dive-in transition, the new badminton camera, the footwork change (stop short +
   reach, calmer runs) and the gentle return to the cube are approved.** "We'll work a lot on the graphics later."
-- User: "golf se mi taky hraje dobře" — minigolf plays well (did not say which holes; J3 holes 8–9 not confirmed
-  one by one).
+- User: "golf se mi taky hraje dobře", then "jamky jsou top!" — **Minigolf J3 (holes 8 Bridge, 9 Finale) approved;
+  all 9 holes approved.**
 
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.
