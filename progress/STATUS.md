@@ -264,6 +264,9 @@ running log of where we are, what the user decided, and what comes next).
   (they did not like the cube much). That work is on its own branch in the cloud: **don't touch `host/hub/` here**;
   merge its branch only when the user asks. This session continues with badminton (functionality).
 - Push `main` after each milestone so the cloud can pick it up.
+- **2026-10-31: merged the cloud's hub branch `claude/adoring-keller-x93qqh` (Cube World 2.0 K1–K2: title menu,
+  new lobby UI `host/ui/`, living cube, confetti, fonts) into `main` on the user's request.** Merge was clean;
+  checked in the dev browser: title → cube → Badminton → Play → game → Esc back to the cube, no errors.
 
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.
