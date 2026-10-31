@@ -50,6 +50,8 @@ export class Hub {
   /** Camera distance from the cube: where it is now and where the zoom wants it. */
   private distance: number = TUNING.hub.cameraDistance;
   private targetDistance: number = TUNING.hub.cameraDistance;
+  /** Extra camera distance on narrow screens, so the whole cube fits across. */
+  private fit = 1;
 
   static async create(container: HTMLElement): Promise<Hub> {
     const loader = new GLTFLoader();
@@ -209,7 +211,7 @@ export class Hub {
     }
     // Glide smoothly to the zoomed distance, along the same line of view.
     this.distance += (this.targetDistance - this.distance) * (1 - Math.exp(-8 * dt));
-    this.camera.position.set(0, c.cameraHeight, c.cameraDistance).multiplyScalar(this.distance / c.cameraDistance);
+    this.camera.position.set(0, c.cameraHeight, c.cameraDistance).multiplyScalar((this.distance / c.cameraDistance) * this.fit);
     this.camera.lookAt(0, 0, 0);
     this.planet.position.y = Math.sin(this.time * c.bobSpeed) * c.bobHeight;
     this.halo.position.copy(this.planet.position).add(new THREE.Vector3(0, 0, -c.cubeSize));
@@ -236,6 +238,10 @@ export class Hub {
     this.composer.setSize(width, height);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
+    this.fit = Math.max(1, TUNING.hub.fitAspect / this.camera.aspect);
+    // Upright screens have the game card at the bottom: show the cube a little higher.
+    if (this.camera.aspect < 1) this.camera.setViewOffset(width, height, 0, height * TUNING.hub.portraitLift, width, height);
+    else this.camera.clearViewOffset();
   }
 
   /** Turns the cube around the screen's up axis (yaw) and side axis (pitch), like grabbing it. */
@@ -410,15 +416,16 @@ function glowTexture(colour: string): THREE.Texture {
   });
 }
 
-/** A white rounded label with a dot in the player's colour and their name. */
+/** A dark glass label with a dot in the player's colour and their name. */
 function makeTag(): HTMLElement {
   const tag = document.createElement('div');
   tag.style.cssText =
-    'position:absolute;left:0;top:0;display:flex;align-items:center;gap:8px;padding:4px 14px 4px 8px;border-radius:999px;' +
-    'background:#fff;color:#1f3247;font:800 clamp(14px,1.5vw,24px) ui-rounded,"SF Pro Rounded",system-ui,sans-serif;' +
-    'white-space:nowrap;max-width:14vw;box-shadow:0 4px 12px rgba(0,0,0,0.3);transform-origin:50% 100%';
+    'position:absolute;left:0;top:0;display:flex;align-items:center;gap:8px;padding:5px 14px 5px 7px;border-radius:999px;' +
+    'background:var(--cw-surface-strong);border:1px solid var(--cw-stroke-strong);color:var(--cw-text);' +
+    'font:800 clamp(13px,1.2vw,20px) var(--cw-font);white-space:nowrap;max-width:14vw;' +
+    'box-shadow:var(--cw-shadow-pop);transform-origin:50% 100%';
   const dot = document.createElement('span');
-  dot.style.cssText = 'width:0.9em;height:0.9em;border-radius:50%;flex:0 0 auto';
+  dot.style.cssText = 'width:0.85em;height:0.85em;border-radius:50%;flex:0 0 auto;box-shadow:0 0 0 2px rgba(255,255,255,0.25)';
   const name = document.createElement('span');
   name.style.cssText = 'overflow:hidden;text-overflow:ellipsis';
   tag.append(dot, name);

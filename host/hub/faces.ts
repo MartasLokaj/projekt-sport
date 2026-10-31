@@ -11,29 +11,82 @@ export type FaceKit = { windmill: GLTF; flag: GLTF; forest: Forest };
 
 type Vec = readonly [number, number, number];
 
+/** Whether a game can be played: finished, a playable prototype, or not built yet. */
+export type FaceStatus = 'ready' | 'prototype' | 'soon';
+
+/** A way to play a game. `players` = how many phones it needs (the mode that matches the phones joined is shown as active). */
+export type GameMode = { label: string; detail: string; players: readonly [number, number] };
+
 export type FaceInfo = {
   id: string;
   title: string;
   description: string;
-  players: string;
-  available: boolean;
+  status: FaceStatus;
+  /** The game's own colour in the menu (its card, its dot, the glow on its side of the cube). */
+  accent: string;
+  icon: 'golf' | 'shuttle' | 'mystery';
+  minPlayers: number;
+  maxPlayers: number;
+  /** One line on how you play with the phone. */
+  controls: string;
+  modes: readonly GameMode[];
   normal: Vec;
   forward: Vec;
 };
+
+const MYSTERY = {
+  title: 'Mystery game',
+  description: 'Something fun is being built on this side. Come back soon!',
+  status: 'soon',
+  accent: '#a597ff',
+  icon: 'mystery',
+  minPlayers: 0,
+  maxPlayers: 0,
+  controls: '',
+  modes: [],
+} as const;
 
 /**
  * The games on the cube's six sides. normal: which way the side faces on the cube; forward: the
  * direction on that side that points towards the camera once the side has turned up.
  */
 export const FACES: readonly FaceInfo[] = [
-  { id: 'minigolf', title: 'Minigolf', description: 'Putt across tiny islands with your phone as the club', players: '1–4 players', available: true, normal: [0, 0, 1], forward: [0, -1, 0] },
-  { id: 'badminton', title: 'Badminton', description: 'Smash the shuttlecock over the net', players: '2–4 players', available: false, normal: [1, 0, 0], forward: [0, 0, 1] },
-  { id: 'mystery-1', title: 'Mystery game', description: 'Something fun is being built here', players: '', available: false, normal: [0, 1, 0], forward: [0, 0, 1] },
-  { id: 'mystery-2', title: 'Mystery game', description: 'Something fun is being built here', players: '', available: false, normal: [-1, 0, 0], forward: [0, 0, 1] },
-  { id: 'mystery-3', title: 'Mystery game', description: 'Something fun is being built here', players: '', available: false, normal: [0, 0, -1], forward: [0, 1, 0] },
-  { id: 'mystery-4', title: 'Mystery game', description: 'Something fun is being built here', players: '', available: false, normal: [0, -1, 0], forward: [0, 0, -1] },
+  {
+    id: 'minigolf',
+    title: 'Minigolf',
+    description: 'Putt across tiny islands in the sea. Fewest strokes wins.',
+    status: 'ready',
+    accent: '#3ddc84',
+    icon: 'golf',
+    minPlayers: 1,
+    maxPlayers: 4,
+    controls: 'Swing like a putter',
+    modes: [{ label: '3-hole course', detail: 'Take turns, lowest total wins', players: [1, 4] }],
+    normal: [0, 0, 1],
+    forward: [0, -1, 0],
+  },
+  {
+    id: 'badminton',
+    title: 'Badminton',
+    description: 'Rally on the beach. Swing when the shuttle reaches you.',
+    status: 'prototype',
+    accent: '#ff7a59',
+    icon: 'shuttle',
+    minPlayers: 1,
+    maxPlayers: 2,
+    controls: 'Swing like a racket',
+    modes: [
+      { label: 'Versus CPU', detail: 'One phone · first to 4, win by 2', players: [0, 1] },
+      { label: '1 v 1', detail: 'Two phones · split screen', players: [2, 4] },
+    ],
+    normal: [1, 0, 0],
+    forward: [0, 0, 1],
+  },
+  { id: 'mystery-1', ...MYSTERY, normal: [0, 1, 0], forward: [0, 0, 1] },
+  { id: 'mystery-2', ...MYSTERY, normal: [-1, 0, 0], forward: [0, 0, 1] },
+  { id: 'mystery-3', ...MYSTERY, normal: [0, 0, -1], forward: [0, 1, 0] },
+  { id: 'mystery-4', ...MYSTERY, normal: [0, -1, 0], forward: [0, 0, -1] },
 ];
-
 
 export function buildFace(face: FaceInfo, kit: FaceKit, size: number): THREE.Group {
   if (face.id === 'minigolf') return minigolfWorld(kit, size);
@@ -198,7 +251,7 @@ function badmintonWorld(size: number): THREE.Group {
   feathers.position.set(2.15, 0.35, 0.5);
   feathers.castShadow = true;
   g.add(feathers);
-  const sign = new THREE.Sprite(new THREE.SpriteMaterial({ map: textTexture('Badminton', '#ffffff', 'coming soon'), transparent: true }));
+  const sign = new THREE.Sprite(new THREE.SpriteMaterial({ map: textTexture('Badminton', '#ffffff', 'prototype'), transparent: true }));
   sign.scale.set(2.4, 1.2, 1);
   sign.position.set(-1.2, 1.2, 0);
   g.add(sign);

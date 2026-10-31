@@ -294,6 +294,10 @@ export const TUNING = {
     cameraDistance: 16.5,
     cameraHeight: 3.5,
     cameraFov: 40,
+    /** On screens narrower than this (width / height) the camera steps back so the cube still fits. */
+    fitAspect: 1.3,
+    /** On upright screens, how far up the cube sits (share of the screen height), above the game card. */
+    portraitLift: 0.08,
     /** Zooming with the mouse wheel or a trackpad pinch: nearest and farthest camera distance, and how fast. */
     zoomMin: 9,
     zoomMax: 32,
@@ -322,6 +326,14 @@ export const TUNING = {
     popInStagger: 0.15,
     exposure: 1.05,
     bloomStrength: 0.55,
+  },
+
+  // The lobby's page panels around the cube (host/hub/lobbyUi.ts, styles in host/ui/).
+  lobbyUi: {
+    /** How long a new player's seat says "Joining" before "Connected" (milliseconds). */
+    joiningMs: 1500,
+    /** How long a news toast ("Ana joined") stays on screen (milliseconds). */
+    toastMs: 3200,
   },
 
   // Badminton swing detection (Swing Lab, phase B1). The phone is held like a racket handle,

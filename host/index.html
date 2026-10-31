@@ -3,44 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Minigolf Party</title>
+    <title>Cube World</title>
+    <link rel="stylesheet" href="/host/ui/theme.css" />
+    <link rel="stylesheet" href="/host/ui/lobby.css" />
     <style>
       :root {
         --ink: #1f3247;
         --soft: #5a6f85;
         --card: #ffffff;
-        --font: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+        --font: var(--cw-font);
       }
       html, body { margin: 0; height: 100%; }
       [hidden] { display: none !important; }
       body { font-family: var(--font); color: var(--ink); margin: 0; overflow: hidden; }
-      #lobby-screen { position: fixed; inset: 0; background: #0b0f2e; color: var(--ink); }
-      #hub-canvas { position: absolute; inset: 0; }
-      .panel { position: absolute; background: rgba(255, 255, 255, 0.92); border-radius: 28px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); }
-      #pick {
-        right: 3vw; top: 50%; transform: translate(0, -50%); width: min(26vw, 380px); padding: 22px 24px; text-align: center;
-        transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s;
-      }
-      #pick.away { transform: translate(120%, -50%); opacity: 0; pointer-events: none; }
-      #pick .row { display: flex; align-items: center; justify-content: center; gap: 14px; }
-      #pick h2 { margin: 0; font-size: clamp(30px, 3.4vw, 52px); font-weight: 900; }
-      #pick-description { margin: 4px 0 2px; font-size: 20px; color: var(--soft); }
-      #pick-players { margin: 0 0 12px; font-size: 18px; font-weight: 700; color: var(--soft); }
-      .turn {
-        font: inherit; font-size: 30px; font-weight: 900; width: 58px; height: 58px; border-radius: 50%; border: none;
-        background: #ece8ff; color: #5b46c9; cursor: pointer;
-      }
-      #start {
-        font: inherit; font-size: 26px; font-weight: 900; color: #ffffff; background: #3ec300;
-        border: none; border-radius: 999px; padding: 12px 28px; box-shadow: 0 6px 0 #2b8a00; cursor: pointer; white-space: nowrap;
-      }
-      #start:active { transform: translateY(5px); box-shadow: 0 1px 0 #2b8a00; }
-      #start:disabled { background: #b8b2d6; box-shadow: 0 6px 0 #8f88b5; cursor: default; }
-      #hub-title {
-        position: absolute; top: 2vh; left: 50%; transform: translateX(-50%); margin: 0; color: #ffffff;
-        font-size: clamp(24px, 2.6vw, 40px); font-weight: 900; letter-spacing: 1px; text-shadow: 0 0 24px rgba(127, 243, 255, 0.7);
-      }
-      #hub-keys { position: absolute; bottom: 2vh; right: 2vw; color: rgba(255, 255, 255, 0.7); font-size: 16px; font-weight: 600; }
       #lab-screen {
         position: fixed; inset: 0; display: grid; grid-template-columns: minmax(260px, 30vw) 1fr; gap: 2vw; padding: 3vh 2vw;
         box-sizing: border-box; background: linear-gradient(#8fd3ff, #ffe7a8);
@@ -153,52 +128,78 @@
         position: absolute; top: 38%; left: 50%; transform: translate(-50%, -50%); white-space: pre-line; text-align: center;
         font-size: 64px; font-weight: 900; color: #ffffff; text-shadow: 0 4px 0 rgba(0, 0, 0, 0.25), 0 0 30px rgba(0, 0, 0, 0.2);
       }
-      #join { top: 3vh; left: 2vw; padding: 20px; text-align: center; width: min(24vh, 260px); }
-      #join h3 { margin: 0 0 10px; font-size: 22px; }
-      #qr { width: 100%; aspect-ratio: 1; image-rendering: pixelated; display: block; margin: 0 auto; }
-      #join-url { margin: 10px 0 0; font-size: 13px; color: var(--soft); word-break: break-all; }
-      #room { margin: 8px 0 0; font-size: 20px; }
-      #room b { font-size: 32px; letter-spacing: 5px; }
-      #joined { margin: 10px 0 0; padding: 0; list-style: none; text-align: left; font-size: 17px; font-weight: 800; }
-      #joined li { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
-      #joined li.away { opacity: 0.5; }
-      #joined .dot { width: 14px; height: 14px; border-radius: 50%; flex: 0 0 auto; }
-      #help { margin: 10px 0 0; font-size: 12px; line-height: 1.35; color: var(--soft); text-align: left; }
-      #help b { color: var(--ink); }
-      #offline-banner {
-        position: fixed; top: 0; left: 0; right: 0; padding: 12px; text-align: center;
-        background: #ff5a5f; color: white; font-size: 22px; font-weight: 800;
-      }
     </style>
   </head>
   <body>
-    <div id="offline-banner" hidden>Lost connection to the game server. Reconnecting…</div>
+    <div id="offline-banner" role="status" hidden>Lost connection to the game server · reconnecting…</div>
     <div id="lobby-screen">
       <div id="hub-canvas"></div>
-      <h1 id="hub-title">Cube World</h1>
-      <div id="join" class="panel">
-        <h3>Scan to join</h3>
-        <img id="qr" alt="QR code to join the game" />
-        <p id="room">Room <b id="room-code">····</b></p>
-        <p id="join-url"></p>
-        <ul id="joined"></ul>
-        <p id="help">
-          <b>Phone can't connect?</b> Use the same Wi-Fi as this computer. The first time, the phone shows a security
-          warning: tap "Show Details" / "Advanced" and continue. If the Mac asks whether "node" may accept incoming
-          connections, click "Allow".
-        </p>
-      </div>
-      <div id="pick" class="panel away">
-        <h2 id="pick-title"></h2>
-        <p id="pick-description"></p>
-        <p id="pick-players"></p>
-        <div class="row">
-          <button class="turn" id="turn-left" type="button" aria-label="Previous game">‹</button>
-          <button id="start" type="button" disabled>Play (Enter)</button>
-          <button class="turn" id="turn-right" type="button" aria-label="Next game">›</button>
+      <h1 class="cw-brand"><span class="cw-brand-mark" aria-hidden="true"></span>Cube World</h1>
+
+      <aside id="join" class="cw-panel" aria-label="Join the game">
+        <div class="join-head">
+          <h2>Join with your phone</h2>
+          <span id="link-status" class="cw-chip is-link">Connecting</span>
         </div>
+        <div class="qr-frame">
+          <img id="qr" alt="QR code to join the game" />
+          <p id="qr-missing" class="qr-missing" hidden>This computer is not on a Wi-Fi network, so phones cannot join.</p>
+        </div>
+        <p class="join-step">Scan with the phone camera</p>
+        <div class="room">
+          <span class="cw-label">Room code</span>
+          <b id="room-code" aria-live="polite"></b>
+        </div>
+        <p id="join-url"></p>
+        <div class="players-head">
+          <span class="cw-label">Players</span>
+          <span id="player-count">0 / 4</span>
+        </div>
+        <ul id="joined" aria-live="polite"></ul>
+        <details id="help">
+          <summary>Phone can't connect?</summary>
+          <p>
+            Use the same Wi-Fi as this computer. The first time, the phone shows a security warning: tap "Show Details"
+            or "Advanced" and continue. If the Mac asks whether "node" may accept incoming connections, click "Allow".
+          </p>
+        </details>
+      </aside>
+
+      <section id="pick" class="cw-panel away" aria-live="polite">
+        <div class="pick-art" id="pick-art">
+          <span id="pick-status" class="cw-chip"></span>
+        </div>
+        <div class="pick-head">
+          <h2 id="pick-title"></h2>
+          <p id="pick-description"></p>
+        </div>
+        <dl class="pick-facts">
+          <div><dt>Players</dt><dd id="pick-players"></dd></div>
+          <div><dt>Controls</dt><dd id="pick-controls"></dd></div>
+        </dl>
+        <div class="pick-modes">
+          <span class="cw-label">Modes</span>
+          <ul id="pick-modes"></ul>
+        </div>
+        <button id="start" class="cw-btn cw-btn--play" type="button" disabled><span id="start-label">Play</span><kbd>Enter</kbd></button>
+        <p id="pick-note"></p>
+        <nav class="pick-nav" aria-label="Choose a game">
+          <button class="cw-btn cw-btn--icon" id="turn-left" type="button" aria-label="Previous game">‹</button>
+          <div id="pick-dots"></div>
+          <button class="cw-btn cw-btn--icon" id="turn-right" type="button" aria-label="Next game">›</button>
+        </nav>
+      </section>
+      <div id="pick-hint" class="cw-panel"><span class="cw-key">←</span><span class="cw-key">→</span> or click a side to choose a game</div>
+
+      <div id="hub-keys">
+        <span>Drag to spin</span>
+        <span>Scroll to zoom</span>
+        <span><span class="cw-key">←</span><span class="cw-key">→</span> choose</span>
+        <span><span class="cw-key">Enter</span> play</span>
+        <span><span class="cw-key">Esc</span> let go</span>
+        <span><span class="cw-key">L</span> swing lab</span>
       </div>
-      <div id="hub-keys">Drag to spin the cube · scroll or pinch to zoom · click a side (or ← →) to choose a game · Enter play · L badminton swing lab · Esc let go</div>
+      <div id="toasts" class="cw-toasts" aria-live="polite"></div>
     </div>
 
     <div id="lab-screen" hidden>

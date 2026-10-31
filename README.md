@@ -49,4 +49,5 @@ npm run check    # TypeScript type check
 
 - Windmill and flag: [Minigolf Kit](https://kenney.nl/assets/minigolf-kit) by Kenney (CC0), in `host/assets/minigolf/`.
 - Grass texture: [Grass 004](https://ambientcg.com/view?id=Grass004) from ambientCG (CC0), in `host/assets/textures/`.
+- Font: [Nunito Sans](https://github.com/Fonthausen/NunitoSans) by the Nunito Sans Project Authors (SIL Open Font License 1.1, `OFL.txt` included), in `host/assets/fonts/`.
 - Trees, bushes and grass tufts: [KayKit Forest Nature Pack](https://kaylousberg.itch.io/kaykit-forest) by Kay Lousberg (CC0, www.kaylousberg.com), in `host/assets/forest/`.
