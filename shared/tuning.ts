@@ -465,7 +465,7 @@ export const TUNING = {
     /** Characters are the minigolf chibis scaled up this much (1 = 0.9 m tall). */
     characterScale: 1.8,
     /** Where a character waits between shots (distance from the net). */
-    homeDepth: 4.5,
+    homeDepth: 4.0,
     /** The server stands this far from the net. */
     serveDepth: 3.25,
     /** Running: normal top speed, and the speed allowed when it is the only way to get there in time (m/s). */
@@ -558,10 +558,10 @@ export const TUNING = {
     // seconds = flight time (slow at 0 % power, fast at 100 %), drag = how much the shuttle slows down in flight
     // (a real shuttle slows down a lot; the user wants it slow, steady and easy to predict, so drag is kept low).
     /** The serve always goes diagonally into the receiver's service court (between the centre line and the sideline). */
-    serve: { depth: [6.5, 7.9], apex: 3.2, seconds: [2.35, 1.95], drag: 1.0 },
-    clear: { depth: [6.25, 7.9], apex: 3.4, seconds: [2.35, 1.85], drag: 1.1 },
-    lift: { depth: [6.0, 7.75], apex: 3.6, seconds: [2.45, 1.95], drag: 1.0 },
-    drive: { depth: [5.75, 7.5], apex: 0.4, seconds: [1.45, 1.1], drag: 0.6 },
+    serve: { depth: [7.4, 8.15], apex: 5.0, seconds: [2.35, 1.95], drag: 1.0 },
+    clear: { depth: [7.5, 8.15], apex: 5.4, seconds: [2.35, 1.85], drag: 1.1 },
+    lift: { depth: [7.3, 8.15], apex: 5.6, seconds: [2.45, 1.95], drag: 1.0 },
+    drive: { depth: [6.8, 8.0], apex: 0.4, seconds: [1.45, 1.1], drag: 0.6 },
     smash: { depth: [3.25, 5.25], apex: 0, seconds: [1.15, 0.8], drag: 0.3 },
     /** Drop shot (SHORT button held): soft, just over the net, lands close behind it. Slower swing = shorter. */
     drop: { depth: [0.8, 2.4], apex: 0.8, seconds: [1.8, 1.5], drag: 1.2 },
@@ -672,6 +672,10 @@ export const TUNING = {
     cameraHeight: 4.2,
     cameraBack: 5.0,
     cameraLookAt: -4,
+    /** When the shuttle flies higher than cameraTiltFrom (m), the camera looks up this share of the extra height, at this speed. */
+    cameraTiltFrom: 3.5,
+    cameraTiltFollow: 0.5,
+    cameraTiltSpeed: 3,
     cameraFov: 50,
     /** Split screen (two players): each half is narrow, so the camera sees wider and sits a little closer. */
     splitCameraFov: 62,

@@ -43,6 +43,8 @@ type Athlete = {
   bob: THREE.Group;
   character: Character;
   camera: THREE.PerspectiveCamera;
+  /** How high the camera looks now (m): it tips up a little to keep a high shuttle in view. */
+  lookY: number;
   feedback: HTMLElement;
   feedbackUntil: number;
   target: THREE.Vector3;
@@ -809,7 +811,10 @@ export class Badminton {
     const back = split ? cfg.splitCameraBack : cfg.cameraBack;
     const want = new THREE.Vector3(x * 0.5, cfg.cameraHeight, a.side * (cfg.courtHalfLength + back));
     a.camera.position.lerp(want, Math.min(1, dt * 3));
-    a.camera.lookAt(x * 0.25, 1, a.side * cfg.cameraLookAt);
+    // A high clear climbs out of the top of the picture: tip up a little to follow it, then back down.
+    const high = this.phase === 'rally' ? Math.max(0, this.shuttle.position.y - cfg.cameraTiltFrom) * cfg.cameraTiltFollow : 0;
+    a.lookY += (1 + high - a.lookY) * Math.min(1, dt * cfg.cameraTiltSpeed);
+    a.camera.lookAt(x * 0.25, a.lookY, a.side * cfg.cameraLookAt);
     const shake = (this.shakeUntil - Date.now()) / cfg.shakeMs;
     if (shake > 0) {
       const s = cfg.shakeStrength * shake;
@@ -848,6 +853,7 @@ export class Badminton {
       bob,
       character,
       camera,
+      lookY: 1,
       feedback,
       feedbackUntil: 0,
       target: new THREE.Vector3(0, 0, side * cfg.homeDepth),
