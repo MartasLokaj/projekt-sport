@@ -2,6 +2,8 @@
 
 Last updated: 2026-10-31. Read `CLAUDE.md` and `SPEC.md` too (SPEC is the source of truth; this file is the
 running log of where we are, what the user decided, and what comes next).
+Short overview for the user (in Czech: % done, what is missing, optimisation ideas): `progress/OVERVIEW.md` — keep it
+up to date too.
 
 ## Where we are
 
