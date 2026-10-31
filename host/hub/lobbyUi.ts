@@ -33,6 +33,7 @@ export class LobbyUi {
     for (const face of FACES) {
       const dot = document.createElement('button');
       dot.type = 'button';
+      dot.innerHTML = ICONS[face.icon];
       dot.style.setProperty('--dot', face.accent);
       dot.setAttribute('aria-label', face.title);
       dot.title = face.title;
@@ -67,7 +68,27 @@ export class LobbyUi {
   /** Who has joined (changes which mode is lit and whether Play works). */
   setPlayers(players: PlayerInfo[]): void {
     this.players = players;
+    // Once everyone who joined is connected, the join panel shrinks to a small QR for latecomers.
+    this.join.classList.toggle('is-compact', players.length > 0 && players.every((p) => p.connected));
+    this.renderFaces();
     this.renderGame(false);
+  }
+
+  /** The joined players' little faces under the Play button (a player who lost connection is faded). */
+  private renderFaces(): void {
+    const row = this.$('pick-faces');
+    const faces = this.players.map((p) => {
+      const existing = row.querySelector<HTMLElement>(`[data-id="${CSS.escape(p.id)}"]`);
+      const face = existing ?? el('span', 'cw-avatar');
+      face.dataset.id = p.id;
+      face.classList.toggle('is-away', !p.connected);
+      face.style.setProperty('--shirt', p.colour);
+      face.style.setProperty('--skin', p.skinTone);
+      face.title = p.connected ? p.name : `${p.name} (away)`;
+      face.setAttribute('aria-label', face.title);
+      return face;
+    });
+    row.replaceChildren(...faces);
   }
 
   // ---------- Game card ----------
@@ -86,11 +107,11 @@ export class LobbyUi {
     if (face.status === 'soon') return { enabled: false, label: 'Coming soon', note: 'This world is still being built', warn: false };
     if (face.id === 'badminton') {
       // Works without phones too: the Mac keyboard can swing (Space, ↑).
-      const note = phones === 0 ? 'No phone yet: Space swings on the Mac' : phones > 2 ? 'The first two players play' : '';
+      const note = phones === 0 ? 'No phone yet: Space swings on the Mac' : phones > 2 ? 'The first two play' : '';
       return { enabled: true, label: 'Play', note, warn: false };
     }
     if (phones < face.minPlayers) return { enabled: false, label: 'Play', note: 'Join with a phone to play', warn: true };
-    return { enabled: true, label: 'Play', note: `${phones} ${phones === 1 ? 'player' : 'players'} ready`, warn: false };
+    return { enabled: true, label: 'Play', note: '', warn: false };
   }
 
   private renderGame(changed: boolean): void {
@@ -113,6 +134,7 @@ export class LobbyUi {
     // Games that are not built yet have no facts or modes to show.
     (this.pick.querySelector('.pick-facts') as HTMLElement).hidden = face.status === 'soon';
     (this.pick.querySelector('.pick-modes') as HTMLElement).hidden = face.modes.length === 0;
+    this.$('pick-faces').hidden = face.status === 'soon';
 
     const phones = this.players.filter((p) => p.connected).length;
     const active = face.modes.findIndex((m) => phones >= m.players[0] && phones <= m.players[1]);

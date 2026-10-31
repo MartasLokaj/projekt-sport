@@ -69,6 +69,38 @@
   overflow: hidden auto;
   scrollbar-width: none;
 }
+/* Everyone who joined is connected: the panel shrinks to a small QR for latecomers (hover opens it again). */
+@media (min-width: 901px) and (min-aspect-ratio: 1/1) {
+  #join.is-compact:not(:hover) {
+    width: 190px;
+    gap: var(--cw-s2);
+    padding: var(--cw-s3);
+  }
+  #join.is-compact:not(:hover) .join-step,
+  #join.is-compact:not(:hover) #join-url,
+  #join.is-compact:not(:hover) #help,
+  #join.is-compact:not(:hover) #link-status {
+    display: none;
+  }
+  #join.is-compact:not(:hover) .join-head h2 {
+    font-size: var(--cw-fs-small);
+  }
+  #join.is-compact:not(:hover) #room-code span {
+    width: 24px;
+    height: 30px;
+    font-size: 17px;
+  }
+  #join.is-compact:not(:hover) .room {
+    justify-content: center;
+    padding: 4px 8px;
+  }
+  #join.is-compact:not(:hover) .room .cw-label {
+    display: none;
+  }
+}
+#join {
+  transition: transform var(--cw-slow) var(--cw-ease), opacity var(--cw-base), width var(--cw-slow) var(--cw-ease), padding var(--cw-slow) var(--cw-ease);
+}
 /* The join panel only shows while a game is chosen. */
 #join.away {
   transform: translate(calc(-100% - var(--cw-gutter) * 2), -50%);
@@ -333,30 +365,70 @@
 }
 #pick-dots {
   display: flex;
-  gap: 8px;
+  gap: 4px;
 }
+.pick-nav .cw-btn--icon {
+  width: 36px;
+  height: 36px;
+  font-size: 18px;
+}
+/* One small picture per side of the cube; the chosen one is lit in its game's colour. */
 #pick-dots button {
-  width: 12px;
-  height: 12px;
-  padding: 0;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 3px;
   border: none;
-  border-radius: 50%;
+  border-radius: 9px;
   cursor: pointer;
-  background: var(--dot);
-  opacity: 0.35;
-  transition: transform var(--cw-base) var(--cw-spring), opacity var(--cw-base);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 1px var(--cw-stroke);
+  opacity: 0.55;
+  transition: transform var(--cw-base) var(--cw-spring), opacity var(--cw-base), box-shadow var(--cw-base), background var(--cw-base);
+}
+#pick-dots button svg {
+  width: 100%;
+  height: 100%;
 }
 #pick-dots button:hover {
-  opacity: 0.7;
+  opacity: 0.9;
+  transform: translateY(-2px);
 }
 #pick-dots button.is-current {
   opacity: 1;
-  transform: scale(1.35);
-  box-shadow: 0 0 10px var(--dot);
+  transform: scale(1.12);
+  background: color-mix(in srgb, var(--dot) 22%, transparent);
+  box-shadow: inset 0 0 0 2px var(--dot), 0 0 14px color-mix(in srgb, var(--dot) 60%, transparent);
 }
 #pick-dots button:focus-visible {
   outline: 2px solid var(--cw-link);
   outline-offset: 3px;
+}
+/* The faces of the players who joined, under the Play button. */
+#pick-faces {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  min-height: 0;
+}
+#pick-faces:empty {
+  display: none;
+}
+#pick-faces .cw-avatar {
+  width: 36px;
+  height: 36px;
+  animation: face-in var(--cw-slow) var(--cw-spring);
+}
+#pick-faces .cw-avatar.is-away {
+  opacity: 0.4;
+  filter: grayscale(0.7);
+}
+@keyframes face-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.6);
+  }
 }
 .swap-in {
   animation: swap-in var(--cw-slow) var(--cw-ease);
@@ -646,7 +718,7 @@
     transform: none;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    grid-template-areas: 'art head' 'facts facts' 'modes modes' 'play play' 'note note' 'nav nav';
+    grid-template-areas: 'art head' 'facts facts' 'modes modes' 'play play' 'faces faces' 'note note' 'nav nav';
   }
   #pick.away {
     transform: translateY(calc(100% + var(--cw-gutter)));
@@ -667,6 +739,9 @@
   }
   #start {
     grid-area: play;
+  }
+  #pick-faces {
+    grid-area: faces;
   }
   #pick-note {
     grid-area: note;

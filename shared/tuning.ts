@@ -317,7 +317,7 @@ export const TUNING = {
     overhangLean: 0.4,
     /** The minigolf waterfall: where along the front edge it pours (sideways, -3..3) and how wide it is. */
     waterfallX: 0.15,
-    waterfallWidth: 0.7,
+    waterfallWidth: 0.55,
     /** Things orbiting the cube: radius, seconds per round, tilt of the orbit (degrees), size. */
     orbiters: [
       { kind: 'golfball', radius: 6.6, seconds: 24, tilt: 18, size: 0.32 },

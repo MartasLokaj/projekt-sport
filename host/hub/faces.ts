@@ -288,7 +288,7 @@ class Waterfall {
         z = lip + 1.8 * u + 0.6 * u * u;
         y = 0.125 - 1.1 * u - 6.2 * u * u;
       }
-      const spread = width * (1 + Math.max(0, v - 0.08) * 1.6); // it fans out a little as it falls
+      const spread = width * (1 + Math.max(0, v - 0.08) * 1.2); // it fans out a little as it falls
       positions.push(centre - spread / 2, y, z, centre + spread / 2, y, z);
       uvs.push(0, v, 1, v);
       if (k < segments) {
@@ -318,8 +318,8 @@ class Waterfall {
           float foam = smoothstep(0.14, 0.06, vUv.y) * step(0.06, vUv.y);
           vec3 water = mix(vec3(0.33, 0.72, 0.98), vec3(1.0), clamp(bright + foam, 0.0, 1.0));
           float edge = smoothstep(0.0, 0.18, vUv.x) * smoothstep(1.0, 0.82, vUv.x);
-          float fade = 1.0 - smoothstep(0.55, 1.0, vUv.y);
-          gl_FragColor = vec4(water * brightness, (0.72 + bright * 0.3) * edge * fade);
+          float fade = 1.0 - smoothstep(0.35, 0.9, vUv.y);
+          gl_FragColor = vec4(water * brightness, (0.5 + bright * 0.35) * edge * fade);
         }`,
     });
     const sheet = new THREE.Mesh(geometry, this.material);
