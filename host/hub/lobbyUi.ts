@@ -51,7 +51,10 @@ export class LobbyUi {
     qr.hidden = !qrDataUrl;
     this.$('qr-missing').hidden = !!qrDataUrl;
     if (qrDataUrl) qr.src = qrDataUrl;
-    this.$('join-url').textContent = joinUrl ? `or open ${joinUrl.split('?')[0]} and type the code` : '';
+    // The address gets its own line, so it never breaks in the middle of a word.
+    const url = this.$('join-url');
+    if (joinUrl) url.replaceChildren('or open', el('span', 'join-address', joinUrl.split('?')[0]), 'and type the code');
+    else url.replaceChildren();
   }
 
   /** The big screen's own link to the game server. */

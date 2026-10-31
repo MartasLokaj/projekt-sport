@@ -285,22 +285,26 @@ function constructionWorld(seed: number, size: number): THREE.Group {
   question.position.set(0, 1.25, 0);
   question.name = 'glow';
   g.add(question);
-  const fog = new THREE.MeshStandardMaterial({ color: '#ffffff', transparent: true, opacity: 0.35, roughness: 1, depthWrite: false });
-  const puffs: { mesh: THREE.Mesh; x: number; z: number; phase: number }[] = [];
-  for (let k = 0; k < 7; k++) {
-    const puff = new THREE.Mesh(new THREE.SphereGeometry(0.4 + random() * 0.4, 16, 12), fog);
-    const x = -1.8 + random() * 3.6;
-    const z = -1.8 + random() * 3.6;
-    puff.position.set(x, 0.25, z);
-    puff.scale.y = 0.5;
-    g.add(puff);
-    puffs.push({ mesh: puff, x, z, phase: random() * 6 });
+  // Building dust: soft sandy wisps that rise from the ground, swell and fade, one after another.
+  const dustTexture = dustPuffTexture();
+  const wisps: { sprite: THREE.Sprite; x: number; z: number; phase: number; size: number }[] = [];
+  for (let k = 0; k < 12; k++) {
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: dustTexture, color: '#f3dfb8', transparent: true, depthWrite: false, opacity: 0 }));
+    const x = -1.9 + random() * 3.8;
+    const z = -1.9 + random() * 3.8;
+    g.add(sprite);
+    wisps.push({ sprite, x, z, phase: random(), size: 0.7 + random() * 0.6 });
   }
   const tick: Tick = (time) => {
-    // The "?" floats and breathes; the fog drifts in slow circles.
+    // The "?" floats and breathes.
     question.position.y = 1.25 + Math.sin(time * 1.6 + seed) * 0.12;
     question.scale.setScalar(1.6 + Math.sin(time * 2.2 + seed) * 0.06);
-    for (const p of puffs) p.mesh.position.set(p.x + Math.sin(time * 0.3 + p.phase) * 0.25, 0.25, p.z + Math.cos(time * 0.25 + p.phase) * 0.25);
+    for (const w of wisps) {
+      const life = (time / 5 + w.phase) % 1; // each wisp lives 5 s
+      w.sprite.position.set(w.x + Math.sin(time * 0.4 + w.phase * 9) * 0.15 + life * 0.3, 0.2 + life * 0.7, w.z);
+      w.sprite.scale.setScalar(w.size * (0.5 + life * 0.8));
+      w.sprite.material.opacity = Math.sin(life * Math.PI) * 0.45;
+    }
   };
   g.userData.tick = tick;
   return g;
@@ -344,10 +348,6 @@ function badmintonWorld(size: number): THREE.Group {
   const from = new THREE.Vector3();
   const to = new THREE.Vector3();
   const next = new THREE.Vector3();
-  const sign = new THREE.Sprite(new THREE.SpriteMaterial({ map: textTexture('Badminton', '#ffffff', 'prototype'), transparent: true }));
-  sign.scale.set(2.4, 1.2, 1);
-  sign.position.set(-1.2, 1.2, 0);
-  g.add(sign);
   const shot = (t: number, k: number, out: THREE.Vector3): THREE.Vector3 => {
     // Shot k goes from one baseline to the other, a little left or right each time.
     const dir = k % 2 === 0 ? 1 : -1;
@@ -371,6 +371,23 @@ function badmintonWorld(size: number): THREE.Group {
 
 // ---------- Helpers ----------
 
+/** A soft, lumpy cloud of dust (a few overlapping round blurs), white so a material colour can tint it. */
+function dustPuffTexture(): THREE.Texture {
+  return canvasTexture(128, 128, (c) => {
+    const random = seededRandom(5);
+    for (let k = 0; k < 7; k++) {
+      const x = 40 + random() * 48;
+      const y = 44 + random() * 40;
+      const r = 22 + random() * 22;
+      const g = c.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, 'rgba(255,255,255,0.55)');
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = g;
+      c.fillRect(0, 0, 128, 128);
+    }
+  });
+}
+
 function mat(color: string, roughness: number): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({ color, roughness });
 }
@@ -385,24 +402,18 @@ export function canvasTexture(width: number, height: number, draw: (c: CanvasRen
   return texture;
 }
 
-function textTexture(text: string, colour: string, below?: string): THREE.Texture {
+function textTexture(text: string, colour: string): THREE.Texture {
   return canvasTexture(512, 256, (c) => {
     c.textAlign = 'center';
     c.textBaseline = 'middle';
-    c.font = `900 ${below ? 86 : 220}px ui-rounded, system-ui, sans-serif`;
+    c.font = '900 220px ui-rounded, system-ui, sans-serif';
     c.shadowColor = colour;
     c.shadowBlur = 30;
     c.lineWidth = 14;
     c.strokeStyle = 'rgba(30,40,70,0.55)';
-    c.strokeText(text, 256, below ? 100 : 135);
+    c.strokeText(text, 256, 135);
     c.fillStyle = colour;
-    c.fillText(text, 256, below ? 100 : 135);
-    if (below) {
-      c.font = '800 54px ui-rounded, system-ui, sans-serif';
-      c.fillStyle = '#ffe36b';
-      c.strokeText(below, 256, 190);
-      c.fillText(below, 256, 190);
-    }
+    c.fillText(text, 256, 135);
   });
 }
 

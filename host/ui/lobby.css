@@ -146,7 +146,13 @@
   font-size: var(--cw-fs-small);
   color: var(--cw-text-3);
   text-align: center;
-  word-break: break-all;
+  line-height: 1.5;
+}
+.join-address {
+  display: block;
+  font-weight: 800;
+  color: var(--cw-text-2);
+  overflow-wrap: anywhere;
 }
 #help {
   font-size: var(--cw-fs-small);
