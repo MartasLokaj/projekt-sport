@@ -119,6 +119,22 @@ running log of where we are, what the user decided, and what comes next).
     - **The join panel (QR, room code) only slides in once a playable game is chosen** (not for "coming soon").
     - **Players are shown only as characters standing on the cube** — the player list and the join/leave toasts
       are gone (a disconnected player's name tag still says "(away)").
+  - **Hub design pass 2 (user, 2026-10-31; plan shown, then built in 6 commits):**
+    1. Fixes: join address on its own line (no "typ e" break); the camera-facing "Badminton prototype" sprite
+       that poked out past the edge is gone; building-site fog balls → sandy dust wisps that rise and fade.
+    2. Chosen side: soft glow + frame in the game colour, a 3D wooden **name sign** springs up at its back
+       (`host/hub/sign.ts`), other sides dim to `dimOthers`. Brand moved to the top-left.
+    3. Spilling over the edges: minigolf **waterfall** off the front edge into space (shader ribbon + spray),
+       trees on knolls leaning out over edges (`overhangLean`), **orbiters**: golf ball moon, shuttlecock, tiny
+       cube (`TUNING.hub.orbiters`).
+    4. Space: nebula + planets with their own parallax, ringed pink planet, striped giant, **shooting star**
+       every 5–11 s, fresnel **light outline** round the cube in the game colour.
+    5. Card: side **icons** instead of dots; joined players' **faces** (shirt/skin, faded when away) instead of
+       "N players ready"; the **join panel shrinks** to a small QR when everyone who joined is connected (hover
+       opens it; wide screens only).
+    6. Motion: the cube **hops** when a game is chosen (`switchHop`); a **newly joined player jumps down** onto
+       the chosen side and lands with a squash and **confetti** (`host/hub/confetti.ts`, `drop*`, `confetti*`).
+    Waiting for the user's test on the Mac (60 fps not measured on the real MacBook Air yet).
   - **K3 sounds** (menu, turn, join, countdown; volume + mute) — next; needs downloaded sounds: propose CC0 files
     with names and sizes, ask first.
   - **K4** dive-in transition, match intro (players + 3-2-1), results screen with Play again / Back to the cube,

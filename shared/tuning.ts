@@ -325,6 +325,16 @@ export const TUNING = {
       { kind: 'cube', radius: 8.4, seconds: 41, tilt: 52, size: 0.45 },
     ],
     choosePop: 0.025,
+    /** How high the cube hops (bouncing) when a game is chosen. */
+    switchHop: 0.45,
+    /** A newly joined player jumps down onto the cube: from how high, how long the fall takes (s). */
+    dropHeight: 4,
+    dropSeconds: 0.55,
+    /** Confetti when they land: pieces per burst, how fast they shoot up, how wide they spread, how long they live (s). */
+    confettiPieces: 70,
+    confettiSpeed: 6,
+    confettiSpread: 3.5,
+    confettiSeconds: 1.8,
     /** Camera: distance from the cube, height and field of view (degrees). Closer = bigger cube. */
     cameraDistance: 16.5,
     cameraHeight: 3.5,

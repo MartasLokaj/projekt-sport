@@ -10,6 +10,7 @@ import { TUNING } from '../../shared/tuning.ts';
 import { Character } from '../game/character.ts';
 import { loadForest } from '../game/vegetation.ts';
 import { FaceSign } from './sign.ts';
+import { Confetti } from './confetti.ts';
 import { buildFace, canvasTexture, FACES, seededRandom, type FaceInfo, type FaceKit, type Tick } from './faces.ts';
 
 // Cube World: the lobby is a cute cube floating in starry space, one little world per side for each
@@ -17,9 +18,11 @@ import { buildFace, canvasTexture, FACES, seededRandom, type FaceInfo, type Face
 // its side turns up towards you, the game's card appears, and the players' chibi characters pop up on it.
 // Click into empty space (or press Esc) to let the cube go again.
 
-type Guest = { player: PlayerInfo; character: Character; tag: HTMLElement; age: number; hitUntil: number; hitText: string };
+/** `drop`: seconds since a newly joined player jumped down onto the cube (-1 = not dropping). */
+type Guest = { player: PlayerInfo; character: Character; tag: HTMLElement; age: number; hitUntil: number; hitText: string; drop: number; spot: THREE.Vector3 };
 
 const UP = new THREE.Vector3(0, 1, 0);
+const GRAVITY = new THREE.Vector3(0, -6, 0);
 const SIDE = new THREE.Vector3(1, 0, 0);
 
 export class Hub {
@@ -52,6 +55,11 @@ export class Hub {
   /** How bright each side is drawn now (1 = its own colours). */
   private readonly brightness: number[] = [];
   private readonly sign = new FaceSign();
+  private readonly confetti = new Confetti();
+  /** Players who joined since the last update: they jump down onto the cube instead of popping up. */
+  private readonly arrivals = new Set<string>();
+  /** True when the last selection chose a game (the cube hops), false when it let go. */
+  private hop = false;
   /** Little moons going round the cube: a golf ball, a shuttlecock and a tiny cube. */
   private readonly orbiters: { pivot: THREE.Group; body: THREE.Object3D; seconds: number; spinSelf: boolean }[] = [];
   private readonly haloColour = new THREE.Color(TUNING.hub.glowColour);
@@ -182,7 +190,7 @@ export class Hub {
       new THREE.Euler(THREE.MathUtils.degToRad(c.startTiltDegrees), THREE.MathUtils.degToRad(c.startTurnDegrees), 0),
     );
     this.planet.add(this.spinner);
-    this.scene.add(this.planet);
+    this.scene.add(this.planet, this.confetti.mesh);
     for (const o of c.orbiters) {
       // Each one rides on a tilted ring round the cube.
       const pivot = new THREE.Group();
@@ -229,6 +237,7 @@ export class Hub {
     if (index === this.chosen) return;
     this.chosen = index;
     this.chosenAge = 0;
+    this.hop = index >= 0;
     this.sign.show(this.selected, index < 0 ? null : this.faces[index]);
     this.spin.set(0, 0);
     this.clearGuests();
@@ -244,6 +253,7 @@ export class Hub {
 
   /** The players who joined. While a game is chosen, new ones pop up on its side and players who left disappear. */
   setPlayers(players: PlayerInfo[]): void {
+    for (const p of players) if (this.players.length > 0 && !this.players.some((q) => q.id === p.id)) this.arrivals.add(p.id);
     this.players = players;
     for (const [id, guest] of this.guests) {
       if (players.some((p) => p.id === id)) continue;
@@ -282,7 +292,9 @@ export class Hub {
     this.distance += (this.targetDistance - this.distance) * (1 - Math.exp(-8 * dt));
     this.camera.position.set(0, c.cameraHeight, c.cameraDistance).multiplyScalar((this.distance / c.cameraDistance) * this.fit);
     this.camera.lookAt(0, 0, 0);
-    this.planet.position.y = Math.sin(this.time * c.bobSpeed) * c.bobHeight;
+    // The gentle float, plus a bouncy little hop when a game is chosen.
+    const hop = this.hop && this.chosenAge < 1.2 ? c.switchHop * Math.exp(-5 * this.chosenAge) * Math.abs(Math.sin(this.chosenAge * 9)) : 0;
+    this.planet.position.y = Math.sin(this.time * c.bobSpeed) * c.bobHeight + hop;
     this.halo.position.copy(this.planet.position).add(new THREE.Vector3(0, 0, -c.cubeSize));
 
     // The little worlds move; the chosen side's frame glows in its game's colour, and so does the halo.
@@ -344,13 +356,42 @@ export class Hub {
     [...this.guests.values()].forEach((guest, i) => {
       if (settled || guest.age > 0) guest.age += dt;
       const t = Math.max(0, guest.age - i * c.popInStagger) / c.popInSeconds;
-      guest.character.root.scale.setScalar(Math.max(0.001, easeOutBack(Math.min(1, t)) * c.characterScale));
+      const root = guest.character.root;
+      root.scale.setScalar(Math.max(0.001, easeOutBack(Math.min(1, t)) * c.characterScale));
       guest.character.update(dt);
+      if (guest.drop >= 0 && settled) this.dropIn(guest, dt);
       // Now and then somebody waves.
       if (t >= 1 && Math.random() < dt * 0.12) guest.character.play('cheer');
     });
+    this.confetti.update(dt, GRAVITY);
     this.composer.render();
     this.placeTags();
+  }
+
+  /** A newly joined player falls from above onto the chosen side, lands with a squash and a burst of confetti. */
+  private dropIn(guest: Guest, dt: number): void {
+    const c = TUNING.hub;
+    const root = guest.character.root;
+    guest.drop += dt;
+    const fall = Math.min(1, guest.drop / c.dropSeconds);
+    root.scale.setScalar(c.characterScale);
+    if (fall < 1) {
+      root.position.y = guest.spot.y + c.dropHeight * (1 - fall * fall);
+      root.scale.y = c.characterScale * 1.12; // stretched while falling
+      return;
+    }
+    // Landed: squash, then spring back.
+    const after = guest.drop - c.dropSeconds;
+    if (guest.drop - dt < c.dropSeconds) {
+      // The frame it touches down.
+      const at = root.getWorldPosition(new THREE.Vector3());
+      const up = new THREE.Vector3(0, 1, 0).applyQuaternion(root.parent!.getWorldQuaternion(new THREE.Quaternion()));
+      this.confetti.burst(at.addScaledVector(up, 0.3), guest.player.colour, up);
+      guest.character.play('cheer');
+    }
+    const squash = after < 0.35 ? Math.sin((after / 0.35) * Math.PI) * 0.22 : 0;
+    root.scale.set(c.characterScale * (1 + squash * 0.6), c.characterScale * (1 - squash), c.characterScale * (1 + squash * 0.6));
+    if (after >= 0.35) guest.drop = -1;
   }
 
   private resize(): void {
@@ -466,7 +507,9 @@ export class Hub {
       let guest = this.guests.get(player.id);
       if (!guest) {
         const character = new Character({ shirt: player.colour, skin: player.skinTone, handedness: player.handedness });
-        guest = { player, character, tag: makeTag(), age: 0, hitUntil: 0, hitText: '' };
+        // Someone who just joined jumps down onto the cube (if its side is already turned up).
+        const arriving = this.arrivals.has(player.id) && this.spinner.quaternion.angleTo(this.poses[this.chosen]) < 0.2;
+        guest = { player, character, tag: makeTag(), age: arriving ? 10 : 0, hitUntil: 0, hitText: '', drop: arriving ? 0 : -1, spot: new THREE.Vector3() };
         character.root.scale.setScalar(0.001);
         character.play('cheer');
         this.guests.set(player.id, guest);
@@ -477,11 +520,13 @@ export class Hub {
       guest.character.setLook({ shirt: player.colour, skin: player.skinTone, handedness: player.handedness });
       const x = (i - (this.players.length - 1) / 2) * c.characterSpacing;
       const spot = new THREE.Vector3(x, 0.12, c.characterForward - Math.abs(x) * 0.12);
-      if (guest.age === 0) guest.character.place(spot, -x * 0.1);
+      guest.spot.copy(spot);
+      if (guest.age === 0 || guest.drop === 0) guest.character.place(spot, -x * 0.1);
       else guest.character.setTarget(spot, -x * 0.1);
       (guest.tag.firstChild as HTMLElement).style.background = player.colour;
       guest.tag.style.opacity = player.connected ? '1' : '0.6';
     });
+    this.arrivals.clear();
   }
 
   private clearGuests(): void {
