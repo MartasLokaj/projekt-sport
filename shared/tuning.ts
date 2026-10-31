@@ -436,11 +436,11 @@ export const TUNING = {
     // seconds = flight time (slow at 0 % power, fast at 100 %), drag = how much the shuttle slows down in flight
     // (a real shuttle slows down a lot; the user wants it slow, steady and easy to predict, so drag is kept low).
     /** The serve always goes diagonally into the receiver's service court (between the centre line and the sideline). */
-    serve: { depth: [5.2, 6.3], apex: 3.2, seconds: [2.8, 2.3], drag: 1.0 },
-    clear: { depth: [5.0, 6.3], apex: 3.4, seconds: [2.8, 2.2], drag: 1.1 },
-    lift: { depth: [4.8, 6.2], apex: 3.6, seconds: [2.9, 2.3], drag: 1.0 },
-    drive: { depth: [4.6, 6.0], apex: 0.4, seconds: [1.7, 1.3], drag: 0.6 },
-    smash: { depth: [2.6, 4.2], apex: 0, seconds: [1.4, 1.0], drag: 0.3 },
+    serve: { depth: [5.2, 6.3], apex: 3.2, seconds: [2.35, 1.95], drag: 1.0 },
+    clear: { depth: [5.0, 6.3], apex: 3.4, seconds: [2.35, 1.85], drag: 1.1 },
+    lift: { depth: [4.8, 6.2], apex: 3.6, seconds: [2.45, 1.95], drag: 1.0 },
+    drive: { depth: [4.6, 6.0], apex: 0.4, seconds: [1.45, 1.1], drag: 0.6 },
+    smash: { depth: [2.6, 4.2], apex: 0, seconds: [1.15, 0.8], drag: 0.3 },
     /** Every shot clears the net by at least this much (m). */
     netClearance: 0.35,
     /** A Perfect hit flies this much faster. */

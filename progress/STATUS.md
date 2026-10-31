@@ -160,6 +160,8 @@ running log of where we are, what the user decided, and what comes next).
   score with both names. One phone → vs CPU full screen as before. `host/main.ts` maps phones to sides
   (`badmintonIds`). Mac keys: Space = near player (← → aim), ↑ = far player. Left-handed far players mirrored.
   Scripted 2-player test in the dev browser: rallies, scoring, no errors, ~2.7 ms CPU per frame (two renders).
+  - User: "now it's too slow again" → flight times set halfway between the B2 and the slow version
+    (about 15 % faster: clear ~2.1 s, smash ~1.0 s).
   - Next: user test with two phones → B4 2v2 (plan first).
 
 ## How the user likes to work
