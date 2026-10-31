@@ -90,6 +90,18 @@ export class Lobby {
         if (!this.checkRoom(ws, msg.room)) return;
         this.join(ws, msg);
         return;
+      case 'set_look': {
+        const seat = this.seatOf(ws);
+        if (!seat || !this.match.canStart || typeof msg !== 'object') return;
+        const colourTaken = [...this.seats.values()].some((s) => s.colour === msg.colour && s.id !== seat.id);
+        if ((SHIRT_COLOURS as readonly string[]).includes(msg.colour) && !colourTaken) seat.colour = msg.colour;
+        if ((SKIN_TONES as readonly string[]).includes(msg.skinTone)) seat.skinTone = msg.skinTone;
+        seat.handedness = msg.handedness === 'left' ? 'left' : 'right';
+        seat.look = sanitizeLook(msg.look);
+        this.broadcastLobby();
+        if (msg.saved === true) this.sendToHosts({ type: 'player_look_saved', playerId: seat.id });
+        return;
+      }
       case 'aim': {
         const seat = this.seatOf(ws);
         if (!seat || !this.mayAct(seat) || !Number.isFinite(msg.angle)) return;

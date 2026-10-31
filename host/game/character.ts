@@ -22,7 +22,7 @@ export type CharacterLook = { shirt: string; skin: string; handedness: Handednes
 export function lookOf(player: PlayerInfo): CharacterLook {
   return { shirt: player.colour, skin: player.skinTone, handedness: player.handedness, look: player.look };
 }
-export type Mood = 'idle' | 'cheer' | 'jump' | 'slump' | 'scratch' | 'clap';
+export type Mood = 'idle' | 'cheer' | 'jump' | 'slump' | 'scratch' | 'clap' | 'wave';
 /**
  * What the character wears (the face, hair and colours stay the same everywhere). Each game picks one, e.g. the
  * badminton beach look: tank top, shorts, bare feet, a sports headband.
@@ -38,7 +38,7 @@ export type Outfit = {
 };
 export const DEFAULT_OUTFIT: Outfit = { top: 'tee', bottoms: 'pants', feet: 'shoes' };
 
-const MOOD_SECONDS: Record<Mood, number> = { idle: 0, cheer: 0.9, jump: 1.8, slump: 1.6, scratch: 1.6, clap: 1.6 };
+const MOOD_SECONDS: Record<Mood, number> = { idle: 0, cheer: 0.9, jump: 1.8, slump: 1.6, scratch: 1.6, clap: 1.6, wave: 1.8 };
 const PANTS = '#2f3a56';
 const INK = '#1b1f2a';
 const MOUTH_INSIDE = '#7a2e3a';
@@ -306,6 +306,11 @@ export class Character {
       case 'scratch': // out of bounds: scratching the head
         right.rotation.set(-0.4, 0, -2.4 + Math.sin(t * 16) * 0.12);
         this.head.rotation.set(0.1, 0, 0.18);
+        break;
+      case 'wave': // hello / saved the look: the free hand up, waving side to side, head tilted
+        left.rotation.set(-0.2, 0, 2.5 + Math.sin(t * 11) * 0.4);
+        this.head.rotation.set(0.02, 0, -0.12);
+        jump = t < 0.35 ? Math.sin((t / 0.35) * Math.PI) * 0.06 : 0;
         break;
       case 'clap': // someone else holed it: clapping
         left.rotation.set(-1.25, 0, -0.35 - Math.max(0, Math.sin(t * 16)) * 0.3);

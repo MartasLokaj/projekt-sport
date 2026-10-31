@@ -33,12 +33,12 @@ export class Confetti {
   }
 
   /** A burst at a point in the world, mostly in `colour` with some party colours mixed in. */
-  burst(at: THREE.Vector3, colour: string, up: THREE.Vector3): void {
+  burst(at: THREE.Vector3, colour: string, up: THREE.Vector3, pieces: number = TUNING.hub.confettiPieces): void {
     const c = TUNING.hub;
     const side = new THREE.Vector3().crossVectors(up, Math.abs(up.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0)).normalize();
     const side2 = new THREE.Vector3().crossVectors(up, side);
     const tint = new THREE.Color();
-    for (let k = 0; k < c.confettiPieces; k++) {
+    for (let k = 0; k < pieces; k++) {
       const index = this.next;
       this.next = (this.next + 1) % this.pieces.length;
       const p = this.pieces[index];

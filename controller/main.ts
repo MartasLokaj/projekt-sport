@@ -14,7 +14,10 @@ import {
   type PlayerInfo,
   type ServerMessage,
 } from '../shared/protocol.ts';
+import { DEFAULT_LOOK, sanitizeLook, type AvatarLook } from '../shared/avatar.ts';
 import { TUNING } from '../shared/tuning.ts';
+import { initEditor, type EditorState } from './avatar/editor.ts';
+import { createAvatarPreview } from './avatar/preview.ts';
 import { initLabScreen } from './badminton/lab.ts';
 import { initPlayScreen } from './play.ts';
 
@@ -28,6 +31,8 @@ type Profile = {
   skinTone: string;
   handedness: Handedness;
   sensitivity: number;
+  /** Face, hair, hat, glasses, gear colours (shared/avatar.ts). */
+  look: AvatarLook;
 };
 
 const PROFILE_KEY = 'minigolf.profile';
@@ -41,6 +46,7 @@ const screens = {
   join: document.getElementById('screen-join')!,
   play: document.getElementById('screen-play')!,
   lab: document.getElementById('screen-lab')!,
+  editor: document.getElementById('screen-editor')!,
 };
 const messageTitle = document.getElementById('message-title')!;
 const messageText = document.getElementById('message-text')!;
@@ -50,11 +56,9 @@ const roomInput = document.getElementById('room-code') as HTMLInputElement;
 const roomError = document.getElementById('room-error')!;
 const joinForm = document.getElementById('join-form') as HTMLFormElement;
 const nameInput = document.getElementById('name') as HTMLInputElement;
-const skinsEl = document.getElementById('skins')!;
-const handButtons = [...document.querySelectorAll<HTMLButtonElement>('#hands button')];
 const sensitivityInput = document.getElementById('sensitivity') as HTMLInputElement;
 const sensitivityValue = document.getElementById('sensitivity-value')!;
-const coloursEl = document.getElementById('colours')!;
+const joinAvatar = document.getElementById('join-avatar')!;
 const joinError = document.getElementById('join-error')!;
 const meDot = document.getElementById('me-dot')!;
 const meName = document.getElementById('me-name')!;
@@ -66,9 +70,8 @@ let reconnectTimer: number | undefined;
 /** Set when reconnecting would not help (game opened in another tab). */
 let stopped = false;
 let joined = false;
-let selectedColour: string = profile.colour;
-let selectedHand: Handedness = profile.handedness;
-let selectedSkin: string = profile.skinTone;
+/** After the next 'joined', open the character editor instead of the play screen (Customize on the join screen). */
+let editorAfterJoin = false;
 let otherPlayers: PlayerInfo[] = [];
 let allPlayers: PlayerInfo[] = [];
 let gameState: GameState | null = null;
@@ -98,21 +101,22 @@ function showRoomForm(error = ''): void {
 
 function showJoinForm(error = ''): void {
   joined = false;
+  editorAfterJoin = false;
   lab.setOpen(false);
   if (!nameInput.value) nameInput.value = profile.name;
-  selectedHand = profile.handedness;
-  selectedSkin = profile.skinTone;
   sensitivityInput.value = String(profile.sensitivity);
   renderSettings();
   joinError.textContent = error;
-  renderColours();
+  freeColour();
+  preview.setLook(characterLook());
+  preview.mount(joinAvatar);
   show('join');
 }
 
-function showJoined(player: PlayerInfo): void {
+function showJoined(): void {
   joined = true;
-  meDot.style.background = player.colour;
-  meName.textContent = player.name;
+  meDot.style.background = profile.colour;
+  meName.textContent = profile.name;
   wakeTip.hidden = 'wakeLock' in navigator;
   show(labOpen ? 'lab' : 'play');
   lab.setOpen(labOpen);
@@ -124,8 +128,10 @@ function showJoined(player: PlayerInfo): void {
 function renderLab(): void {
   lab.setOpen(joined && labOpen);
   if (!joined) return;
-  if (labOpen) play.cancel();
-  show(labOpen ? 'lab' : 'play');
+  if (labOpen) {
+    play.cancel();
+    show('lab');
+  } else if (!screens.lab.hidden) show('play'); // (the character editor stays open if it is)
 }
 
 // ---------- Whose turn ----------
@@ -196,56 +202,93 @@ function renderTurn(): void {
 }
 
 turnButton.addEventListener('click', () => send({ type: gameState?.phase === 'hole_end' ? 'next_hole' : 'start_game' }));
-turnEdit.addEventListener('click', () => showJoinForm());
+turnEdit.addEventListener('click', () => openEditor());
 
 function renderSettings(): void {
-  skinsEl.replaceChildren();
-  for (const tone of SKIN_TONES) {
-    const swatch = document.createElement('button');
-    swatch.type = 'button';
-    swatch.className = 'swatch';
-    swatch.style.background = tone;
-    swatch.classList.toggle('selected', tone === selectedSkin);
-    swatch.setAttribute('aria-label', `Skin tone ${tone}`);
-    swatch.addEventListener('click', () => {
-      selectedSkin = tone;
-      renderSettings();
-    });
-    skinsEl.append(swatch);
-  }
-  for (const button of handButtons) button.classList.toggle('selected', button.dataset.hand === selectedHand);
   sensitivityValue.textContent = `${sensitivityInput.value} %`;
-}
-
-for (const button of handButtons) {
-  button.addEventListener('click', () => {
-    selectedHand = button.dataset.hand === 'left' ? 'left' : 'right';
-    renderSettings();
-  });
 }
 sensitivityInput.addEventListener('input', renderSettings);
 
-function renderColours(): void {
+/** Two players cannot wear the same colour (yet): if someone else has ours, take a free one. */
+function freeColour(): void {
   const taken = new Set(otherPlayers.map((p) => p.colour));
-  if (taken.has(selectedColour)) selectedColour = SHIRT_COLOURS.find((c) => !taken.has(c)) ?? selectedColour;
-  coloursEl.replaceChildren();
-  for (const colour of SHIRT_COLOURS) {
-    const swatch = document.createElement('button');
-    swatch.type = 'button';
-    swatch.className = 'swatch';
-    swatch.style.background = colour;
-    swatch.disabled = taken.has(colour);
-    swatch.classList.toggle('selected', colour === selectedColour);
-    swatch.setAttribute('aria-label', `Shirt colour ${colour}`);
-    swatch.addEventListener('click', () => {
-      selectedColour = colour;
-      renderColours();
-    });
-    coloursEl.append(swatch);
+  if (taken.has(profile.colour)) {
+    profile.colour = SHIRT_COLOURS.find((c) => !taken.has(c)) ?? profile.colour;
+    preview.setLook(characterLook());
   }
 }
 
+// ---------- Character ----------
+
+function characterLook(): { shirt: string; skin: string; handedness: Handedness; look: AvatarLook } {
+  return { shirt: profile.colour, skin: profile.skinTone, handedness: profile.handedness, look: profile.look };
+}
+
+const preview = createAvatarPreview(characterLook());
+
+/** Live updates to the big screen while editing: at most one per sendIntervalMs, the last one always goes out. */
+let lookTimer: number | undefined;
+let lastLookSent = 0;
+let pendingLook: EditorState | null = null;
+
+function sendLook(state: EditorState, saved = false): void {
+  pendingLook = state;
+  const wait = TUNING.avatarEditor.sendIntervalMs - (performance.now() - lastLookSent);
+  if (saved || wait <= 0) flushLook(saved);
+  else if (lookTimer === undefined) lookTimer = window.setTimeout(() => flushLook(false), wait);
+}
+
+function flushLook(saved: boolean): void {
+  clearTimeout(lookTimer);
+  lookTimer = undefined;
+  if (!pendingLook) return;
+  const s = pendingLook;
+  pendingLook = null;
+  lastLookSent = performance.now();
+  send({ type: 'set_look', colour: s.colour, skinTone: s.skin, handedness: s.handedness, look: s.look, saved });
+}
+
+/** Keeps the edited look on this phone (localStorage) and tells the game screens that use the hand. */
+function keepLook(state: EditorState): void {
+  profile.colour = state.colour;
+  profile.skinTone = state.skin;
+  profile.handedness = state.handedness;
+  profile.look = state.look;
+  saveProfile(profile);
+  lab.setHandedness(profile.handedness);
+}
+
+function inLobby(): boolean {
+  return !gameState || gameState.phase === 'lobby' || gameState.phase === 'game_end';
+}
+
+function openEditor(): void {
+  if (!inLobby()) return;
+  joined = true;
+  play.cancel();
+  editor.open(
+    { colour: profile.colour, skin: profile.skinTone, handedness: profile.handedness, look: profile.look },
+    room ? `${profile.name} · Room ${room}` : profile.name,
+  );
+  editor.setTaken(otherPlayers.map((p) => p.colour));
+  show('editor');
+}
+
+function closeEditor(state: EditorState, saved: boolean): void {
+  keepLook(state);
+  sendLook(state, saved);
+  preview.mount(joinAvatar);
+  showJoined();
+}
+
+const editor = initEditor(preview, {
+  onChange: (state) => sendLook(state),
+  onSave: (state) => closeEditor(state, true),
+  onBack: (state) => closeEditor(state, false),
+});
+
 const JOIN_ERROR_TEXT: Partial<Record<JoinError, string>> = {
+  // (colour_taken: the phone already avoids taken colours, so this only happens in a rare race)
   colour_taken: 'Someone just took that colour. Pick another one.',
   invalid: `Please type a name (up to ${NAME_MAX_LENGTH} letters).`,
 };
@@ -302,20 +345,31 @@ function connect(): void {
         profile.skinTone = msg.player.skinTone;
         profile.handedness = msg.player.handedness;
         profile.sensitivity = msg.player.sensitivity;
+        profile.look = msg.player.look;
         saveProfile(profile);
         play.setSensitivity(profile.sensitivity);
         lab.setSensitivity(profile.sensitivity);
         lab.setHandedness(profile.handedness);
-        showJoined(msg.player);
+        preview.setLook(characterLook());
+        if (editorAfterJoin) {
+          editorAfterJoin = false;
+          openEditor();
+        } else if (screens.editor.hidden) showJoined();
         break;
       case 'lobby_state':
         allPlayers = msg.players;
         otherPlayers = msg.players.filter((p) => p.id !== profile.playerId);
-        if (!screens.join.hidden) renderColours();
+        if (!screens.join.hidden) freeColour();
+        if (!screens.editor.hidden) editor.setTaken(otherPlayers.map((p) => p.colour));
         renderTurn();
         break;
       case 'game_state':
         gameState = msg;
+        // The game started while this player was still editing: keep the look and go to the controls.
+        if (!screens.editor.hidden && !inLobby()) {
+          preview.mount(joinAvatar);
+          showJoined();
+        }
         renderTurn();
         break;
       case 'join_error':
@@ -361,26 +415,43 @@ roomForm.addEventListener('submit', (event) => {
   else connect();
 });
 
-joinForm.addEventListener('submit', (event) => {
-  event.preventDefault();
+/** Join (or update name and sensitivity); the server answers with 'joined'. */
+function sendJoin(): boolean {
   nameInput.blur();
   const name = nameInput.value.trim();
   if (!name) {
     joinError.textContent = JOIN_ERROR_TEXT.invalid!;
-    return;
+    return false;
   }
   void keepScreenAwake(); // must start from a tap
-  if (!room) return;
+  if (!room) return false;
+  freeColour();
   send({
     type: 'join',
     room,
     playerId: profile.playerId,
     name,
-    colour: selectedColour,
-    skinTone: selectedSkin,
-    handedness: selectedHand,
+    colour: profile.colour,
+    skinTone: profile.skinTone,
+    handedness: profile.handedness,
     sensitivity: Number(sensitivityInput.value),
+    look: profile.look,
   });
+  return true;
+}
+
+joinForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  sendJoin();
+});
+
+// Customize: join first (so the character is on the big screen), then open the editor.
+document.getElementById('customize')!.addEventListener('click', () => {
+  if (!inLobby()) {
+    joinError.textContent = 'You can change your character in the lobby, between games.';
+    return;
+  }
+  if (sendJoin()) editorAfterJoin = true;
 });
 
 document.getElementById('change-profile')!.addEventListener('click', () => showJoinForm());
@@ -418,6 +489,7 @@ function loadProfile(): Profile {
         colour: typeof saved.colour === 'string' ? saved.colour : SHIRT_COLOURS[0],
         skinTone: typeof saved.skinTone === 'string' ? saved.skinTone : SKIN_TONES[1],
         handedness: saved.handedness === 'left' ? 'left' : 'right',
+        look: sanitizeLook(saved.look),
         sensitivity:
           typeof saved.sensitivity === 'number'
             ? Math.min(SENSITIVITY_MAX, Math.max(SENSITIVITY_MIN, saved.sensitivity))
@@ -434,6 +506,7 @@ function loadProfile(): Profile {
     skinTone: SKIN_TONES[1],
     handedness: 'right',
     sensitivity: SENSITIVITY_DEFAULT,
+    look: DEFAULT_LOOK,
   };
   saveProfile(fresh);
   return fresh;

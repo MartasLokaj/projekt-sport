@@ -20,7 +20,19 @@ import { buildFace, canvasTexture, FACES, seededRandom, type FaceInfo, type Face
 // Click into empty space (or press Esc) to let the cube go again.
 
 /** `drop`: seconds since a newly joined player jumped down onto the cube (-1 = not dropping). */
-type Guest = { player: PlayerInfo; character: Character; tag: HTMLElement; age: number; hitUntil: number; hitText: string; drop: number; spot: THREE.Vector3 };
+type Guest = {
+  player: PlayerInfo;
+  character: Character;
+  tag: HTMLElement;
+  age: number;
+  hitUntil: number;
+  hitText: string;
+  drop: number;
+  spot: THREE.Vector3;
+  /** The look last shown, and when it last sparkled (the player edits their character on the phone). */
+  lookKey: string;
+  sparkledAt: number;
+};
 
 const UP = new THREE.Vector3(0, 1, 0);
 const GRAVITY = new THREE.Vector3(0, -6, 0);
@@ -267,6 +279,35 @@ export class Hub {
       this.leave(guest);
     }
     this.addGuests();
+  }
+
+  /** A player edits their character on the phone: the look changes live with a small sparkle. */
+  private showLookChange(guest: Guest): void {
+    const key = lookKeyOf(guest.player);
+    if (key === guest.lookKey) return;
+    const colourChanged = guest.player.colour !== guest.lookKey.split('|')[0];
+    guest.lookKey = key;
+    if (colourChanged && FACES[this.chosen]?.id === 'badminton') guest.character.setGear(heldRacket(guest.player.colour));
+    const e = TUNING.avatarEditor;
+    if (this.time - guest.sparkledAt < e.sparkleEvery || guest.drop >= 0) return;
+    guest.sparkledAt = this.time;
+    this.burstAt(guest, e.sparklePieces);
+  }
+
+  /** A player pressed Save & play in the character editor: their character waves. */
+  waveHello(playerId: string): void {
+    const guest = this.guests.get(playerId);
+    if (!guest) return;
+    guest.character.play('wave');
+    this.burstAt(guest, TUNING.hub.confettiPieces);
+  }
+
+  private burstAt(guest: Guest, pieces: number): void {
+    const root = guest.character.root;
+    if (!root.parent) return;
+    const at = root.getWorldPosition(new THREE.Vector3());
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(root.parent.getWorldQuaternion(new THREE.Quaternion()));
+    this.confetti.burst(at.addScaledVector(up, 0.5), guest.player.colour, up, pieces);
   }
 
   /** A player hit from their phone while waiting: their character jumps and shows the power. */
@@ -518,7 +559,18 @@ export class Hub {
         if (FACES[this.chosen].id === 'badminton') character.setGear(heldRacket(player.colour));
         // Someone who just joined jumps down onto the cube (if its side is already turned up).
         const arriving = this.arrivals.has(player.id) && this.spinner.quaternion.angleTo(this.poses[this.chosen]) < 0.2;
-        guest = { player, character, tag: makeTag(), age: arriving ? 10 : 0, hitUntil: 0, hitText: '', drop: arriving ? 0 : -1, spot: new THREE.Vector3() };
+        guest = {
+          player,
+          character,
+          tag: makeTag(),
+          age: arriving ? 10 : 0,
+          hitUntil: 0,
+          hitText: '',
+          drop: arriving ? 0 : -1,
+          spot: new THREE.Vector3(),
+          lookKey: lookKeyOf(player),
+          sparkledAt: -1,
+        };
         character.root.scale.setScalar(0.001);
         character.play('cheer');
         this.guests.set(player.id, guest);
@@ -527,6 +579,7 @@ export class Hub {
       }
       guest.player = player;
       guest.character.setLook(lookOf(player));
+      this.showLookChange(guest);
       const x = (i - (this.players.length - 1) / 2) * c.characterSpacing;
       const spot = new THREE.Vector3(x, 0.12, c.characterForward - Math.abs(x) * 0.12);
       guest.spot.copy(spot);
@@ -597,6 +650,11 @@ export class Hub {
 }
 
 /** A badminton racket held at the ready, its head up and a little forward, in the player's colour. */
+/** Everything the phone's character editor can change, as one string (the player's colour first). */
+function lookKeyOf(player: PlayerInfo): string {
+  return `${player.colour}|${player.skinTone}|${player.handedness}|${JSON.stringify(player.look)}`;
+}
+
 function heldRacket(colour: string): THREE.Group {
   const grip = new THREE.Group();
   grip.position.set(0, -0.17, 0); // the hand

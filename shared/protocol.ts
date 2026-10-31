@@ -148,6 +148,11 @@ export type ClientMessage =
       /** The rest of the character (shared/avatar.ts). Optional: older phones do not send it. */
       look?: AvatarLook;
     }
+  /**
+   * From a joined phone in the lobby: the player's new look while they edit it (at most ~10 per second).
+   * saved = they pressed Save & play (the character waves on the big screen).
+   */
+  | { type: 'set_look'; colour: string; skinTone: string; handedness: Handedness; look: AvatarLook; saved?: boolean }
   /** Live aim while dragging, about 20 per second. */
   | { type: 'aim'; angle: number }
   | ({ type: 'stroke' } & Stroke)
@@ -186,6 +191,8 @@ export type ServerMessage =
   | { type: 'join_error'; reason: JoinError }
   /** Forwarded to the host page. */
   | { type: 'player_aim'; playerId: string; angle: number }
+  /** To the host page: a player pressed Save & play in the character editor. */
+  | { type: 'player_look_saved'; playerId: string }
   | ({ type: 'player_stroke'; playerId: string } & Stroke)
   | ({ type: 'player_practice'; playerId: string } & Stroke)
   | ({ type: 'player_swing_progress'; playerId: string } & SwingProgress)

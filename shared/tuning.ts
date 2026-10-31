@@ -14,6 +14,20 @@ export const TUNING = {
     minStrokeIntervalMs: 800,
   },
 
+  /** The character editor on the phone (phase 5) and how the big screen shows the edits. */
+  avatarEditor: {
+    /** Minimum time between live look updates sent while editing (milliseconds). 100 = 10 per second. */
+    sendIntervalMs: 100,
+    /** The phone's 3D preview: sharpness (pixel ratio cap) and frames per second (lower = less battery). */
+    previewPixelRatio: 2,
+    previewFps: 30,
+    /** How fast a finger drag turns the preview character (radians per pixel). */
+    dragTurn: 0.012,
+    /** Big screen: a small sparkle on each change, at most once per this many seconds; how many pieces. */
+    sparkleEvery: 0.35,
+    sparklePieces: 10,
+  },
+
   aim: {
     /** How far the aim turns per pixel of finger drag (degrees). */
     degreesPerPixel: 0.35,

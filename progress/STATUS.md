@@ -13,7 +13,7 @@ running log of where we are, what the user decided, and what comes next).
 | 2b Handedness + per-player sensitivity | Done, approved |
 | 3 Chibi characters | Done, approved |
 | 4 Art and juice | **In progress** — see below |
-| 5 Character editor on the phone (AVATAR.md) | **In progress** — step 1 built, waiting for the user's test |
+| 5 Character editor on the phone (AVATAR.md) | **In progress** — step 1 approved (`/avatars` OK), step 2 built, waiting for the user's phone test |
 | 6 Polish | Not started |
 
 ### Phase 4 in detail
@@ -467,7 +467,22 @@ body, round mitten hands, sturdier legs, chunky shoes).
   Test page **`/avatars`** (`host/avatars.html`, `host/avatars/gallery.ts`): every option, every hat on every hair,
   Random, Turn, Face close-up, Racket, Swing, Cheer/Jump/Clap/Scratch.
   Not yet: racket grip colour in badminton (step 4), phones still send no look (step 2), same colour still refused.
-- Step 2: phone editor (4 tabs, Random, Save & play) with live TV sync. Step 3: Quick start + Saved screen.
+- **Step 1 approved** by the user ("ano funguje", 2026-10-31).
+- **Step 2 — built (waiting for the user's phone test):** phone join screen = name, 3D preview of the character,
+  **Customize**, sensitivity, Join (colour/skin/hand moved into the editor). Customize joins first (name needed),
+  then opens the editor (user's OK), so the character is on the cube and edits show live. Editor =
+  `#screen-editor` in `controller/index.html` (dark Cube World look, Nunito Sans; the other phone screens stay light
+  until step 3, as proposed), `controller/avatar/editor.ts` (tabs Face/Hair/Clothes/Gear, Random, Save & play,
+  Back; colours other players wear are disabled), `controller/avatar/preview.ts` (one WebGL canvas with the real
+  `Character`, moved between join screen and editor; draws only while on screen, `TUNING.avatarEditor`
+  previewFps/pixel ratio; drag to turn). Live updates: `set_look` message, at most 10/s
+  (`TUNING.avatarEditor.sendIntervalMs`), only in the lobby / after a game; the server validates and broadcasts
+  `lobby_state`; `saved: true` -> `player_look_saved` to the host -> `Hub.waveHello` (new mood `wave` + confetti).
+  Each change: a small sparkle on the cube (`sparkleEvery`, `sparklePieces`; `Confetti.burst` got a piece count).
+  The look is saved in the phone's profile (`minigolf.profile`, field `look`). "Edit character" in the lobby opens
+  the editor directly. Note: the hub sets its own character scale, so left-handers are not mirrored on the cube
+  (unchanged); the phone preview turns a left-hander round to face the camera.
+- Step 3: Quick start + Saved screen (+ the other phone screens in the dark look).
   Step 4: outfits per game + same-colour name tags (then drop the `colour_taken` refusal).
 
 ## How the user likes to work
@@ -534,5 +549,5 @@ Summary of what is left, given to the user on 2026-10-31 (waiting for them to pi
   60 fps check; small open points (windmill tile's orange side walls, trees blocking the camera at bends).
 - **Shared:** Cube World K3 sounds, K4 dive-in/intro/results, K5 phone lobby screen; Phase 6 polish (settings,
   playtest with friends).
-- **Phase 5 avatar (AVATAR.md):** step 1 built (merged from the cloud on 2026-10-31) → user checks `/avatars` on
-  the Mac and the existing games (also the badminton beach outfit with every hair and hat) → step 2.
+- **Phase 5 avatar (AVATAR.md):** step 1 approved; step 2 (phone editor, live on the TV) built → user tests it on
+  real phones → step 3.

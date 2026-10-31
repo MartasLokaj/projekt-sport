@@ -181,6 +181,7 @@ function connect(): void {
       if (!badmintonScreen.hidden) badminton?.setPlayers(badmintonPlayers());
       labEmpty.hidden = players.length > 0;
     } else if (msg.type === 'game_state') void onGameState(msg);
+    else if (msg.type === 'player_look_saved') hub?.waveHello(msg.playerId);
     else if (msg.type === 'player_aim') {
       if (playing) game?.onPhoneAim(msg.angle);
     } else if (msg.type === 'player_stroke') {

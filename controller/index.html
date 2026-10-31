@@ -35,12 +35,85 @@
       .toggle button.selected { border-color: var(--ink); }
       input[type='range'] { width: 100%; max-width: 320px; accent-color: #ff8a3d; height: 32px; }
       .hint { font-size: 16px; margin: 4px auto 0; }
-      #colours { display: grid; grid-template-columns: repeat(3, 64px); gap: 14px; justify-content: center; }
-      #skins { display: grid; grid-template-columns: repeat(6, 44px); gap: 8px; justify-content: center; }
-      #skins .swatch { width: 44px; height: 44px; border-width: 4px; }
-      .swatch { width: 64px; height: 64px; border-radius: 50%; border: 5px solid #ffffff; padding: 0; }
-      .swatch.selected { box-shadow: 0 0 0 5px var(--ink); }
-      .swatch:disabled { opacity: 0.25; }
+      .avatar-holder { position: relative; }
+      .avatar-canvas { display: block; width: 100%; height: 100%; }
+      #join-avatar {
+        width: 170px; height: 190px; margin: 0 auto; border-radius: 24px;
+        background: radial-gradient(circle at 50% 42%, #2e2a72 0%, #171b4c 70%);
+      }
+      button.customize {
+        font: inherit; font-size: 20px; font-weight: 800; color: var(--ink); background: #ffffff; border: none;
+        border-radius: 999px; min-height: 48px; padding: 0 28px; margin-top: 12px;
+      }
+
+      /* Character editor: the Cube World look (dark space, Nunito Sans), as in the approved design. */
+      @font-face {
+        font-family: 'Nunito Sans'; font-style: normal; font-weight: 400 900; font-display: swap;
+        src: url('/host/assets/fonts/nunito-sans-latin.woff2') format('woff2');
+      }
+      @font-face {
+        font-family: 'Nunito Sans'; font-style: normal; font-weight: 400 900; font-display: swap;
+        src: url('/host/assets/fonts/nunito-sans-latin-ext.woff2') format('woff2');
+        unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1E00-1E9F;
+      }
+      #screen-editor {
+        position: fixed; inset: 0; min-height: 0; z-index: 1; padding: env(safe-area-inset-top) 0 0;
+        justify-content: flex-start; align-items: stretch; text-align: left; gap: 0;
+        background: #0e1236; color: #f3f5ff; font-family: 'Nunito Sans', ui-rounded, system-ui, sans-serif;
+      }
+      #screen-editor[hidden] { display: none; }
+      .ed-head { display: flex; align-items: center; gap: 12px; padding: 16px 16px 12px; }
+      .ed-icon {
+        width: 44px; height: 44px; flex: 0 0 auto; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.14);
+        background: rgba(255, 255, 255, 0.06); color: #f3f5ff; display: flex; align-items: center; justify-content: center; padding: 0;
+      }
+      .ed-title { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+      .ed-title b { font-size: 19px; font-weight: 900; }
+      .ed-title span { font-size: 13px; color: rgba(226, 231, 255, 0.74); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .ed-pill {
+        min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.18);
+        background: rgba(255, 255, 255, 0.08); color: #f3f5ff; font: inherit; font-weight: 800; font-size: 15px;
+        display: flex; align-items: center; gap: 8px;
+      }
+      .ed-stage {
+        flex: 0 0 auto; height: min(300px, 34vh); margin: 0 16px; border-radius: 24px; overflow: hidden;
+        background: radial-gradient(circle at 50% 42%, #2e2a72 0%, #171b4c 70%); border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .ed-live {
+        position: absolute; top: 12px; left: 12px; display: flex; align-items: center; gap: 6px; padding: 5px 10px;
+        border-radius: 999px; background: rgba(61, 220, 132, 0.16); color: #3ddc84; font-size: 11px; font-weight: 900;
+        letter-spacing: 0.08em; pointer-events: none;
+      }
+      .ed-live i { width: 7px; height: 7px; border-radius: 999px; background: #3ddc84; }
+      .ed-tabs {
+        margin: 14px 16px 0; padding: 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.06);
+        display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px;
+      }
+      .ed-tabs button {
+        min-height: 44px; border-radius: 999px; border: none; font: inherit; font-weight: 800; font-size: 15px;
+        background: transparent; color: rgba(226, 231, 255, 0.8);
+      }
+      .ed-tabs button[aria-selected='true'] { background: #f3f5ff; color: #0e1236; }
+      .ed-panel { flex: 1 1 0; overflow-y: auto; padding: 18px 16px 8px; display: flex; flex-direction: column; gap: 18px; }
+      .ed-group { display: flex; flex-direction: column; gap: 8px; }
+      .ed-label { font-size: 11px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(226, 231, 255, 0.74); }
+      .ed-note { font-size: 13px; color: rgba(226, 231, 255, 0.74); }
+      .ed-options { display: flex; flex-wrap: wrap; gap: 8px; }
+      .ed-options.swatches { gap: 12px; }
+      .ed-chip {
+        min-height: 44px; padding: 0 16px; border-radius: 999px; border: 2px solid rgba(255, 255, 255, 0.16);
+        background: rgba(255, 255, 255, 0.06); color: #f3f5ff; font: inherit; font-weight: 800; font-size: 15px;
+      }
+      .ed-chip[aria-pressed='true'] { background: #7ff3ff; color: #0e1236; border-color: #7ff3ff; }
+      .ed-swatch { width: 44px; height: 44px; border-radius: 999px; border: 2px solid rgba(255, 255, 255, 0.3); padding: 0; }
+      .ed-swatch[aria-pressed='true'] { box-shadow: 0 0 0 3px #7ff3ff; }
+      .ed-swatch:disabled { opacity: 0.2; }
+      .ed-foot { padding: 12px 16px max(20px, env(safe-area-inset-bottom)); border-top: 1px solid rgba(255, 255, 255, 0.08); }
+      #ed-save {
+        width: 100%; min-height: 56px; border-radius: 999px; border: none; background: #3ddc84; color: #05261a;
+        font: inherit; font-size: 20px; font-weight: 900; box-shadow: 0 4px 0 #1f9e57;
+      }
+      #ed-save:active { transform: translateY(3px); box-shadow: 0 1px 0 #1f9e57; }
       button.big {
         font: inherit; font-size: 30px; font-weight: 900; color: #ffffff; background: #3ec300;
         border: none; border-radius: 24px; padding: 20px 0; width: 100%; max-width: 320px; margin-top: 28px;
@@ -149,21 +222,39 @@
       <form id="join-form" autocomplete="off">
         <label for="name">Your name</label>
         <input id="name" maxlength="12" enterkeyhint="done" autocapitalize="words" spellcheck="false" />
-        <label>Shirt colour</label>
-        <div id="colours"></div>
-        <label>Skin tone</label>
-        <div id="skins"></div>
-        <label>Putting hand</label>
-        <div id="hands" class="toggle">
-          <button type="button" data-hand="right">Right-handed</button>
-          <button type="button" data-hand="left">Left-handed</button>
-        </div>
+        <label>Your character</label>
+        <div id="join-avatar" class="avatar-holder"></div>
+        <button class="customize" id="customize" type="button">Customize</button>
         <label for="sensitivity">Swing sensitivity: <span id="sensitivity-value">100 %</span></label>
         <input id="sensitivity" type="range" min="50" max="150" step="5" />
         <p class="hint">Gentle swinger? Turn it up. Strong swinger? Turn it down.</p>
         <button class="big" type="submit">Join</button>
         <p id="join-error" class="error"></p>
       </form>
+    </section>
+
+    <section id="screen-editor" hidden>
+      <header class="ed-head">
+        <button id="ed-back" class="ed-icon" type="button" aria-label="Back">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+        </button>
+        <div class="ed-title"><b>Your character</b><span id="ed-sub"></span></div>
+        <button id="ed-random" class="ed-pill" type="button">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"></rect><circle cx="8.5" cy="8.5" r="1.3" fill="currentColor"></circle><circle cx="15.5" cy="15.5" r="1.3" fill="currentColor"></circle><circle cx="12" cy="12" r="1.3" fill="currentColor"></circle></svg>
+          Random
+        </button>
+      </header>
+      <div id="ed-stage" class="ed-stage avatar-holder">
+        <span class="ed-live"><i></i>LIVE ON THE TV</span>
+      </div>
+      <div class="ed-tabs" role="tablist" aria-label="Character parts">
+        <button type="button" role="tab" data-tab="face" aria-selected="true">Face</button>
+        <button type="button" role="tab" data-tab="hair" aria-selected="false">Hair</button>
+        <button type="button" role="tab" data-tab="clothes" aria-selected="false">Clothes</button>
+        <button type="button" role="tab" data-tab="gear" aria-selected="false">Gear</button>
+      </div>
+      <div id="ed-panel" class="ed-panel" role="tabpanel"></div>
+      <footer class="ed-foot"><button id="ed-save" type="button">Save &amp; play</button></footer>
     </section>
 
     <section id="screen-play" hidden>
@@ -198,7 +289,7 @@
         <h1 id="turn-title"></h1>
         <p id="turn-text"></p>
         <button class="big" id="turn-button" type="button" hidden></button>
-        <button class="link" id="turn-edit" type="button" hidden>Change name or colour</button>
+        <button class="link" id="turn-edit" type="button" hidden>Edit character</button>
       </div>
     </section>
 
