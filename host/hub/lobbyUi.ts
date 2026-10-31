@@ -1,10 +1,29 @@
 import type { PlayerInfo } from '../../shared/protocol.ts';
+import { TUNING } from '../../shared/tuning.ts';
 import { FACES, type FaceInfo } from './faces.ts';
 
 // The page parts of the Cube World lobby around the 3D cube: the join panel (QR code, room code) and
 // the chosen game's card (picture, facts, modes, Play button, dots to switch games). Both only show
-// while a game is chosen. The players themselves are shown only as characters on the cube.
+// while a game is chosen. The players themselves are shown only as characters on the cube, and as little
+// faces under the Play button: hover a face for a × that kicks that player (after a confirm dialog).
 // Styles are in host/ui/lobby.css.
+
+/** The computer's difficulty, chosen in a "Versus CPU" mode row. */
+export type CpuLevel = 'easy' | 'normal' | 'pro';
+const LEVELS: { id: CpuLevel; label: string; key: string }[] = [
+  { id: 'easy', label: 'Easy', key: '1' },
+  { id: 'normal', label: 'Normal', key: '2' },
+  { id: 'pro', label: 'Pro', key: '3' },
+];
+
+/** How long a match lasts, chosen in the card (badminton: see TUNING.badminton.matchLengths). */
+export type MatchLength = keyof typeof TUNING.badminton.matchLengths;
+
+/** "first to 11, win by 2, max 15" */
+function lengthText(length: MatchLength): string {
+  const m = TUNING.badminton.matchLengths[length];
+  return `first to ${m.to}, win by ${m.winBy}${m.cap === null ? '' : `, max ${m.cap}`}`;
+}
 
 /** What the Play button would do for a game right now. */
 export type PlayState = { enabled: boolean; label: string; note: string; warn: boolean };
@@ -18,6 +37,12 @@ const STATUS: Record<FaceInfo['status'], { text: string; tone: string }> = {
 export class LobbyUi {
   /** A dot under the game card was clicked: choose that game. */
   onChoose: (id: string) => void = () => {};
+  /** The host confirmed kicking this player. */
+  onKick: (playerId: string) => void = () => {};
+  /** The computer's difficulty for the next match against it (Easy / Normal / Pro in the mode row, or keys 1 2 3). */
+  cpuLevel: CpuLevel = 'normal';
+  /** The match length for the next match (Quick / Normal / Long in the card's Match row). */
+  matchLength: MatchLength = TUNING.badminton.matchLength;
 
   private readonly $ = (id: string): HTMLElement => document.getElementById(id)!;
   private readonly pick = this.$('pick');
@@ -27,8 +52,16 @@ export class LobbyUi {
   private readonly dots: HTMLButtonElement[] = [];
   private players: PlayerInfo[] = [];
   private face: FaceInfo | null = null;
+  private readonly kickDialog = this.$('kick-confirm');
+  /** The player the kick dialog asks about. */
+  private kickId: string | null = null;
 
   constructor() {
+    this.$('kick-yes').addEventListener('click', () => this.answerKick(true));
+    this.$('kick-cancel').addEventListener('click', () => this.answerKick(false));
+    this.kickDialog.addEventListener('click', (e) => {
+      if (e.target === this.kickDialog) this.answerKick(false); // a click outside the panel
+    });
     const dots = this.$('pick-dots');
     for (const face of FACES) {
       const dot = document.createElement('button');
@@ -74,21 +107,101 @@ export class LobbyUi {
     this.renderGame(false);
   }
 
-  /** The joined players' little faces under the Play button (a player who lost connection is faded). */
+  /**
+   * The joined players' little faces under the Play button (a player who lost connection is faded).
+   * Hovering a face shows a × to kick that player. A face whose player left (or was kicked) spins away.
+   */
   private renderFaces(): void {
     const row = this.$('pick-faces');
-    const faces = this.players.map((p) => {
-      const existing = row.querySelector<HTMLElement>(`[data-id="${CSS.escape(p.id)}"]`);
-      const face = existing ?? el('span', 'cw-avatar');
-      face.dataset.id = p.id;
+    const ids = new Set(this.players.map((p) => p.id));
+    for (const slot of row.querySelectorAll<HTMLElement>('.face-slot')) {
+      if (ids.has(slot.dataset.id!) || slot.classList.contains('is-leaving')) continue;
+      slot.classList.add('is-leaving');
+      setTimeout(() => slot.remove(), 520);
+    }
+    for (const p of this.players) {
+      let slot = row.querySelector<HTMLElement>(`.face-slot[data-id="${CSS.escape(p.id)}"]:not(.is-leaving)`);
+      if (!slot) {
+        slot = el('span', 'face-slot');
+        slot.dataset.id = p.id;
+        const kick = el('button', 'face-kick', '×') as HTMLButtonElement;
+        kick.type = 'button';
+        kick.addEventListener('click', () => this.askKick(p.id));
+        slot.append(el('span', 'cw-avatar'), kick);
+        row.append(slot);
+      }
+      const face = slot.querySelector<HTMLElement>('.cw-avatar')!;
       face.classList.toggle('is-away', !p.connected);
       face.style.setProperty('--shirt', p.colour);
       face.style.setProperty('--skin', p.skinTone);
       face.title = p.connected ? p.name : `${p.name} (away)`;
       face.setAttribute('aria-label', face.title);
-      return face;
+      const kick = slot.querySelector<HTMLElement>('.face-kick')!;
+      kick.title = `Kick ${p.name}`;
+      kick.setAttribute('aria-label', `Kick ${p.name}`);
+    }
+  }
+
+  /** The Match row (Quick / Normal / Long) under the modes, for games that have it. */
+  private renderLengths(face: FaceInfo): void {
+    const row = this.$('pick-length');
+    row.hidden = !face.matchLengths;
+    if (!face.matchLengths) return;
+    const buttons = (Object.keys(TUNING.badminton.matchLengths) as MatchLength[]).map((id) => {
+      const button = el('button', id === this.matchLength ? 'is-on' : '', TUNING.badminton.matchLengths[id].label) as HTMLButtonElement;
+      button.type = 'button';
+      button.title = lengthText(id);
+      button.setAttribute('role', 'radio');
+      button.setAttribute('aria-checked', String(id === this.matchLength));
+      button.addEventListener('click', () => {
+        this.matchLength = id;
+        this.renderGame(false);
+      });
+      return button;
     });
-    row.replaceChildren(...faces);
+    row.querySelector('.mode-levels')!.replaceChildren(...buttons);
+  }
+
+  setCpuLevel(level: CpuLevel): void {
+    this.cpuLevel = level;
+    this.renderGame(false);
+  }
+
+  /** Keys 1 2 3 choose the computer's level while a game with a Versus CPU mode is chosen. */
+  handleLevelKey(e: KeyboardEvent): boolean {
+    const level = LEVELS.find((l) => l.key === e.key);
+    if (!level || !this.face?.modes.some((m) => m.levels)) return false;
+    this.setCpuLevel(level.id);
+    return true;
+  }
+
+  // ---------- Kick dialog ----------
+
+  get kickOpen(): boolean {
+    return !this.kickDialog.hidden;
+  }
+
+  private askKick(playerId: string): void {
+    const player = this.players.find((p) => p.id === playerId);
+    if (!player) return;
+    this.kickId = playerId;
+    this.$('kick-title').textContent = `Kick ${player.name}?`;
+    this.$('kick-text').textContent = `${player.name} will be removed from the game. They can join again from their phone.`;
+    this.kickDialog.hidden = false;
+    this.$('kick-yes').focus();
+  }
+
+  /** Keys while the kick dialog is open: Enter kicks, Esc cancels. */
+  handleKickKey(e: KeyboardEvent): void {
+    if (e.key === 'Escape') this.answerKick(false);
+    else if (e.key === 'Enter') this.answerKick(true);
+  }
+
+  private answerKick(kick: boolean): void {
+    const id = this.kickId;
+    this.kickId = null;
+    this.kickDialog.hidden = true;
+    if (kick && id) this.onKick(id);
   }
 
   // ---------- Game card ----------
@@ -141,11 +254,28 @@ export class LobbyUi {
     const modes = face.modes.map((mode, i) => {
       const item = el('li', i === (active < 0 ? 0 : active) ? 'mode is-active' : 'mode');
       const text = el('div', '');
-      text.append(el('b', '', mode.label), el('span', '', mode.detail));
+      text.append(el('b', '', mode.label), el('span', '', mode.detail.replace('{length}', lengthText(this.matchLength))));
       item.append(text);
+      if (mode.levels) {
+        // Easy / Normal / Pro for the computer, right in its mode row.
+        const levels = el('div', 'mode-levels');
+        levels.setAttribute('role', 'radiogroup');
+        levels.setAttribute('aria-label', 'Computer level');
+        for (const level of LEVELS) {
+          const button = el('button', level.id === this.cpuLevel ? 'is-on' : '', level.label) as HTMLButtonElement;
+          button.type = 'button';
+          button.title = `${level.label} (key ${level.key})`;
+          button.setAttribute('role', 'radio');
+          button.setAttribute('aria-checked', String(level.id === this.cpuLevel));
+          button.addEventListener('click', () => this.setCpuLevel(level.id));
+          levels.append(button);
+        }
+        item.append(levels);
+      }
       return item;
     });
     this.$('pick-modes').replaceChildren(...modes);
+    this.renderLengths(face);
 
     const play = this.playState(face);
     this.start.disabled = !play.enabled;

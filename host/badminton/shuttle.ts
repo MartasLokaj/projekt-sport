@@ -8,7 +8,7 @@ import { TUNING } from '../../shared/tuning.ts';
 //
 // Court coordinates: net along x at z = 0, the player's half at z > 0, the computer's at z < 0.
 
-export type ShotKind = 'serve' | 'clear' | 'lift' | 'drive' | 'smash';
+export type ShotKind = 'serve' | 'shortServe' | 'clear' | 'lift' | 'drive' | 'smash' | 'drop' | 'wobble' | 'superSmash';
 
 export class Flight {
   constructor(
@@ -23,6 +23,8 @@ export class Flight {
     /** How much the shuttle slows down: 0 = steady, higher = shoots off fast, then hangs. */
     readonly drag: number,
     readonly kind: ShotKind,
+    /** The shot ends in the net (on the hitter's side): a point for the other side. */
+    readonly intoNet = false,
   ) {}
 
   /** Share of the horizontal distance covered at progress u (0..1). */
@@ -35,12 +37,18 @@ export class Flight {
   }
 
   positionAt(u: number, out = new THREE.Vector3()): THREE.Vector3 {
-    const k = this.across(Math.min(1, Math.max(0, u)));
+    const t = Math.min(1, Math.max(0, u));
+    const k = this.across(t);
     out.set(
       this.from.x + (this.to.x - this.from.x) * k,
-      this.heightAt(Math.min(1, Math.max(0, u))),
+      this.heightAt(t),
       this.from.z + (this.to.z - this.from.z) * k,
     );
+    if (this.kind === 'wobble') {
+      // Sways from side to side, most in the middle of the flight.
+      const cfg = TUNING.badminton;
+      out.x += Math.sin(t * Math.PI * 2 * cfg.wobbleSwaysPerFlight) * Math.sin(t * Math.PI) * cfg.wobbleSway;
+    }
     return out;
   }
 
@@ -80,6 +88,8 @@ export class Flight {
  * A new shot from `from` into the other half. side = the hitter's half (+1 player, -1 computer).
  * aim: -1 left … 1 right, from the hitter's point of view. power, quality: 0..1.
  * xRange: where it may land across the court (world x, default: the whole court); aim picks a spot in it.
+ * extraScatter: added to the usual scatter (m), e.g. for a drop from the back. netChance: chance it ends in the net.
+ * speed: flies this many times faster (e.g. a chain of Super Smashes).
  */
 export function makeShot(
   kind: ShotKind,
@@ -90,17 +100,21 @@ export function makeShot(
   quality: number,
   start: number,
   xRange: [number, number] = [-TUNING.badminton.courtHalfWidth + 0.25, TUNING.badminton.courtHalfWidth - 0.25],
+  extraScatter = 0,
+  netChance = 0,
+  speed = 1,
 ): Flight {
   const cfg = TUNING.badminton;
   const shot = cfg[kind];
   const depth = shot.depth[0] + (shot.depth[1] - shot.depth[0]) * power;
   // The hitter looks towards the other half: for the player (+z half, looking at -z) "right" is +x,
   // for the computer (looking at +z) "right" is -x.
-  const scatter = (1 - quality) * cfg.scatter;
-  const worldAim = side * aim * cfg.aimReach; // -1..1 across the court in world x
+  const scatter = (1 - quality) * cfg.scatter + extraScatter;
+  const aimShare = kind === 'wobble' ? cfg.wobbleAimShare : 1;
+  const worldAim = side * aim * aimShare * cfg.aimReach; // -1..1 across the court in world x
   const [lo, hi] = xRange;
   const x = lo + ((worldAim + 1) / 2) * (hi - lo) + (Math.random() * 2 - 1) * scatter;
-  const z = -side * (depth + (Math.random() * 2 - 1) * scatter * 0.5);
+  const z = -side * Math.max(0.4, depth + (Math.random() * 2 - 1) * scatter * 0.5);
   const to = new THREE.Vector3(
     THREE.MathUtils.clamp(x, lo, hi),
     0,
@@ -108,12 +122,19 @@ export function makeShot(
   );
   let seconds = shot.seconds[0] + (shot.seconds[1] - shot.seconds[0]) * power;
   if (quality >= 1) seconds *= cfg.perfectSpeedup;
+  seconds /= speed;
 
+  if (Math.random() < netChance) {
+    // Into the net: it flies to the net and drops down on the hitter's own side.
+    const net = new THREE.Vector3(to.x * 0.5 + from.x * 0.5, 0, side * 0.25);
+    return new Flight(from.clone(), net, 0.4, seconds * 600, start, 0.4, kind, true);
+  }
   let flight = new Flight(from.clone(), to, shot.apex, seconds * 1000, start, shot.drag, kind);
-  // Make sure it clears the net: raise the arc until it does.
+  // Make sure it clears the net: raise the arc until it does. Drops and short serves stay close above it.
   const u = flight.netCrossing();
   if (u !== null) {
-    const need = cfg.netHeight + cfg.netClearance - flight.heightAt(u);
+    const clearance = kind === 'drop' ? cfg.dropNetClearance : kind === 'shortServe' ? cfg.shortServeNetClearance : cfg.netClearance;
+    const need = cfg.netHeight + clearance - flight.heightAt(u);
     if (need > 0) {
       flight = new Flight(from.clone(), to, shot.apex + need / (4 * u * (1 - u)), seconds * 1000, start, shot.drag, kind);
     }
@@ -130,30 +151,47 @@ export type Contact = {
    * drive = about chest height (a flat, fast shot); lift = low (underhand).
    */
   stroke: 'overhead' | 'drive' | 'lift';
+  /** run = can get there running; dive = only with a dive (a wobble at best); none = out of reach. */
+  reach: 'run' | 'dive' | 'none';
 };
 
 /**
- * Where the receiver on `side`, now standing at `at`, meets this flight. Like real players it takes the
- * shuttle as early as it can: the first point in its half that is low enough to reach and that it can
- * get to in time at a normal run (so it does not dash at the net to block a smash). Failing that, the
- * first point it can reach at full sprint; failing that, just before the shuttle lands.
+ * Where the receiver on `side`, standing at `at` and free to move from `availableAt` (host clock; later
+ * than now while it gets up after a fall), meets this flight. Like real players it takes the shuttle as
+ * early as it can: the first point in its half that is low enough to reach and that it can get to in time
+ * at a normal run (so it does not dash at the net to block a smash). Failing that, the first point it can
+ * reach at full sprint; failing that, the first one a dive can reach; failing that, out of reach.
  */
-export function findContact(flight: Flight, side: number, at: THREE.Vector3, now: number): Contact {
+export function findContact(
+  flight: Flight,
+  side: number,
+  at: THREE.Vector3,
+  availableAt: number,
+  reactionMs: number = TUNING.badminton.reactionMs,
+): Contact {
   const cfg = TUNING.badminton;
+  const assist = 1 + cfg.reachAssist;
   const p = new THREE.Vector3();
-  const earliest = (speed: number): number | null => {
+  const earliest = (speed: number, extraReach: number): number | null => {
     for (let i = 0; i <= 200; i++) {
       const u = i / 200;
       flight.positionAt(u, p);
-      if (Math.sign(p.z) !== side || p.y > cfg.reachHeight || p.y < cfg.lowestContact) continue;
+      if (Math.sign(p.z) !== side || Math.abs(p.z) < cfg.minContactDepth) continue;
+      if (p.y > cfg.reachHeight || p.y < cfg.lowestContact) continue;
       if (Math.abs(p.z) > cfg.courtHalfLength + 0.6 || Math.abs(p.x) > cfg.courtHalfWidth + 0.7) continue;
-      const runSeconds = Math.hypot(p.x - at.x, p.z - at.z) / speed;
-      if (flight.timeAt(u) - now >= cfg.reactionMs + runSeconds * 1000) return u;
+      const runSeconds = Math.max(0, Math.hypot(p.x - at.x, p.z - at.z) - extraReach) / speed;
+      if (flight.timeAt(u) - availableAt >= reactionMs + runSeconds * 1000) return u;
     }
     return null;
   };
-  const chosen = earliest(cfg.runSpeed) ?? earliest(cfg.maxRunSpeed) ?? 0.98;
+  let reach: Contact['reach'] = 'run';
+  let chosen = earliest(cfg.runSpeed * assist, 0) ?? earliest(cfg.maxRunSpeed * assist, 0);
+  if (chosen === null) {
+    chosen = earliest(cfg.maxRunSpeed * assist, cfg.diveReach);
+    reach = chosen === null ? 'none' : 'dive';
+  }
+  chosen ??= 0.98;
   const position = flight.positionAt(chosen);
   const stroke = position.y >= cfg.overheadFrom ? 'overhead' : position.y >= cfg.driveFrom ? 'drive' : 'lift';
-  return { position, time: flight.timeAt(chosen), stroke };
+  return { position, time: flight.timeAt(chosen), stroke, reach };
 }

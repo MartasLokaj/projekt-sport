@@ -155,6 +155,9 @@ Each of the six faces is a small world for one game. For now only the **Minigolf
 
 ## 13. Badminton (next game) — DRAFT, still being designed with the user
 
+**Mechanics upgrade (requested 2026-10-31):** see BADMINTON_MECHANICS.md for the full brief (short shot, wobble shots, dive/fall, Super Smash, timing feedback, rally escalation, match options).
+**Beach venue design (requested 2026-10-31):** see BADMINTON_BEACH.md (based on the user's reference photo: court, then players, shuttle, rackets).
+
 Status: decisions so far are recorded here. Do not start building Badminton until the user says so (Cube World hub and the Minigolf phases come first). Open questions are marked **OPEN**.
 
 **Decided**
@@ -168,7 +171,7 @@ Status: decisions so far are recorded here. Do not start building Badminton unti
 **Proposed (user agreed in principle, details to tune)**
 - Modes: 1v1, 2v2 and 1 player vs CPU (CPU difficulty levels).
 - ~~Shot type comes from the swing~~ (replaced, see Decided: shot type from court position). Power comes from the swing speed. ~~Hitting early/late sends the shuttle left/right~~ (replaced: the swing direction aims, see Decided).
-- ~~Short party matches: rally scoring to 11 points.~~ Decided (user, 2026-10-31): rally scoring **to 4 points, win by 2** (4 : 4 → play on until someone leads by 2).
+- ~~Short party matches: rally scoring to 11 points.~~ Decided (user, 2026-10-31): rally scoring **to 4 points, win by 2** (4 : 4 → play on until someone leads by 2) by default; the lobby card offers Quick (to 4) / Normal (to 11, cap 15) / Long (to 21, cap 30), always win by 2. The computer's level (Easy / Normal / Pro) is chosen in the Versus CPU row.
 - **Court (user, 2026-10-31):** 25 % bigger than a real singles court, so the characters run more; they also bounce on their toes while waiting.
 - The shuttle is slow, so Wi-Fi delay matters less than in tennis. Badminton needs **instant** swing detection, unlike minigolf's "wait until still" flow. Use a generous, tunable hit window and compensate for network delay (timestamps).
 
@@ -180,6 +183,8 @@ Status: decisions so far are recorded here. Do not start building Badminton unti
 - **Serve (user, 2026-10-30):** always diagonally into the receiver's service court (right court on an even score, left on odd), never straight.
 - **Shuttle:** bright glowing red and drawn bigger than real, so it is easy to follow. It is drawn 2.4× bigger than real (user, 2026-10-31). It flies slower than a real one, at a steady, predictable pace, and never slows down near the player (user, 2026-10-30).
 - **Later (user):** make the shot speeds easy to tell apart visually (e.g. a trail or effect that shows a fast smash vs a slow clear) — design phase (B5).
+- **Super Smash (user, 2026-10-31):** allowed from anywhere on the court (only on a wobble, high, strong and well timed); the normal smash stays back-court only.
+- **Falling (user, 2026-10-31):** a player's character falls into the sand only when the swing is really late, or when a Super Smash attempt is badly timed. Too early = swing again; slightly off = a wobble, no fall.
 - **Shot depth (user, 2026-10-30):** for now every shot flies to the back of the court. Later the phone gets a big button that means "play a short shot" (drop).
 
 **OPEN**

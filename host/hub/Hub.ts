@@ -7,6 +7,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import type { PlayerInfo } from '../../shared/protocol.ts';
 import { TUNING } from '../../shared/tuning.ts';
+import { buildRacket } from '../badminton/court.ts';
 import { Character } from '../game/character.ts';
 import { loadForest } from '../game/vegetation.ts';
 import { FaceSign } from './sign.ts';
@@ -56,8 +57,12 @@ export class Hub {
   private readonly brightness: number[] = [];
   private readonly sign = new FaceSign();
   private readonly confetti = new Confetti();
+  /** Characters of players who left or were kicked: they spin up and shrink away, then go. */
+  private readonly leaving: { guest: Guest; t: number }[] = [];
   /** Players who joined since the last update: they jump down onto the cube instead of popping up. */
   private readonly arrivals = new Set<string>();
+  /** Players already there when the page opens just appear; anyone joining after this moment jumps down. */
+  private readonly quietUntil = performance.now() + 1500;
   /** True when the last selection chose a game (the cube hops), false when it let go. */
   private hop = false;
   /** Little moons going round the cube: a golf ball, a shuttlecock and a tiny cube. */
@@ -253,12 +258,13 @@ export class Hub {
 
   /** The players who joined. While a game is chosen, new ones pop up on its side and players who left disappear. */
   setPlayers(players: PlayerInfo[]): void {
-    for (const p of players) if (this.players.length > 0 && !this.players.some((q) => q.id === p.id)) this.arrivals.add(p.id);
+    const greet = performance.now() > this.quietUntil;
+    for (const p of players) if (greet && !this.players.some((q) => q.id === p.id)) this.arrivals.add(p.id);
     this.players = players;
     for (const [id, guest] of this.guests) {
       if (players.some((p) => p.id === id)) continue;
-      this.removeGuest(guest);
       this.guests.delete(id);
+      this.leave(guest);
     }
     this.addGuests();
   }
@@ -363,6 +369,7 @@ export class Hub {
       // Now and then somebody waves.
       if (t >= 1 && Math.random() < dt * 0.12) guest.character.play('cheer');
     });
+    this.updateLeaving(dt);
     this.confetti.update(dt, GRAVITY);
     this.composer.render();
     this.placeTags();
@@ -507,6 +514,8 @@ export class Hub {
       let guest = this.guests.get(player.id);
       if (!guest) {
         const character = new Character({ shirt: player.colour, skin: player.skinTone, handedness: player.handedness });
+        // On the Badminton side everyone holds a racket instead of the putter.
+        if (FACES[this.chosen].id === 'badminton') character.setGear(heldRacket(player.colour));
         // Someone who just joined jumps down onto the cube (if its side is already turned up).
         const arriving = this.arrivals.has(player.id) && this.spinner.quaternion.angleTo(this.poses[this.chosen]) < 0.2;
         guest = { player, character, tag: makeTag(), age: arriving ? 10 : 0, hitUntil: 0, hitText: '', drop: arriving ? 0 : -1, spot: new THREE.Vector3() };
@@ -534,6 +543,35 @@ export class Hub {
     this.guests.clear();
   }
 
+  /** Starts the goodbye: a puff of confetti in the player's colour, then spin, hop up and shrink away. */
+  private leave(guest: Guest): void {
+    guest.tag.remove();
+    const root = guest.character.root;
+    if (!root.parent) return;
+    const at = root.getWorldPosition(new THREE.Vector3());
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(root.parent.getWorldQuaternion(new THREE.Quaternion()));
+    this.confetti.burst(at.addScaledVector(up, 0.3), guest.player.colour, up);
+    this.leaving.push({ guest, t: 0 });
+  }
+
+  private updateLeaving(dt: number): void {
+    const c = TUNING.hub;
+    for (let i = this.leaving.length - 1; i >= 0; i--) {
+      const l = this.leaving[i];
+      l.t += dt / 0.5;
+      const root = l.guest.character.root;
+      if (l.t >= 1) {
+        this.removeGuest(l.guest);
+        this.leaving.splice(i, 1);
+        continue;
+      }
+      root.rotation.y += dt * 18;
+      root.position.y += dt * 2.2 * (1 - l.t);
+      root.scale.setScalar(Math.max(0.001, c.characterScale * (1 - l.t * l.t)));
+      l.guest.character.update(dt);
+    }
+  }
+
   private removeGuest(guest: Guest): void {
     guest.character.root.removeFromParent();
     guest.tag.remove();
@@ -556,6 +594,17 @@ export class Hub {
       if (name.textContent !== text) name.textContent = text;
     });
   }
+}
+
+/** A badminton racket held at the ready, its head up and a little forward, in the player's colour. */
+function heldRacket(colour: string): THREE.Group {
+  const grip = new THREE.Group();
+  grip.position.set(0, -0.17, 0); // the hand
+  grip.rotation.x = -2.5; // from pointing down the arm to pointing up and forward
+  const racket = buildRacket(colour);
+  racket.position.y = 0.17; // buildRacket's handle starts at the hand
+  grip.add(racket);
+  return grip;
 }
 
 // ---------- Space backdrop ----------

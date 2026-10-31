@@ -236,7 +236,94 @@ running log of where we are, what the user decided, and what comes next).
     stroke from the height at the swing (`strokeAt`); racket windup for players starts when the shuttle enters
     their half; the computer still jumps by itself; `shuttleScale` 2.4. Scripted: no jump before the swing,
     early swing → 1.2 m jump, late → 0.16 m hop, chest-height on time → no jump.
-  - Next: user test (also with two phones) → B4 2v2 (plan first).
+  - User: "okay, this is divine" — approved.
+  - The user then added **`BADMINTON_MECHANICS.md`** (linked from SPEC §13): 9 mechanics to add before 2v2, in order
+    (1 SHORT button, 2 wobble + dive/fall, 3 Super Smash, 4 feedback/movement/CPU levels, 5 rally escalation, trails,
+    match options, 6 then B4 2v2). Each step: plan → OK → build → test on phones → commit, push, STATUS.
+  - **Mechanics step 1 (SHORT button + short serve) — built, waiting for the user's phone test.** Phone: big
+    SHORT button at the bottom (left for right-handers, right for left-handers), held = blue "SHORT ✓", light
+    vibration on Android; `short` is sent with each swing (held at the peak or let go ≤ `shortGraceMs` before).
+    Game: new shots `drop` (any height, lands 0.8–2.4 m past the net, crosses the net low: `dropNetClearance`) and
+    `shortServe` (just past the short service line); a drop from the back is less precise (`shortShotScatterBack`,
+    `shortShotNetChanceBack` → `Flight.intoNet`, point to the receiver); CPU plays drops (`cpu.dropChance`) and
+    short serves (`cpu.shortServeChance`); nobody hits closer than `minContactDepth` to the net. Mac: Shift+Space.
+    Lab card shows SHORT. Scripted test: drops land 1.1–1.9 m from the net, short serves at 3.2–3.4 m.
+  - **User test: "works well"**, but the drop was too brutal: now it passes 40 cm over the net
+    (`dropNetClearance` 0.4, drop apex 0.8; short serve keeps `shortServeNetClearance` 0.12). Still met at most
+    ~1 m from the net, so it can never be smashed (smash needs `smashFromDepth` 4.6).
+  - **Mechanics step 2 (wobble + dive/fall/recovery) — built (user: "Ano, postav krok 2"), waiting for the
+    phone test.** Wobble (`wobble` shot: slower, higher, sways sideways, keeps `wobbleAimShare` of the aim, purple
+    dot trail `Trail` in `effects.ts`) when: power < `wobblePower` (not drops), timing outside `goodEarlyMs`/
+    `goodLateMs`, or a dive. Receiver sees "⚡ Smash chance!" in their half; the phone gets `badminton_cue`
+    (host → server → phone; text + Android vibration). `findContact` now returns `reach` (run / dive within
+    `diveReach` / none) and takes `availableAt` (after getting up). Swing far too early (> hitWindowEarly +
+    `diveExtraMs`), too late, out of reach, or no swing → dive and miss; a little too early or dive-reach → dive and
+    wobble. Dive = belly-flop along the dive direction + sand puff (`SandPuffs`), lying `recoveryMs` 900, can't
+    move/hit. CPU follows the same rules and plays wobbles (`cpu.wobbleChance`). Mac: W+Space = weak swing.
+    The old "Too early → swing again" is gone (now a dive).
+  - **User test: "now I just keep falling into the sand"** → falls only when the swing is **really late**
+    (> `veryLateMs` 400 after the right moment, also when its message arrives after the miss was called:
+    `missedContact`), or (step 3) a badly timed Super Smash attempt. Far too early = "Too early!" and swing again
+    (no fall); a little too early (`earlyWobbleMs`) or a stretch (`diveReach`) = wobble without falling; out of
+    reach or no swing = miss without falling. The computer still falls when it misses.
+  - **Mechanics step 3 (Super Smash) — built (user: "Odkudkoli, postav to": allowed from anywhere, the normal
+    smash stays back-only), waiting for the phone test.** Strong (≥ `superSmashPower` 75) overhead swing on a
+    `wobble`, shuttle ≥ `superSmashMinHeight` 2.4 m at the swing, timing in the Good part → `superSmash`
+    (0.55–0.75 s, ×0.9 if Perfect); chain in one rally: ×`superSmashChainBoost` 1.12 each, cap
+    `superSmashMaxSpeed` 1.8. Strong try badly timed → weak wobble back + fall ("Super Smash failed!"); outside the
+    window → miss + fall. Returning one: `superSmashDefenseWindowMs` 180/130 (`hitWindow()`). Juice: hit-stop
+    `superSmashHitStopMs` 300 (shuttle waits at the racket: `pendingHit.contactAt` vs `when`), white flash
+    (`#badminton-flash`), big golden bouncy "SUPER SMASH! (×n)" in the hitter's half, gold trail, sand burst +
+    camera shake on landing, hitter's phone cue `super_smash` (strong vibration on Android). CPU tries one on high
+    wobbles (`cpu.superSmashChance` 0.5) and returns one with `cpu.superSmashReturnChance` 0.3.
+    Scripted: perfect try → Super Smash 504 ms; third in a chain 402 ms; −250 ms → "failed" + fall.
+  - **User test step 3: "plays well" — approved.**
+  - **Mechanics step 4 — built (user: "Ano, postav krok 4"), waiting for the phone test.** Timing text pops up
+    above the player's own character (`showPop`, `.badminton-pop` coloured perfect/good/wobble/miss, `popMs` 900,
+    placed by projecting the head with that half's camera); Perfect → racket glows gold (`perfectGlowMs`) + phone
+    cue `perfect` (short buzz); tips "wait for it!" / "swing sooner!" after early/late misses at most once per
+    `hintEveryRallies` 3 (`tip`); running `reachAssist` 0.2 (in `findContact` and the run speed); computer levels
+    `cpuLevels` easy/normal/pro (reaction, return chances, smash/drop/wobble/Super Smash chances, aim, power,
+    quality), keys 1 2 3 in a match against it, "CPU: Normal" label next to the score. Scripted: Perfect → gold pop +
+    glow + cue; tips every 3 rallies; Pro selectable.
+  - User: "good, but I want the difficulty already where I pick Versus CPU or 1 v 1" → done: the Versus CPU mode row
+    in the lobby card has Easy / Normal / Pro (`GameMode.levels`, `LobbyUi.cpuLevel`, keys 1 2 3 in the lobby too);
+    `Badminton.start(near, far, level)` uses it (keys 1 2 3 still work during the match).
+  - **Mechanics step 5 — built (user: "ano jdeme na to"), waiting for the test.** Rally hits counter (`hits`,
+    serve counts) in the top-left of each half from `rallyThresholds.show` 3, orange from `birds` 5 (seagulls
+    `Birds` in `effects.ts` circle the court), red "🔥" + fire trail on every shot (except wobble / Super Smash)
+    from `fire` 10, "Rally ×N!" under the point message from `celebrate` 5. Trails by shot type (`trails`,
+    `fireTrail`). Match length in the lobby card's Match row: Quick (to 4, win by 2) / Normal (to 11, win by 2,
+    cap 15) / Long (to 21, win by 2, cap 30) (`matchLengths`, `FaceInfo.matchLengths`, mode detail "{length}",
+    `Badminton.start(…, level, length)`); messages "Game point!", "Deuce: win by 2", "Next point wins!" (at the
+    cap). Music / louder waves wait for sounds in B5 (none yet). Scripted: 11:9 wins, 15:14 wins by the cap.
+  - Next: user tests step 5 → B4 (2v2) — plan first.
+
+### GitHub and the cloud (2026-10-31)
+- Project is on GitHub: **private** repo `MartasLokaj/projekt-sport` (remote `origin`, branch `main`). `gh` CLI is in
+  `~/.local/gh/bin/gh` (not on PATH; logged in as MartasLokaj, git credential helper set up with `gh auth setup-git`).
+- The user connected GitHub to claude.ai and started their own **cloud session redesigning the Cube World hub**
+  (they did not like the cube much). That work is on its own branch in the cloud: **don't touch `host/hub/` here**;
+  merge its branch only when the user asks. This session continues with badminton (functionality).
+- Push `main` after each milestone so the cloud can pick it up.
+- **2026-10-31: merged the cloud's hub branch `claude/adoring-keller-x93qqh` (Cube World 2.0 K1–K2: title menu,
+  new lobby UI `host/ui/`, living cube, confetti, fonts) into `main` on the user's request.** Merge was clean;
+  checked in the dev browser: title → cube → Badminton → Play → game → Esc back to the cube, no errors.
+
+### Kick players from the lobby (2026-10-31, user request)
+- **Built, waiting for the user's test.** Hover a player's face under Play → red × (`.face-kick` in
+  `host/hub/lobbyUi.ts`, styles in `host/ui/lobby.css`) → dialog "Kick Eva?" (`#kick-confirm` in `host/index.html`;
+  Enter kicks, Esc cancels) → host sends `kick_player` → server (`server/lobby.ts`) deletes the seat (only outside a
+  match), the phone gets `join_error: kicked` ("You were removed from the game" + "Join again" button). The face
+  spins away; the cube character (`Hub.leave`) bursts confetti and spins up and shrinks away (any player who
+  leaves now animates like that). Note: the dialog needs `#lobby-screen > #kick-confirm` to beat the
+  `#lobby-screen > *:not(#hub-canvas)` z-index rule.
+- Touches the cloud's hub files (`host/hub/`, `host/ui/`): tell the cloud session if it is still working there.
+- User: "kick works, but the arrival and confetti don't". Cause: the hub only let a joiner drop in when somebody
+  was already on the cube, so the first player (or a lone player re-joining after a kick) just appeared. Now
+  everyone who joins after the first 1.5 s of the page (`Hub.quietUntil`) drops in with confetti.
+- User: "really good!" Then (done): on the Badminton side the characters hold a racket in their shirt colour
+  instead of the putter (`Character.setGear`, `heldRacket` in `host/hub/Hub.ts`, reusing `buildRacket`).
 
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.
@@ -293,7 +380,7 @@ running log of where we are, what the user decided, and what comes next).
 - Turf brightness/tint can still be tuned (`turfTint`, `bumperTint`, `islandGrassTint`).
 
 ## Next action
-**Badminton B3:** get the user's test with two phones (split screen), then plan B4 (2v2).
+**Badminton mechanics (BADMINTON_MECHANICS.md):** step 1 built → user's phone test → step 2. B4 (2v2) comes after step 5. (Cloud session redesigns the hub — leave `host/hub/` alone.)
 Older (paused):
 Cube World: 2a (host hub) is built — get the user's test on the TV with real phones, then 2b (registry + phone control), then 2c.
 After that 4c (juice, incl. **wind**: trees and grass swaying), then ask the user to approve Phase 4.

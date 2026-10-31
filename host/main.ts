@@ -101,9 +101,19 @@ function showLab(on: boolean): void {
         message: document.getElementById('badminton-message')!,
         feedbackNear: document.getElementById('badminton-feedback-near')!,
         feedbackFar: document.getElementById('badminton-feedback-far')!,
+        flash: document.getElementById('badminton-flash')!,
+        popNear: document.getElementById('badminton-pop-near')!,
+        popFar: document.getElementById('badminton-pop-far')!,
+        level: document.getElementById('badminton-level')!,
+        rallyNear: document.getElementById('badminton-rally-near')!,
+        rallyFar: document.getElementById('badminton-rally-far')!,
       });
+      badminton.onCue = (side, cue) => {
+        const playerId = badmintonIds[side === 1 ? 0 : 1];
+        if (playerId) send({ type: 'badminton_cue', playerId, cue });
+      };
       if (import.meta.env.DEV) Object.assign(window, { badminton }); // for debugging in the browser console
-      badminton.start(...badmintonPlayers());
+      badminton.start(...badmintonPlayers(), lobbyUi.cpuLevel, lobbyUi.matchLength);
     } else lab.start();
   } else {
     lab.stop();
@@ -174,7 +184,7 @@ function connect(): void {
     else if (msg.type === 'player_badminton_swing') {
       if (!badmintonScreen.hidden) {
         const side = msg.playerId === badmintonIds[0] ? 1 : msg.playerId === badmintonIds[1] ? -1 : null;
-        if (side !== null && !msg.ignored) badminton?.onSwing(side, msg.at, msg.power, msg.aim);
+        if (side !== null && !msg.ignored) badminton?.onSwing(side, msg.at, msg.power, msg.aim, msg.short);
       } else lab.onSwing(msg);
     }
   });
@@ -301,9 +311,14 @@ startButton.addEventListener('click', startSelected);
 document.getElementById('turn-left')!.addEventListener('click', () => hub?.cycle(-1));
 document.getElementById('turn-right')!.addEventListener('click', () => hub?.cycle(1));
 lobbyUi.onChoose = (id) => hub?.select(id);
+lobbyUi.onKick = (playerId) => send({ type: 'kick_player', playerId });
 window.addEventListener('keydown', (e) => {
   // A focused button handles Enter and Space itself (keyboard users can Tab to it).
   if (e.target instanceof HTMLButtonElement && (e.key === 'Enter' || e.key === ' ')) return;
+  if (lobbyUi.kickOpen) {
+    lobbyUi.handleKickKey(e);
+    return;
+  }
   const phase = lastState?.phase ?? 'lobby';
   if (onTitle && !playing && !labOpen) {
     if (!howTo.hidden) {
@@ -317,6 +332,7 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (phase === 'lobby' && !playing) {
+    if (lobbyUi.handleLevelKey(e)) return;
     if (e.key === 'l' || e.key === 'L') {
       openBadminton('lab');
       return;

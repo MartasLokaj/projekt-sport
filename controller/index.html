@@ -108,6 +108,20 @@
       #lab-live-fill { height: 100%; width: 0; background: linear-gradient(90deg, #3ec300, #ffb400 60%, #ff5a5f); }
       #lab-tilt, #lab-clock { font-size: 17px; margin: 2px 0; }
       #lab-motion[hidden] { display: none; }
+      /* SHORT button: big, at the bottom under the thumb (left side for right-handers, right side for left-handers). */
+      #screen-lab { padding-bottom: calc(32vh + env(safe-area-inset-bottom)); justify-content: flex-start; gap: 4px; }
+      #screen-lab p { font-size: 16px; margin: 4px 0; }
+      #screen-lab #lab-kind { font-size: 40px; margin-top: 8px; }
+      #screen-lab #lab-power { font-size: 52px; }
+      #lab-short {
+        position: fixed; bottom: max(16px, env(safe-area-inset-bottom)); left: 16px; width: 72%; height: 28vh;
+        border: 5px dashed #1971c2; border-radius: 32px; background: rgba(255, 255, 255, 0.85); color: #1971c2;
+        font: inherit; font-size: 40px; font-weight: 900; line-height: 1.1;
+        touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
+      }
+      #lab-short small { display: block; font-size: 17px; font-weight: 800; opacity: 0.8; }
+      #lab-short.left-handed { left: auto; right: 16px; }
+      #lab-short.held { background: #1971c2; color: #ffffff; border-style: solid; transform: scale(0.98); }
     </style>
   </head>
   <body>
@@ -116,6 +130,7 @@
     <section id="screen-message">
       <h1 id="message-title">Connecting…</h1>
       <p id="message-text"></p>
+      <button class="big" id="message-button" type="button" hidden>Join again</button>
     </section>
 
     <section id="screen-room" hidden>
@@ -189,7 +204,7 @@
 
     <section id="screen-lab" hidden>
       <h1>Badminton</h1>
-      <p>Hold the phone like a racket handle: grip the bottom, the top is the racket head. Swing when the shuttle reaches you, no button needed. Swing more to the left or right to aim.</p>
+      <p>Grip the bottom of the phone like a racket handle and swing when the shuttle reaches you. Swing left or right to aim.</p>
       <div id="lab-kind">Swing!</div>
       <div id="lab-power"></div>
       <p id="lab-detail">Soft or hard, early or late. Watch the big screen too.</p>
@@ -200,6 +215,7 @@
         <p>This phone needs permission to use its motion sensor.</p>
         <button class="big" id="lab-motion-enable" type="button">Enable motion</button>
       </div>
+      <button id="lab-short" type="button"><span id="lab-short-label">SHORT</span><small>hold while you swing</small></button>
     </section>
 
     <script type="module" src="/controller/main.ts"></script>

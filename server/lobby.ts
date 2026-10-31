@@ -170,6 +170,23 @@ export class Lobby {
         this.onBadmintonSwing?.({ player: seat.name, handedness: seat.handedness, sensitivity: seat.sensitivity, receivedAt, ...swing });
         return;
       }
+      case 'badminton_cue': {
+        if (!this.hosts.has(ws) || !['smash_chance', 'super_smash', 'perfect'].includes(msg.cue)) return;
+        const socket = this.seats.get(msg.playerId)?.socket;
+        if (socket) send(socket, { type: 'badminton_cue', cue: msg.cue });
+        return;
+      }
+      case 'kick_player': {
+        if (!this.hosts.has(ws) || this.match.playing || typeof msg.playerId !== 'string') return;
+        const seat = this.seats.get(msg.playerId);
+        if (!seat) return;
+        this.seats.delete(seat.id);
+        // The phone stays connected (it knows the room code), so it can join again from the join form.
+        if (seat.socket) refuse(seat.socket, 'kicked');
+        this.broadcastLobby();
+        this.broadcastGame(); // the leader may have changed
+        return;
+      }
       case 'host_stroke': {
         const current = this.match.currentPlayer;
         if (!this.hosts.has(ws) || current === null) return;
@@ -316,6 +333,7 @@ function cleanBadmintonSwing(msg: BadmintonSwing): BadmintonSwing | null {
     : [];
   return {
     ignored: msg.ignored === true,
+    short: msg.short === true,
     speed: clamp(msg.speed, 0, 5000),
     power: clamp(msg.power, 0, 100),
     aim: clamp(msg.aim, -1, 1),

@@ -66,12 +66,14 @@ export type SwingProgress = {
  * speed: fastest turn of the phone (degrees per second). power: 0..100 from the speed and sensitivity.
  * tilt: angle of the top of the phone above the horizon at the fastest moment (degrees, -90..90), only logged.
  * aim: -1 = swung fully to the left, 0 = straight, 1 = fully to the right.
+ * short: the SHORT button was held at the hit (a drop shot, or a short serve).
  * ignored: too slow to be a hit (reaching for the shuttle, getting ready); sent only for the lab and the log.
  * at: when the fastest moment happened, in the server's clock (milliseconds since 1970), so timing
  * can be judged without the Wi-Fi delay. trace: the last moments of motion, for the graph and the log.
  */
 export type BadmintonSwing = {
   ignored: boolean;
+  short: boolean;
   speed: number;
   power: number;
   aim: number;
@@ -82,6 +84,9 @@ export type BadmintonSwing = {
   /** Samples: [ms relative to the fastest moment, speed deg/s, tilt deg, turn around x, y, z, turn around up (deg/s)]. */
   trace: number[][];
 };
+
+/** Hints from the big screen to one player's phone during badminton. */
+export type BadmintonCue = 'smash_chance' | 'super_smash' | 'perfect';
 
 /** What happened to the ball after a stroke, reported by the host. */
 export type BallResult = 'rest' | 'holed' | 'out';
@@ -119,7 +124,8 @@ export type JoinError =
   | 'game_full'
   | 'colour_taken'
   | 'invalid'
-  | 'replaced'; // the same player opened the game in another tab
+  | 'replaced' // the same player opened the game in another tab
+  | 'kicked'; // the big screen removed this player (they may join again)
 
 /** Sent by the host page or a phone. */
 export type ClientMessage =
@@ -152,11 +158,15 @@ export type ClientMessage =
   | { type: 'ball_result'; result: BallResult }
   /** From the host: the current player hit with the Mac keyboard (for testing without a phone). */
   | { type: 'host_stroke' }
+  /** From the host, in the lobby: remove this player (their phone is told and may join again). */
+  | { type: 'kick_player'; playerId: string }
   /** From the host: open or close the Badminton Swing Lab (phones switch to the swing test). */
   | { type: 'lab_mode'; on: boolean }
   /** From a phone: what time is it on the server? t = the phone's clock when sent. */
   | { type: 'clock_ping'; t: number }
-  | ({ type: 'badminton_swing' } & BadmintonSwing);
+  | ({ type: 'badminton_swing' } & BadmintonSwing)
+  /** From the host: tell one player's phone something (it shows it and vibrates on Android). */
+  | { type: 'badminton_cue'; playerId: string; cue: BadmintonCue };
 
 /** Sent by the server. */
 export type ServerMessage =
@@ -177,4 +187,6 @@ export type ServerMessage =
   /** Answer to clock_ping: t = the phone's time it sent, server = the server's clock. */
   | { type: 'clock_pong'; t: number; server: number }
   /** Forwarded to the host page. receivedAt = server clock when it arrived (to show the delay). */
-  | ({ type: 'player_badminton_swing'; playerId: string; receivedAt: number } & BadmintonSwing);
+  | ({ type: 'player_badminton_swing'; playerId: string; receivedAt: number } & BadmintonSwing)
+  /** To one phone, from the host. */
+  | { type: 'badminton_cue'; cue: BadmintonCue };

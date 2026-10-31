@@ -80,7 +80,7 @@ export class Lab {
     const band = msg.power < cfg.softBelow ? 'soft' : msg.power >= cfg.hardFrom ? 'hard' : 'medium';
     const aim =
       Math.abs(msg.aim) < cfg.aimDeadzone ? '↑ straight' : `${msg.aim < 0 ? '← left' : '→ right'} ${Math.round(Math.abs(msg.aim) * 100)} %`;
-    card.shot.textContent = `HIT · ${band} ${Math.round(msg.power)} % · ${aim}`;
+    card.shot.textContent = `${msg.short ? 'SHORT' : 'HIT'} · ${band} ${Math.round(msg.power)} % · ${aim}`;
     card.shot.className = `lab-shot ${band}`;
 
     const off = this.timingOf(msg.at);

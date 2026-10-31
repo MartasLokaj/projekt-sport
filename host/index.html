@@ -58,6 +58,42 @@
       /* Two players: each half shows its own player's feedback; a white line between the halves. */
       #badminton-screen.split #badminton-feedback-near { left: 25%; }
       #badminton-screen.split #badminton-feedback-far { left: 75%; }
+      /* Super Smash: big, golden, bouncy text and a white flash. */
+      .badminton-feedback.super {
+        bottom: 42%; font-size: 60px; color: #ffb400; background: rgba(40, 20, 0, 0.75);
+        text-shadow: 0 0 18px rgba(255, 180, 0, 0.8); animation: super-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+      @keyframes super-pop { from { transform: translateX(-50%) scale(0.3) rotate(-8deg); opacity: 0; } }
+      #badminton-flash { position: absolute; inset: 0; background: #ffffff; opacity: 0; pointer-events: none; z-index: 3; }
+      #badminton-flash.on { animation: flash 0.35s ease-out; }
+      @keyframes flash { from { opacity: 0.75; } to { opacity: 0; } }
+      /* Timing text popping up above the player's own character. */
+      .badminton-pop {
+        position: absolute; z-index: 2; transform: translate(-50%, -100%); white-space: nowrap; pointer-events: none;
+        font-size: 30px; font-weight: 900; color: #ffffff; padding: 4px 16px; border-radius: 14px; background: rgba(31, 50, 71, 0.75);
+        text-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+      }
+      .badminton-pop.on { animation: pop-up 0.45s cubic-bezier(0.34, 1.56, 0.64, 1); }
+      @keyframes pop-up { from { transform: translate(-50%, -60%) scale(0.4); opacity: 0; } }
+      .badminton-pop.perfect { color: #3a2500; background: linear-gradient(#ffe066, #ffb400); font-size: 36px; box-shadow: 0 0 24px rgba(255, 190, 0, 0.8); }
+      .badminton-pop.good { background: rgba(43, 138, 0, 0.85); }
+      .badminton-pop.wobble { background: rgba(140, 60, 200, 0.85); }
+      .badminton-pop.miss { background: rgba(217, 58, 63, 0.88); }
+      /* Rally hit counter in the top-left corner of each half; hotter as the rally grows. */
+      .badminton-rally {
+        position: absolute; top: 24px; left: 20px; z-index: 2; padding: 6px 16px; border-radius: 14px;
+        background: rgba(255, 255, 255, 0.9); font-size: 24px; font-weight: 900; color: #1f3247;
+      }
+      #badminton-screen.split #badminton-rally-far { left: calc(50% + 20px); }
+      .badminton-rally.hot { background: #ffb547; }
+      .badminton-rally.fire { background: linear-gradient(#ff7a1a, #e0301e); color: #ffffff; box-shadow: 0 0 20px rgba(255, 90, 20, 0.7); }
+      .badminton-rally.bump { animation: rally-bump 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+      @keyframes rally-bump { from { transform: scale(1.35); } }
+      #badminton-message.long-rally { color: #ffe066; }
+      #badminton-level {
+        position: absolute; top: 24px; right: 20px; z-index: 2; background: rgba(255, 255, 255, 0.9); border-radius: 14px;
+        padding: 6px 14px; font-size: 18px; font-weight: 800;
+      }
       #badminton-divider { display: none; position: absolute; top: 0; bottom: 0; left: 50%; width: 6px; transform: translateX(-50%); background: #ffffff; }
       #badminton-screen.split #badminton-divider { display: block; }
       #badminton-keys { position: absolute; bottom: 14px; left: 20px; font-size: 16px; font-weight: 600; color: var(--soft); }
@@ -133,6 +169,16 @@
   <body>
     <div id="offline-banner" role="status" hidden>Lost connection to the game server · reconnecting…</div>
     <div id="lobby-screen">
+      <div id="kick-confirm" class="kick-backdrop" hidden>
+        <section class="cw-panel kick-panel" role="dialog" aria-modal="true" aria-labelledby="kick-title">
+          <h2 id="kick-title">Kick player?</h2>
+          <p id="kick-text"></p>
+          <div class="kick-buttons">
+            <button id="kick-cancel" class="cw-btn cw-btn--ghost" type="button">Cancel<kbd>Esc</kbd></button>
+            <button id="kick-yes" class="cw-btn cw-btn--danger" type="button">Kick<kbd>Enter</kbd></button>
+          </div>
+        </section>
+      </div>
       <div id="hub-canvas"></div>
       <p class="cw-brand"><span class="cw-brand-mark" aria-hidden="true"></span>Cube World</p>
 
@@ -213,6 +259,10 @@
         <div class="pick-modes">
           <span class="cw-label">Modes</span>
           <ul id="pick-modes"></ul>
+          <div id="pick-length" hidden>
+            <span class="cw-label">Match</span>
+            <div class="mode-levels" role="radiogroup" aria-label="Match length"></div>
+          </div>
         </div>
         <button id="start" class="cw-btn cw-btn--play" type="button" disabled><span id="start-label">Play</span><kbd>Enter</kbd></button>
         <div id="pick-faces" aria-label="Players who joined"></div>
@@ -252,7 +302,13 @@
       <div id="badminton-divider"></div>
       <div id="badminton-feedback-near" class="badminton-feedback" hidden></div>
       <div id="badminton-feedback-far" class="badminton-feedback" hidden></div>
-      <div id="badminton-keys">Prototype · swing your phone when the shuttle reaches you · Mac: Space swings (hold ← → to aim), ↑ swings for player 2 · Esc back to the cube</div>
+      <div id="badminton-flash"></div>
+      <div id="badminton-pop-near" class="badminton-pop" hidden></div>
+      <div id="badminton-pop-far" class="badminton-pop" hidden></div>
+      <div id="badminton-level" hidden></div>
+      <div id="badminton-rally-near" class="badminton-rally" hidden></div>
+      <div id="badminton-rally-far" class="badminton-rally" hidden></div>
+      <div id="badminton-keys">Prototype · swing your phone when the shuttle reaches you · Mac: Space swings (hold ← → to aim, W weak, Shift short), ↑ swings for player 2 · 1 2 3 computer level · Esc back to the cube</div>
     </div>
 
     <div id="game-screen" hidden>

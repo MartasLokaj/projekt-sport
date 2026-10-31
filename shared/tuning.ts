@@ -443,6 +443,8 @@ export const TUNING = {
     aimWindowMs: 120,
     aimDeadzone: 0.15,
     aimSign: 1,
+    /** The SHORT button counts if it was held this close to the hit (milliseconds), in case it was let go a little early. */
+    shortGraceMs: 150,
     /** Graph and log: how much motion before the fastest moment is kept (milliseconds). */
     traceBeforeMs: 600,
     /** Clock sync with the server: how often the phone asks the time (milliseconds). */
@@ -482,6 +484,17 @@ export const TUNING = {
     reachHeight: 3.0,
     /** How high the racket reaches with the arm up, standing (our chibis are small: about 1.8 m). */
     standingReach: 1.8,
+    /**
+     * A shuttle out of running reach by at most diveReach (m) can still be caught with a stretch, as a wobble.
+     * A swing up to earlyWobbleMs earlier than the hit window still catches it, as a wobble; earlier than that
+     * is "Too early!" and the player may swing again. Only a swing more than veryLateMs after the right moment
+     * makes the character dive into the sand (diveMs) and lie there for recoveryMs (counted from the landing).
+     */
+    diveReach: 1.6,
+    earlyWobbleMs: 150,
+    veryLateMs: 400,
+    diveMs: 350,
+    recoveryMs: 900,
     /** A jump takes this long to go up (and the same to come down, milliseconds). */
     jumpRiseMs: 320,
     /**
@@ -490,7 +503,14 @@ export const TUNING = {
      */
     swingJumpRiseMs: 180,
     lowestContact: 0.3,
+    /** Nobody can hit the shuttle closer to the net than this (m), e.g. a drop that has just crossed it. */
+    minContactDepth: 0.6,
     reactionMs: 150,
+    /**
+     * Running help: characters run this much faster than runSpeed / maxRunSpeed (0.2 = 20 %), so they reach the
+     * shuttle more often. Stretches still exist for really far shots.
+     */
+    reachAssist: 0.2,
     /** Contact height decides the stroke: from overheadFrom up = overhead, from driveFrom up = flat drive, lower = lift (m). */
     overheadFrom: 1.7,
     driveFrom: 1.0,
@@ -520,6 +540,13 @@ export const TUNING = {
     scatter: 1.0,
     /** Mac keyboard (testing without a phone): Space swings with this power, arrows held = aim. */
     keyPower: 60,
+    /** Timing text above the player's character: how long it shows (ms); Perfect makes the racket glow (ms). */
+    popMs: 900,
+    perfectGlowMs: 350,
+    /** After a miss, a tip ("Wait for it!" / "Swing sooner!") shows at most once every this many rallies. */
+    hintEveryRallies: 3,
+    /** Mac keyboard: Space with W held swings this weakly (a wobble). */
+    keyWeakPower: 15,
 
     // Shots. depth = landing distance from the net (min at 0 % power, max at 100 %), apex = extra height of the arc (m),
     // seconds = flight time (slow at 0 % power, fast at 100 %), drag = how much the shuttle slows down in flight
@@ -530,17 +557,109 @@ export const TUNING = {
     lift: { depth: [6.0, 7.75], apex: 3.6, seconds: [2.45, 1.95], drag: 1.0 },
     drive: { depth: [5.75, 7.5], apex: 0.4, seconds: [1.45, 1.1], drag: 0.6 },
     smash: { depth: [3.25, 5.25], apex: 0, seconds: [1.15, 0.8], drag: 0.3 },
+    /** Drop shot (SHORT button held): soft, just over the net, lands close behind it. Slower swing = shorter. */
+    drop: { depth: [0.8, 2.4], apex: 0.8, seconds: [1.8, 1.5], drag: 1.2 },
+    /** Short serve (SHORT held while serving): low, lands just past the short service line (depth from the net). */
+    shortServe: { depth: [2.7, 3.8], apex: 0.4, seconds: [1.6, 1.35], drag: 0.8 },
+    /**
+     * How high a drop and a short serve pass over the net (m). A drop still lands close to the net, so it
+     * can never be smashed (a smash needs smashFromDepth from the net).
+     */
+    dropNetClearance: 0.4,
+    shortServeNetClearance: 0.12,
+    /**
+     * A drop from the back of the court (at least smashFromDepth from the net) lands up to this far from
+     * where it was aimed (m) and has this chance to end in the net. From mid-court or the front it is precise.
+     */
+    shortShotScatterBack: 1.2,
+    shortShotNetChanceBack: 0.15,
+    shortShotScatterMid: 0.35,
+    /**
+     * Wobble shot: what a bad hit becomes (too weak, timing outside the Good part, or a dive). Slow, high and
+     * wobbly with a wavy trail, so the other side sees its chance coming. It mostly ignores the aim.
+     */
+    wobble: { depth: [4.0, 6.5], apex: 4.5, seconds: [2.9, 2.6], drag: 0.8 },
+    /** A swing weaker than this (percent) gives a wobble shot (not for drops). */
+    wobblePower: 25,
+    /** The Good part of the hit window: further than this early or late (but still a hit) gives a wobble (ms). */
+    goodEarlyMs: 220,
+    goodLateMs: 170,
+    /** How much of the aim a wobble keeps (0..1), how far it sways sideways (m) and how many sways per flight. */
+    wobbleAimShare: 0.3,
+    wobbleSway: 0.35,
+    wobbleSwaysPerFlight: 5,
+    /**
+     * Trails behind the shuttle, one style per shot (colour, how long the trail is in ms). Chosen to be easy to
+     * tell apart, also in split screen. In a fiery rally (rallyThresholds.fire) every shot except a wobble or a
+     * Super Smash gets the fire trail.
+     */
+    trails: {
+      serve: { colour: '#ffffff', ms: 300 },
+      clear: { colour: '#ffffff', ms: 300 },
+      lift: { colour: '#ffffff', ms: 300 },
+      drive: { colour: '#3fe0e0', ms: 380 },
+      drop: { colour: '#5be36b', ms: 380 },
+      shortServe: { colour: '#5be36b', ms: 380 },
+      smash: { colour: '#ff5a36', ms: 520 },
+      superSmash: { colour: '#ffb400', ms: 700 },
+      wobble: { colour: '#c45cff', ms: 600 },
+    },
+    fireTrail: { colour: '#ff7a1a', ms: 650 },
+    /**
+     * Long rallies (hits in one rally, the serve counts): the counter shows from `show`, the seagulls circle from
+     * `birds`, a fire trail from `fire`, and a rally of at least `celebrate` gets a "Rally ×N!" when it ends.
+     */
+    rallyThresholds: { show: 3, birds: 5, fire: 10, celebrate: 5 },
+    birds: 7,
+    /**
+     * Super Smash: a strong (>= superSmashPower) overhead hit on a wobble shot, met at least superSmashMinHeight
+     * high (with the swing's jump) and timed in the Good part of the window. Allowed from anywhere on the court
+     * (user, 2026-10-31). The fastest shot; each further Super Smash in the same rally is superSmashChainBoost
+     * faster, up to superSmashMaxSpeed times the first one. A strong swing at a wobble that is badly timed
+     * makes the character fall (a weak wobble back, or a miss).
+     */
+    superSmash: { depth: [2.5, 5.5], apex: 0, seconds: [0.75, 0.55], drag: 0.2 },
+    superSmashPower: 75,
+    superSmashMinHeight: 2.4,
+    superSmashChainBoost: 0.12,
+    superSmashMaxSpeed: 1.8,
+    /** Returning a Super Smash: a tighter hit window (ms, too early / too late). */
+    superSmashDefenseWindowMs: { early: 180, late: 130 },
+    /** Juice: the shuttle stops at the racket for a moment, camera shake and a sand burst on landing (trail: see trails). */
+    superSmashHitStopMs: 300,
+    shakeStrength: 0.25,
+    shakeMs: 450,
+    sandBurst: 34,
     /** Every shot clears the net by at least this much (m). */
     netClearance: 0.35,
     /** A Perfect hit flies this much faster. */
     perfectSpeedup: 0.9,
 
     /** The computer: chance to return a normal shot and a smash, its power range (percent), and serve delay (ms). */
-    cpu: { hitChance: 0.85, smashReturnChance: 0.55, power: [30, 85], smashChance: 0.35, serveDelayMs: 1300, aimRange: 1 },
+    cpu: { serveDelayMs: 1300, shortServeChance: 0.25 },
+    /**
+     * Computer difficulty (keys 1 / 2 / 3 during a match against it). reactionMs = how fast it starts running;
+     * hitChance / smashReturnChance / superSmashReturnChance = how often it returns a normal shot / a smash /
+     * a Super Smash; smashChance, dropChance, wobbleChance, superSmashChance = how often it plays those;
+     * aimRange = how close to the lines it aims (1 = the sidelines); power and quality = how hard and clean it hits.
+     */
+    cpuLevels: {
+      easy: { reactionMs: 230, hitChance: 0.7, smashReturnChance: 0.35, superSmashReturnChance: 0.15, smashChance: 0.15, dropChance: 0.08, wobbleChance: 0.22, superSmashChance: 0.25, aimRange: 0.5, power: [25, 70], quality: [0.3, 0.8] },
+      normal: { reactionMs: 150, hitChance: 0.85, smashReturnChance: 0.55, superSmashReturnChance: 0.3, smashChance: 0.35, dropChance: 0.15, wobbleChance: 0.12, superSmashChance: 0.5, aimRange: 1, power: [30, 85], quality: [0.5, 1] },
+      pro: { reactionMs: 100, hitChance: 0.95, smashReturnChance: 0.75, superSmashReturnChance: 0.5, smashChance: 0.5, dropChance: 0.25, wobbleChance: 0.05, superSmashChance: 0.8, aimRange: 1.1, power: [45, 95], quality: [0.7, 1] },
+    },
+    cpuLevel: 'normal' as 'easy' | 'normal' | 'pro',
 
-    /** Rally scoring: first to pointsToWin, but you must lead by winBy (4 : 4 → 5 : 4 → 6 : 4 wins). Pause after a point (ms). */
-    pointsToWin: 4,
-    winBy: 2,
+    /**
+     * Match lengths (chosen in the lobby card), rally scoring: first to `to`, you must lead by `winBy`, but the
+     * one who reaches `cap` wins anyway (null = no cap). Pause after a point (ms).
+     */
+    matchLengths: {
+      quick: { label: 'Quick', to: 4, winBy: 2, cap: null },
+      normal: { label: 'Normal', to: 11, winBy: 2, cap: 15 },
+      long: { label: 'Long', to: 21, winBy: 2, cap: 30 },
+    },
+    matchLength: 'quick' as 'quick' | 'normal' | 'long',
     pointPauseMs: 1600,
 
     /** Camera behind the player: height, distance behind the baseline, and how far down the court it looks. */

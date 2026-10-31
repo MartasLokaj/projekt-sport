@@ -44,6 +44,7 @@ const screens = {
 };
 const messageTitle = document.getElementById('message-title')!;
 const messageText = document.getElementById('message-text')!;
+const messageButton = document.getElementById('message-button')!;
 const roomForm = document.getElementById('room-form') as HTMLFormElement;
 const roomInput = document.getElementById('room-code') as HTMLInputElement;
 const roomError = document.getElementById('room-error')!;
@@ -81,9 +82,10 @@ function show(screen: keyof typeof screens): void {
   for (const [name, el] of Object.entries(screens)) el.hidden = name !== screen;
 }
 
-function showMessage(title: string, text = ''): void {
+function showMessage(title: string, text = '', button = false): void {
   messageTitle.textContent = title;
   messageText.textContent = text;
+  messageButton.hidden = !button;
   show('message');
 }
 
@@ -263,6 +265,12 @@ function handleJoinError(reason: JoinError): void {
     case 'game_full':
       showMessage('The game is full', 'Up to 4 players can join. Wait for the next game.');
       break;
+    case 'kicked':
+      joined = false;
+      lab.setOpen(false);
+      play.cancel();
+      showMessage('You were removed from the game', 'The big screen took you out of this game. You can join again.', true);
+      break;
     default:
       showJoinForm(JOIN_ERROR_TEXT[reason]);
   }
@@ -297,6 +305,7 @@ function connect(): void {
         saveProfile(profile);
         play.setSensitivity(profile.sensitivity);
         lab.setSensitivity(profile.sensitivity);
+        lab.setHandedness(profile.handedness);
         showJoined(msg.player);
         break;
       case 'lobby_state':
@@ -318,6 +327,9 @@ function connect(): void {
         break;
       case 'clock_pong':
         lab.onClockPong(msg.t, msg.server);
+        break;
+      case 'badminton_cue':
+        lab.onCue(msg.cue);
         break;
     }
   });
@@ -372,6 +384,7 @@ joinForm.addEventListener('submit', (event) => {
 });
 
 document.getElementById('change-profile')!.addEventListener('click', () => showJoinForm());
+messageButton.addEventListener('click', () => showJoinForm());
 
 // After the screen was locked, reconnect right away instead of waiting for the timer.
 document.addEventListener('visibilitychange', () => {
