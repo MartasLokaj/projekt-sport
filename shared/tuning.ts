@@ -275,6 +275,8 @@ export const TUNING = {
     height: 0.9,
     /** The character's putter never swings further back or through than this (degrees). */
     maxBackswing: 70,
+    /** Arms hang out from the shoulders at this angle while standing (radians, 0 = straight down). */
+    armRest: 0.35,
     /** Further away than this, a character hops to its spot instead of shuffling. */
     hopDistance: 0.35,
     /** Hopping speed (units per second), hops per second and hop height. */

@@ -999,7 +999,7 @@ export class Badminton {
     const handedness = human ? (player?.handedness ?? 'right') : 'right';
     const shirt = human ? (player?.colour ?? (a.side === 1 ? '#ff5a5f' : '#00a6ed')) : '#9b5cff';
     const skin = human ? (player?.skinTone ?? SKIN_TONES[1]) : SKIN_TONES[3];
-    a.character.setLook({ shirt, skin, handedness: 'right' });
+    a.character.setLook({ shirt, skin, handedness: 'right', look: human ? player?.look : undefined });
     // A left-handed player is the mirror image, so the racket hand is on the other side.
     // The character's right hand is on its local -x side: +x in the world when facing -z (near side),
     // -x when facing +z (far side).

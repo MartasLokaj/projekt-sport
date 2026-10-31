@@ -7,7 +7,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import type { BallResult, GameState, PlayerInfo, SwingProgress } from '../../shared/protocol.ts';
 import { TUNING } from '../../shared/tuning.ts';
 import { applyCurve, applyRollingResistance, createBall, curveFromTwist, shotSpeed } from './ball.ts';
-import { ADDRESS_DISTANCE, Character } from './character.ts';
+import { ADDRESS_DISTANCE, Character, lookOf } from './character.ts';
 import { buildHole, HOLES, isInCup, loadKit, type BuiltHole, type Kit } from './course.ts';
 import { DistancePreview } from './preview.ts';
 import { Scenery } from './scenery.ts';
@@ -252,8 +252,7 @@ export class Game {
         );
         ghost.visible = false;
         this.scene.add(ghost);
-        const look = { shirt: info.colour, skin: info.skinTone, handedness: info.handedness };
-        const character = new Character(look);
+        const character = new Character(lookOf(info));
         character.place(this.teePosition().add(new THREE.Vector3(1, 0, -0.5)), 0);
         character.root.visible = false;
         this.scene.add(character.root);
@@ -274,7 +273,7 @@ export class Game {
       player.name = info.name;
       player.colour = info.colour;
       player.handedness = info.handedness;
-      player.character.setLook({ shirt: info.colour, skin: info.skinTone, handedness: info.handedness });
+      player.character.setLook(lookOf(info));
       (player.ghost.material as THREE.MeshStandardMaterial).color.set(info.colour);
     }
     this.updateGhosts();

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Character Gallery</title>
+    <link rel="stylesheet" href="/host/ui/theme.css" />
+    <style>
+      :root { color-scheme: dark; }
+      html, body { margin: 0; }
+      body { background: #0e1236; color: #f3f5ff; font-family: var(--cw-font); }
+      #view { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+      header {
+        position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+        padding: 14px 20px; background: rgba(14, 18, 54, 0.94); border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      header h1 { margin: 0 12px 0 0; font-size: 24px; font-weight: 900; }
+      header button {
+        min-height: 40px; padding: 0 16px; border-radius: 999px; border: 2px solid rgba(255, 255, 255, 0.16);
+        background: rgba(255, 255, 255, 0.06); color: #f3f5ff; font: inherit; font-weight: 800; font-size: 15px; cursor: pointer;
+      }
+      header button[aria-pressed='true'] { background: #7ff3ff; color: #0e1236; border-color: #7ff3ff; }
+      main { padding: 8px 20px 40px; }
+      h2 { margin: 22px 0 10px; font-size: 13px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(226, 231, 255, 0.74); }
+      .row { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+      .cell { border-radius: 18px; background: radial-gradient(circle at 50% 42%, #2e2a72 0%, #171b4c 70%); border: 1px solid rgba(255, 255, 255, 0.1); }
+      .cell .stage { aspect-ratio: 5 / 6; }
+      .cell p { margin: 0; padding: 0 8px 10px; text-align: center; font-weight: 800; font-size: 14px; }
+    </style>
+  </head>
+  <body>
+    <canvas id="view"></canvas>
+    <header>
+      <h1>Character Gallery</h1>
+      <button id="random" type="button">Random</button>
+      <button id="turn" type="button" aria-pressed="true">Turn</button>
+      <button id="face" type="button" aria-pressed="false">Face close-up</button>
+      <button id="racket" type="button" aria-pressed="false">Racket</button>
+      <button id="swing" type="button">Swing</button>
+      <button data-mood="cheer" type="button">Cheer</button>
+      <button data-mood="jump" type="button">Jump</button>
+      <button data-mood="clap" type="button">Clap</button>
+      <button data-mood="scratch" type="button">Scratch</button>
+    </header>
+    <main id="rows"></main>
+    <script type="module" src="/host/avatars/gallery.ts"></script>
+  </body>
+</html>
