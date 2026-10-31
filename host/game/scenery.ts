@@ -121,6 +121,13 @@ export class Scenery {
         const pond = (1 - THREE.MathUtils.smoothstep(along, reachAlong - c.pondSlope, reachAlong)) * (1 - THREE.MathUtils.smoothstep(fromEdge, c.pondWidth - 1, c.pondWidth));
         y = THREE.MathUtils.lerp(y, c.seaLevel - c.pondDepth, pond);
       }
+      // Under a bridge the water cuts right across the island.
+      for (const bridge of hole.lane.bridges) {
+        const half = (bridge.to - bridge.from) / 2 - c.bridgeShore;
+        const along = Math.abs(spot.along - (bridge.from + bridge.to) / 2);
+        const water = 1 - THREE.MathUtils.smoothstep(along, half - c.pondSlope, half);
+        y = THREE.MathUtils.lerp(y, c.seaLevel - c.pondDepth, water);
+      }
       return y;
     };
     for (let j = 0; j <= nz; j++) {

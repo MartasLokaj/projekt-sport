@@ -82,6 +82,14 @@ running log of where we are, what the user decided, and what comes next).
     Hole 7 (Banked U-turn): path point `bank` (degrees, eases like the height) tilts the floor and borders; the U-turn
     winds downhill, fast balls ride up the outer wall, then a slope down to the cup. To make balls roll out of the
     curve, the grass now holds less from 2° to 5° of slope (`slopeFrom/slopeFull` were 3/8). `HOLE_COUNT` = 7.
+  - **J2 approved by the user ("pecka").**
+  - **J3 — done, waiting for the user's test.** Hole 8 (Bridge): path flag `bridge` = narrow plank bridge on posts
+    with no borders (`buildBridge`, `bridge*` in `TUNING.course`); the water cuts right across the island under it
+    (`bridgeShore`); falling off = "Splash! +1" (`lane.overWater`). Straight shots cross, ~5° off falls in.
+    Hole 9 (Finale, par 3): ramp + jump (~75 % power), landing, pipe down, and a **funnel** round the cup (HoleDef
+    `funnel` {radius, depth}: the green sinks into a bowl, the cup at its bottom) — a straight 90–100 % shot can be a
+    hole in one. (The first idea, pipe first and then the jump, did not work: the ball loses too much speed in the
+    pipe's bends.) `HOLE_COUNT` = 9; scoreboard columns a little narrower so 9 holes fit.
 - **4c Juice — not started:** hole intro fly-over with "Hole N · Par P", confetti on hole-in (+ special hole-in-one
   celebration), ball trail, impact particles, small camera nudge on hit, sounds (Kenney CC0 audio — ask before
   download), phone vibration on hole-in (host → server → phone `vibrate` message), podium with winner celebration,

@@ -4,7 +4,7 @@ export const WS_PATH = '/ws';
 
 export const MAX_PLAYERS = 4;
 /** Number of holes in a game (the holes themselves are defined on the host, host/game/course.ts). */
-export const HOLE_COUNT = 7;
+export const HOLE_COUNT = 9;
 export const ROOM_CODE_LENGTH = 4;
 export const NAME_MAX_LENGTH = 12;
 export const SHIRT_COLOURS = ['#ff5a5f', '#ffb400', '#3ec300', '#00a6ed', '#9b5cff', '#ff7ac6'] as const;
