@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { SKIN_TONES, type PlayerInfo } from '../../shared/protocol.ts';
 import { TUNING } from '../../shared/tuning.ts';
 import { Character } from '../game/character.ts';
-import { buildCourt, buildRacket, buildShuttle } from './court.ts';
+import { buildRacket, buildShuttle } from './court.ts';
+import { buildBeach, type Venue } from './venue/beach.ts';
 import { Birds, SandPuffs, Trail } from './effects.ts';
 import type { BadmintonCue } from '../../shared/protocol.ts';
 import { findContact, makeShot, type Contact, type Flight, type ShotKind } from './shuttle.ts';
@@ -101,6 +102,7 @@ const WINDUP: Record<Stroke, { x: number; z: number }> = {
 
 export class Badminton {
   private readonly renderer: THREE.WebGLRenderer;
+  private readonly venue: Venue;
   private readonly scene = new THREE.Scene();
   private readonly clock = new THREE.Clock();
   private readonly shuttle = buildShuttle();
@@ -164,15 +166,15 @@ export class Badminton {
     this.renderer.toneMapping = THREE.NeutralToneMapping;
     container.appendChild(this.renderer.domElement);
 
-    this.scene.background = new THREE.Color(cfg.skyColour);
-    this.scene.fog = new THREE.Fog(cfg.skyColour, 30, 70);
-    this.scene.add(new THREE.HemisphereLight('#e6f4ff', '#d9c08a', 1.3));
     const sun = new THREE.DirectionalLight('#fff0d4', 2.4);
     sun.position.set(6, 14, 4);
+    this.venue = buildBeach(sun.position);
+    this.scene.fog = new THREE.Fog(this.venue.horizon, 70, 190);
+    this.scene.add(new THREE.HemisphereLight('#e6f4ff', '#d9c08a', 1.3), this.venue.group);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
     Object.assign(sun.shadow.camera, { left: -14, right: 14, top: 14, bottom: -14, near: 1, far: 45 });
-    this.scene.add(sun, buildCourt());
+    this.scene.add(sun);
 
     this.shadow = new THREE.Mesh(
       new THREE.CircleGeometry(0.09, 16),
@@ -663,6 +665,7 @@ export class Badminton {
       this.shakeUntil = now + cfg.shakeMs;
     }
     this.puffs.update(now, dt);
+    this.venue.update(dt);
     for (const a of [this.near, this.far]) {
       this.updateAthlete(a, now, dt);
       this.updateGlow(a, now);
@@ -677,6 +680,9 @@ export class Badminton {
     const w = this.container.clientWidth || window.innerWidth;
     const h = this.container.clientHeight || window.innerHeight;
     this.updateCamera(this.near, dt);
+    // The sun's shadows are the same for both halves: work them out once per frame.
+    this.renderer.shadowMap.autoUpdate = false;
+    this.renderer.shadowMap.needsUpdate = true;
     if (!this.far.human) {
       this.renderer.setScissorTest(false);
       this.renderer.setViewport(0, 0, w, h);

@@ -47,6 +47,17 @@ running log of where we are, what the user decided, and what comes next).
     - **Wind** (swaying trees/grass) — the user wants it in 4c.
     - Still need a **light CC0 tree source** (e.g. Quaternius stylized nature packs, or another CC0 set). Propose
       options with sizes to the user. Use instancing; keep 60 fps.
+- **4b redo 3 (user, 2026-10-31, reference: a mobile minigolf screenshot) — done, waiting for the user's test:**
+  user chose **wooden borders** (replacing the round turf bumpers) and to **keep the rounded lanes**.
+  - **G1** lane turf = two-green **checker** pattern following the lane (shader, `laneCoord` = distance along /
+    -1..1 across; `turfLight`, `turfDark`, `checkerLength`, `checkerColumns`), **wooden border** (bevelled plank,
+    lighter top, painted grain/knots/joints; `bumperWidth/Height/Depth`, `woodBevel`, `woodColour`,
+    `woodPlankLength`), **white cup rim** (`cupRimWidth`). Ball bounce checked (stays in, same restitution).
+  - **G2** lanes **20 % wider** (`laneWidthScale` 1.2), **camera closer/lower** (aim 2.7/1.3, follow 3.0/2.0).
+  - **G3** islands: brighter grass with **meadow patches** (`meadowPatchSize`, `meadowDark`, `meadowLight`),
+    soft **hills** away from the lane (`hillsPerIsland`, `hillSize`, `hillHeight`, `hillClearance`), groups of
+    grey low-poly **boulders** (`boulderGroups`, `boulderSize`, `boulderClearance`). All in `TUNING.course` /
+    `TUNING.scenery`.
 - **4c Juice — not started:** hole intro fly-over with "Hole N · Par P", confetti on hole-in (+ special hole-in-one
   celebration), ball trail, impact particles, small camera nudge on hit, sounds (Kenney CC0 audio — ask before
   download), phone vibration on hole-in (host → server → phone `vibrate` message), podium with winner celebration,
@@ -317,6 +328,24 @@ running log of where we are, what the user decided, and what comes next).
   everyone who joins after the first 1.5 s of the page (`Hub.quietUntil`) drops in with confetti.
 - User: "really good!" Then (done): on the Badminton side the characters hold a racket in their shirt colour
   instead of the putter (`Character.setGear`, `heldRacket` in `host/hub/Hub.ts`, reusing `buildRacket`).
+
+### Badminton beach venue (BADMINTON_BEACH.md) — step 1 built 2026-10-31, waiting for the user's OK
+- Branch note: `main` had moved on (badminton mechanics steps 1–5); merged `origin/main` into
+  `claude/adoring-keller-x93qqh` (with the minigolf G1–G3 commits) instead of rebasing (force push not allowed).
+- **Step 1 — court and surroundings (done, screenshots shown):** venue code in `host/badminton/venue/`
+  (`beach.ts` layout, sand, footprints, rope lines, net; `props.ts` palms, palapa, deck, umbrellas, rocks,
+  feather flags, wind material; `sea.ts` sky, clouds, sea). `court.ts` keeps only the shuttle and rackets.
+  Layout: court along z; west = stone wall + wooden deck with railing, closed green umbrellas, benches, sea
+  behind; north = open beach sloping into the sea (wet sand, shore foam, patchy reef surf, horizon); east = two
+  palms leaning over the court edge, palapa with tables and chairs, volcanic rocks (also at the NE waterline);
+  south = palm groves and green hills. Feather flags (own design: green, shuttle + cube icon) by the net and at two
+  corners. Rope court lines with pegs; black net with an orange top band that ripples. Palms, flags and the net
+  band sway (vertex shader, `wind`). Static props = one mesh, palms one mesh, flags one mesh, clouds one mesh.
+  The sun's shadow map is now worked out once per frame instead of once per split half.
+  Measured in the dev browser (software GPU, 2 phones, split screen): 201 draw calls per frame for both halves
+  (was 256 with the graybox, mostly the characters), ~300k triangles per frame; venue CPU work per frame is just a
+  few shader values. **Real fps on the MacBook Air not measured yet.** All values in `TUNING.badminton.beach`.
+- Next: user OK on step 1 (tweaks), then step 2 players (beach outfits), 3 shuttle (2 options), 4 rackets.
 
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.
