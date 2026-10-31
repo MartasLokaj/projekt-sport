@@ -255,7 +255,18 @@ running log of where we are, what the user decided, and what comes next).
     `missedContact`), or (step 3) a badly timed Super Smash attempt. Far too early = "Too early!" and swing again
     (no fall); a little too early (`earlyWobbleMs`) or a stretch (`diveReach`) = wobble without falling; out of
     reach or no swing = miss without falling. The computer still falls when it misses.
-  - Next: user tests again → step 3 (Super Smash; a mistimed Super Smash attempt should make the character fall).
+  - **Mechanics step 3 (Super Smash) — built (user: "Odkudkoli, postav to": allowed from anywhere, the normal
+    smash stays back-only), waiting for the phone test.** Strong (≥ `superSmashPower` 75) overhead swing on a
+    `wobble`, shuttle ≥ `superSmashMinHeight` 2.4 m at the swing, timing in the Good part → `superSmash`
+    (0.55–0.75 s, ×0.9 if Perfect); chain in one rally: ×`superSmashChainBoost` 1.12 each, cap
+    `superSmashMaxSpeed` 1.8. Strong try badly timed → weak wobble back + fall ("Super Smash failed!"); outside the
+    window → miss + fall. Returning one: `superSmashDefenseWindowMs` 180/130 (`hitWindow()`). Juice: hit-stop
+    `superSmashHitStopMs` 300 (shuttle waits at the racket: `pendingHit.contactAt` vs `when`), white flash
+    (`#badminton-flash`), big golden bouncy "SUPER SMASH! (×n)" in the hitter's half, gold trail, sand burst +
+    camera shake on landing, hitter's phone cue `super_smash` (strong vibration on Android). CPU tries one on high
+    wobbles (`cpu.superSmashChance` 0.5) and returns one with `cpu.superSmashReturnChance` 0.3.
+    Scripted: perfect try → Super Smash 504 ms; third in a chain 402 ms; −250 ms → "failed" + fall.
+  - Next: user tests step 3 → step 4 (timing feedback upgrade, more generous movement, CPU levels) — plan first.
 
 ### GitHub and the cloud (2026-10-31)
 - Project is on GitHub: **private** repo `MartasLokaj/projekt-sport` (remote `origin`, branch `main`). `gh` CLI is in

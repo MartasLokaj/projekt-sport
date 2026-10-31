@@ -561,13 +561,33 @@ export const TUNING = {
     /** Wavy trail behind a wobble shot: colour and length (ms). */
     wobbleTrailColour: '#c45cff',
     trailMs: 600,
+    /**
+     * Super Smash: a strong (>= superSmashPower) overhead hit on a wobble shot, met at least superSmashMinHeight
+     * high (with the swing's jump) and timed in the Good part of the window. Allowed from anywhere on the court
+     * (user, 2026-10-31). The fastest shot; each further Super Smash in the same rally is superSmashChainBoost
+     * faster, up to superSmashMaxSpeed times the first one. A strong swing at a wobble that is badly timed
+     * makes the character fall (a weak wobble back, or a miss).
+     */
+    superSmash: { depth: [2.5, 5.5], apex: 0, seconds: [0.75, 0.55], drag: 0.2 },
+    superSmashPower: 75,
+    superSmashMinHeight: 2.4,
+    superSmashChainBoost: 0.12,
+    superSmashMaxSpeed: 1.8,
+    /** Returning a Super Smash: a tighter hit window (ms, too early / too late). */
+    superSmashDefenseWindowMs: { early: 180, late: 130 },
+    /** Juice: the shuttle stops at the racket for a moment, a gold trail, camera shake and a sand burst on landing. */
+    superSmashHitStopMs: 300,
+    superSmashTrailColour: '#ffb400',
+    shakeStrength: 0.25,
+    shakeMs: 450,
+    sandBurst: 34,
     /** Every shot clears the net by at least this much (m). */
     netClearance: 0.35,
     /** A Perfect hit flies this much faster. */
     perfectSpeedup: 0.9,
 
     /** The computer: chance to return a normal shot and a smash, its power range (percent), and serve delay (ms). */
-    cpu: { hitChance: 0.85, smashReturnChance: 0.55, power: [30, 85], smashChance: 0.35, dropChance: 0.15, shortServeChance: 0.25, wobbleChance: 0.12, serveDelayMs: 1300, aimRange: 1 },
+    cpu: { hitChance: 0.85, smashReturnChance: 0.55, power: [30, 85], smashChance: 0.35, dropChance: 0.15, shortServeChance: 0.25, wobbleChance: 0.12, superSmashChance: 0.5, superSmashReturnChance: 0.3, serveDelayMs: 1300, aimRange: 1 },
 
     /** Rally scoring: first to pointsToWin, but you must lead by winBy (4 : 4 → 5 : 4 → 6 : 4 wins). Pause after a point (ms). */
     pointsToWin: 4,

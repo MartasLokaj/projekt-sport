@@ -171,7 +171,7 @@ export class Lobby {
         return;
       }
       case 'badminton_cue': {
-        if (!this.hosts.has(ws) || msg.cue !== 'smash_chance') return;
+        if (!this.hosts.has(ws) || (msg.cue !== 'smash_chance' && msg.cue !== 'super_smash')) return;
         const socket = this.seats.get(msg.playerId)?.socket;
         if (socket) send(socket, { type: 'badminton_cue', cue: msg.cue });
         return;

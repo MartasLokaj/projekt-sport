@@ -86,7 +86,7 @@ export type BadmintonSwing = {
 };
 
 /** Hints from the big screen to one player's phone during badminton. */
-export type BadmintonCue = 'smash_chance';
+export type BadmintonCue = 'smash_chance' | 'super_smash';
 
 /** What happened to the ball after a stroke, reported by the host. */
 export type BallResult = 'rest' | 'holed' | 'out';

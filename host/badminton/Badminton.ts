@@ -4,6 +4,7 @@ import { TUNING } from '../../shared/tuning.ts';
 import { Character } from '../game/character.ts';
 import { buildCourt, buildRacket, buildShuttle } from './court.ts';
 import { SandPuffs, Trail } from './effects.ts';
+import type { BadmintonCue } from '../../shared/protocol.ts';
 import { findContact, makeShot, type Contact, type Flight, type ShotKind } from './shuttle.ts';
 
 // Badminton (phases B2–B3): two sides of the net, each played by a phone or by the computer.
@@ -21,6 +22,8 @@ import { findContact, makeShot, type Contact, type Flight, type ShotKind } from 
 // - A bad hit (too weak, timing outside the Good part, or a stretch) becomes a slow, wobbly "wobble" shot with
 //   a wavy trail: the other side's chance. Only a swing far too late makes the character dive and fall in the
 //   sand; it needs recoveryMs to get up. (The computer falls when it misses.)
+// - Super Smash: a strong, well-timed, high hit on a wobble, from anywhere. The fastest shot; a chain of them in
+//   one rally gets faster; returning one has a tighter window. A strong but badly timed try makes you fall.
 // Mac keyboard for testing: Space swings for the near player (hold ← or → to aim), ↑ swings for the
 // far player, Enter plays again after a match.
 
@@ -65,6 +68,8 @@ export type BadmintonHud = {
   /** Shot feedback for the near player (left half, or centre with one player) and the far player (right half). */
   feedbackNear: HTMLElement;
   feedbackFar: HTMLElement;
+  /** A white flash over the whole screen (class "on" plays it), for a Super Smash. */
+  flash: HTMLElement;
 };
 
 type Phase = 'serve' | 'rally' | 'point' | 'over';
@@ -95,10 +100,16 @@ export class Badminton {
   private contact: Contact | null = null;
   /** The receiver's hit has been decided (hit, or missed). */
   private decided = false;
+  /** Super Smashes so far in this rally (each next one is faster), and whether the last one's landing burst played. */
+  private superChain = 0;
+  private landedFx = false;
+  private shakeUntil = 0;
   /** The last missed contact (who and when), so a very late swing arriving after the miss can still dive. */
   private missedContact: { side: Side; time: number } | null = null;
   /** A hit waiting for the top of the character's jump. */
   private pendingHit: {
+    /** When the racket meets the shuttle; it shoots off at `when` (later for a Super Smash's hit-stop). */
+    contactAt: number;
     when: number;
     athlete: Athlete;
     kind: ShotKind;
@@ -114,7 +125,7 @@ export class Badminton {
   private readonly trail = new Trail();
   private readonly puffs = new SandPuffs(TUNING.badminton.sandColour);
   /** Tells a phone something (e.g. "Smash chance!"); set by host/main.ts. */
-  onCue: ((side: Side, cue: 'smash_chance') => void) | null = null;
+  onCue: ((side: Side, cue: BadmintonCue) => void) | null = null;
 
   constructor(
     private readonly container: HTMLElement,
@@ -209,7 +220,17 @@ export class Badminton {
     if (this.phase !== 'rally' || this.receiver !== side || this.decided || !this.contact || !this.flight) return;
     const contact = this.contact;
     const off = at - contact.time;
-    if (off < -(cfg.hitWindowEarlyMs + cfg.earlyWobbleMs)) {
+    const { early, late } = this.hitWindow();
+    // A strong overhead swing at a wobble is a Super Smash try: badly timed, the character falls.
+    const there = this.flight.positionAt(this.flight.progressAt(at));
+    const superTry = this.flight.kind === 'wobble' && !short && power >= cfg.superSmashPower && strokeAt(there.y) === 'overhead';
+    if (superTry && contact.reach !== 'dive' && (off < -early || off > late)) {
+      this.showFeedback(a, `Super Smash missed! (${Math.round(Math.abs(off))} ms ${off < 0 ? 'early' : 'late'})`);
+      this.dive(a, now, contact.position);
+      this.miss();
+      return;
+    }
+    if (off < -(early + cfg.earlyWobbleMs)) {
       // Far too early: a swing at the air, then swing again.
       a.swing = { stroke: contact.stroke, start: now };
       this.showFeedback(a, `Too early! (${Math.round(-off)} ms)`);
@@ -220,12 +241,12 @@ export class Badminton {
       this.miss();
       return;
     }
-    if (off > cfg.hitWindowMs) {
+    if (off > late) {
       this.lateMiss(a, now, off);
       return;
     }
     // Only just reachable, or a little too early: a stretch that just catches it, as a wobble shot.
-    if (contact.reach === 'dive' || off < -cfg.hitWindowEarlyMs) {
+    if (contact.reach === 'dive' || off < -early) {
       a.swing = { stroke: contact.stroke, start: now };
       this.hit(a, power, aim, 0.3, contact.stroke, now, false, true);
       this.showFeedback(a, contact.reach === 'dive' ? 'Stretch! · Wobble' : `Wobble · ${Math.round(-off)} ms early`);
@@ -233,18 +254,30 @@ export class Badminton {
     }
     // The character only jumps with the player's own swing, as high as the shuttle is at that moment:
     // swing early and it jumps (and may miss), swing late and the shuttle is lower, so it stays on the ground.
-    const there = this.flight.positionAt(this.flight.progressAt(at));
     const stroke = strokeAt(there.y);
     const jump = Math.min(cfg.reachHeight, there.y) - cfg.standingReach;
     a.jump = jump > 0 ? { height: jump, peak: now + cfg.swingJumpRiseMs, rise: cfg.swingJumpRiseMs } : null;
     a.swing = { stroke, start: now + (jump > 0 ? cfg.swingJumpRiseMs - 140 : 0) };
     const size = Math.abs(off);
-    const window = off < 0 ? cfg.hitWindowEarlyMs : cfg.hitWindowMs;
-    const quality = size <= cfg.perfectMs ? 1 : 1 - (size - cfg.perfectMs) / (window - cfg.perfectMs);
+    const window = off < 0 ? early : late;
+    const perfect = Math.min(cfg.perfectMs, window * 0.6);
+    const quality = size <= perfect ? 1 : 1 - (size - perfect) / (window - perfect);
     // A hit outside the Good part of the window, or a weak swing (not a drop), wobbles.
-    const offGood = off < -cfg.goodEarlyMs || off > cfg.goodLateMs;
+    const offGood = off < -Math.min(cfg.goodEarlyMs, early * 0.8) || off > Math.min(cfg.goodLateMs, late * 0.8);
     const weak = !short && power < cfg.wobblePower;
-    const kind = this.hit(a, power, aim, quality, stroke, jump > 0 ? now + cfg.swingJumpRiseMs : now, short, offGood || weak);
+    const when = jump > 0 ? now + cfg.swingJumpRiseMs : now;
+    if (superTry && offGood) {
+      // A strong but badly timed Super Smash try: a weak wobble back, and a fall into the sand.
+      this.hit(a, 30, aim, 0.3, stroke, when, false, true);
+      this.dive(a, when, contact.position);
+      this.showFeedback(a, `Super Smash failed! (${Math.round(size)} ms ${off < 0 ? 'early' : 'late'})`);
+      return;
+    }
+    if (superTry && there.y >= cfg.superSmashMinHeight) {
+      this.hit(a, power, aim, quality, stroke, when, false, false, true);
+      return;
+    }
+    const kind = this.hit(a, power, aim, quality, stroke, when, short, offGood || weak);
     const timing = quality >= 1 ? 'Perfect!' : `${Math.round(size)} ms ${off < 0 ? 'early' : 'late'}`;
     const verdict = kind === 'wobble' ? `Wobble · ${weak ? 'too soft' : timing}` : quality >= 1 ? 'Perfect!' : `Good · ${timing}`;
     this.showFeedback(a, kind === 'wobble' ? verdict : `${shotName(kind)} · ${verdict}`);
@@ -266,6 +299,7 @@ export class Badminton {
     this.contact = null;
     this.decided = false;
     this.pendingHit = null;
+    this.superChain = 0;
     for (const a of [this.near, this.far]) {
       a.down = null;
       a.busyUntil = 0;
@@ -310,12 +344,15 @@ export class Badminton {
     when: number,
     short: boolean,
     wobble = false,
+    superSmash = false,
   ): ShotKind {
     const cfg = TUNING.badminton;
     const there = this.flight!.positionAt(this.flight!.progressAt(when));
     // A smash only from the back of the court; elsewhere a hard overhead is a clear.
     const back = Math.abs(there.z) >= cfg.smashFromDepth;
-    const kind: ShotKind = wobble
+    const kind: ShotKind = superSmash
+      ? 'superSmash'
+      : wobble
       ? 'wobble'
       : short
         ? 'drop'
@@ -327,23 +364,39 @@ export class Badminton {
     const extraScatter = short ? (back ? cfg.shortShotScatterBack : cfg.shortShotScatterMid) : 0;
     const netChance = short && back ? cfg.shortShotNetChanceBack : 0;
     this.decided = true;
-    this.pendingHit = { when, athlete, kind, power, aim, quality, extraScatter, netChance };
-    if (when <= Date.now()) this.launchPendingHit();
+    // A Super Smash stops the shuttle at the racket for a moment (hit-stop) before it shoots off.
+    const launchAt = kind === 'superSmash' ? when + cfg.superSmashHitStopMs : when;
+    this.pendingHit = { contactAt: when, when: launchAt, athlete, kind, power, aim, quality, extraScatter, netChance };
+    if (kind === 'superSmash') this.superSmashJuice(athlete);
+    if (launchAt <= Date.now()) this.launchPendingHit();
     return kind;
   }
 
   private launchPendingHit(): void {
+    const cfg = TUNING.badminton;
     const p = this.pendingHit!;
     this.pendingHit = null;
-    const from = this.flight!.positionAt(this.flight!.progressAt(p.when));
-    const shot = makeShot(p.kind, from, p.athlete.side, p.aim, p.power / 100, p.quality, p.when, undefined, p.extraScatter, p.netChance);
+    const from = this.flight!.positionAt(this.flight!.progressAt(p.contactAt));
+    // Each further Super Smash in the same rally is faster, up to a limit.
+    const speed = p.kind === 'superSmash' ? Math.min(cfg.superSmashMaxSpeed, Math.pow(1 + cfg.superSmashChainBoost, this.superChain++)) : 1;
+    const shot = makeShot(p.kind, from, p.athlete.side, p.aim, p.power / 100, p.quality, p.when, undefined, p.extraScatter, p.netChance, speed);
     this.launch(shot, p.athlete.side);
+  }
+
+  /** "SUPER SMASH!" in the hitter's half, a flash, and the hitter's phone buzzes. */
+  private superSmashJuice(a: Athlete): void {
+    this.showFeedback(a, this.superChain > 0 ? `SUPER SMASH ×${this.superChain + 1}!` : 'SUPER SMASH!', true);
+    this.hud.flash.classList.remove('on');
+    void this.hud.flash.offsetWidth; // restart the CSS animation
+    this.hud.flash.classList.add('on');
+    if (a.human) this.onCue?.(a.side, 'super_smash');
   }
 
   /** A new flight from `hitter`'s side: the other side runs to meet it, the hitter goes back home. */
   private launch(flight: Flight, hitter: Side): void {
     const cfg = TUNING.badminton;
     this.flight = flight;
+    this.landedFx = false;
     this.receiver = -hitter as Side;
     const receiver = this.athlete(this.receiver);
     this.moveTo(this.athlete(hitter), new THREE.Vector3(0, 0, hitter * cfg.homeDepth), null);
@@ -424,6 +477,14 @@ export class Badminton {
     return true;
   }
 
+  /** The hit window for the shuttle now coming (ms early, ms late): tighter against a Super Smash. */
+  private hitWindow(): { early: number; late: number } {
+    const cfg = TUNING.badminton;
+    return this.flight?.kind === 'superSmash'
+      ? cfg.superSmashDefenseWindowMs
+      : { early: cfg.hitWindowEarlyMs, late: cfg.hitWindowMs };
+  }
+
   /** Nobody hits it: the shuttle just flies on and lands. */
   private miss(): void {
     if (this.contact) this.missedContact = { side: this.receiver, time: this.contact.time };
@@ -449,7 +510,9 @@ export class Badminton {
     const incomingSmash = this.flight?.kind === 'smash';
     if (now < cpu.busyUntil) return; // still getting up: the shuttle will just fall
     cpu.swing = { stroke: contact.stroke, start: now };
-    const hits = contact.reach !== 'none' && Math.random() <= (incomingSmash ? cfg.smashReturnChance : cfg.hitChance);
+    const incomingSuper = this.flight?.kind === 'superSmash';
+    const chance = incomingSuper ? cfg.superSmashReturnChance : incomingSmash ? cfg.smashReturnChance : cfg.hitChance;
+    const hits = contact.reach !== 'none' && Math.random() <= chance;
     if (!hits) {
       this.dive(cpu, now, contact.position);
       this.miss();
@@ -457,6 +520,12 @@ export class Badminton {
     }
     if (contact.reach === 'dive') {
       this.hit(cpu, 40, 0, 0.3, contact.stroke, now, false, true);
+      return;
+    }
+    // A high wobble: the computer goes for a Super Smash now and then.
+    const superHigh = this.flight?.kind === 'wobble' && contact.stroke === 'overhead' && contact.position.y >= TUNING.badminton.superSmashMinHeight;
+    if (superHigh && Math.random() < cfg.superSmashChance) {
+      this.hit(cpu, 90, (Math.random() * 2 - 1) * cfg.aimRange, 1, contact.stroke, now, false, false, true);
       return;
     }
     let power = cfg.power[0] + Math.random() * (cfg.power[1] - cfg.power[0]);
@@ -505,11 +574,11 @@ export class Badminton {
       if (this.pendingHit && now >= this.pendingHit.when) this.launchPendingHit();
       if (!this.decided && this.contact) {
         const receiver = this.athlete(this.receiver);
-        if (!receiver.human && now >= this.contact.time) {
+        if (!receiver.human && now >= this.contact.time && !this.pendingHit) {
           if (now < receiver.busyUntil) this.miss();
           else this.cpuTurn(receiver, now);
         }
-        else if (receiver.human && now > this.contact.time + cfg.hitWindowMs + cfg.lateGraceMs) {
+        else if (receiver.human && now > this.contact.time + this.hitWindow().late + cfg.lateGraceMs) {
           this.showFeedback(receiver, 'Missed!');
           this.miss();
         }
@@ -523,8 +592,16 @@ export class Badminton {
     }
 
     this.updateShuttle(now);
-    const wobbling = this.phase === 'rally' && this.flight?.kind === 'wobble' && this.flight.progressAt(now) < 1;
-    this.trail.update(this.shuttle.position, now, wobbling, cfg.wobbleTrailColour, cfg.trailMs);
+    const flying = this.phase === 'rally' && !!this.flight && this.flight.progressAt(now) < 1 && !this.pendingHit;
+    const trailKind = flying ? this.flight!.kind : null;
+    const trailColour = trailKind === 'superSmash' ? cfg.superSmashTrailColour : cfg.wobbleTrailColour;
+    this.trail.update(this.shuttle.position, now, trailKind === 'wobble' || trailKind === 'superSmash', trailColour, cfg.trailMs);
+    // A Super Smash landing: a big sand burst and a shake.
+    if (this.flight?.kind === 'superSmash' && !this.landedFx && this.flight.progressAt(now) >= 1) {
+      this.landedFx = true;
+      this.puffs.burst(this.flight.to, now, cfg.sandBurst);
+      this.shakeUntil = now + cfg.shakeMs;
+    }
     this.puffs.update(now, dt);
     for (const a of [this.near, this.far]) {
       this.updateAthlete(a, now, dt);
@@ -565,7 +642,9 @@ export class Badminton {
       position = this.handPosition(this.athlete(this.server), TUNING.badminton.serveHeight);
       direction = new THREE.Vector3(0, 1, 0);
     } else {
-      const u = Math.min(1, this.flight.progressAt(now));
+      // During a Super Smash's hit-stop the shuttle waits at the racket.
+      const held = this.pendingHit && now >= this.pendingHit.contactAt ? this.pendingHit.contactAt : now;
+      const u = Math.min(1, this.flight.progressAt(held));
       position = this.flight.positionAt(u);
       direction = position.clone().sub(this.flight.positionAt(u - 0.01));
       if (u >= 1) direction.set(1, -0.2, 0); // lying on the sand
@@ -636,6 +715,11 @@ export class Badminton {
     const want = new THREE.Vector3(x * 0.5, cfg.cameraHeight, a.side * (cfg.courtHalfLength + back));
     a.camera.position.lerp(want, Math.min(1, dt * 3));
     a.camera.lookAt(x * 0.25, 1, a.side * cfg.cameraLookAt);
+    const shake = (this.shakeUntil - Date.now()) / cfg.shakeMs;
+    if (shake > 0) {
+      const s = cfg.shakeStrength * shake;
+      a.camera.position.add(new THREE.Vector3((Math.random() - 0.5) * s, (Math.random() - 0.5) * s, 0));
+    }
   }
 
   // ---------- Helpers ----------
@@ -718,10 +802,12 @@ export class Badminton {
     return a.wrapper.position.clone().add(new THREE.Vector3(a.handSign * 0.45, height, -a.side * 0.3));
   }
 
-  private showFeedback(a: Athlete, text: string): void {
+  /** Text in the athlete's half; big = large, golden and bouncy (a Super Smash). */
+  private showFeedback(a: Athlete, text: string, big = false): void {
     a.feedback.textContent = text;
     a.feedback.hidden = false;
-    a.feedbackUntil = Date.now() + 1400;
+    a.feedback.classList.toggle('super', big);
+    a.feedbackUntil = Date.now() + (big ? 1800 : 1400);
   }
 
   private renderScore(): void {
@@ -769,7 +855,7 @@ function strokeAt(height: number): Stroke {
 }
 
 function shotName(kind: ShotKind): string {
-  return { serve: 'Serve', shortServe: 'Short serve', clear: 'Clear', lift: 'Lift', drive: 'Drive', smash: 'Smash!', drop: 'Drop', wobble: 'Wobble' }[kind];
+  return { serve: 'Serve', shortServe: 'Short serve', clear: 'Clear', lift: 'Lift', drive: 'Drive', smash: 'Smash!', drop: 'Drop', wobble: 'Wobble', superSmash: 'SUPER SMASH!' }[kind];
 }
 
 function easeOut(t: number): number {

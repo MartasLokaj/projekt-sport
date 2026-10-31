@@ -8,7 +8,7 @@ import { TUNING } from '../../shared/tuning.ts';
 //
 // Court coordinates: net along x at z = 0, the player's half at z > 0, the computer's at z < 0.
 
-export type ShotKind = 'serve' | 'shortServe' | 'clear' | 'lift' | 'drive' | 'smash' | 'drop' | 'wobble';
+export type ShotKind = 'serve' | 'shortServe' | 'clear' | 'lift' | 'drive' | 'smash' | 'drop' | 'wobble' | 'superSmash';
 
 export class Flight {
   constructor(
@@ -89,6 +89,7 @@ export class Flight {
  * aim: -1 left … 1 right, from the hitter's point of view. power, quality: 0..1.
  * xRange: where it may land across the court (world x, default: the whole court); aim picks a spot in it.
  * extraScatter: added to the usual scatter (m), e.g. for a drop from the back. netChance: chance it ends in the net.
+ * speed: flies this many times faster (e.g. a chain of Super Smashes).
  */
 export function makeShot(
   kind: ShotKind,
@@ -101,6 +102,7 @@ export function makeShot(
   xRange: [number, number] = [-TUNING.badminton.courtHalfWidth + 0.25, TUNING.badminton.courtHalfWidth - 0.25],
   extraScatter = 0,
   netChance = 0,
+  speed = 1,
 ): Flight {
   const cfg = TUNING.badminton;
   const shot = cfg[kind];
@@ -120,6 +122,7 @@ export function makeShot(
   );
   let seconds = shot.seconds[0] + (shot.seconds[1] - shot.seconds[0]) * power;
   if (quality >= 1) seconds *= cfg.perfectSpeedup;
+  seconds /= speed;
 
   if (Math.random() < netChance) {
     // Into the net: it flies to the net and drops down on the hitter's own side.
