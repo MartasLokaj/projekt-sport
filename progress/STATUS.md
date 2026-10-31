@@ -360,6 +360,11 @@ running log of where we are, what the user decided, and what comes next).
 - **2026-10-31: merged the cloud branch `claude/optimistic-ptolemy-k4bk8a` (Minigolf J1: ramps, gaps, tubes,
   holes 4 Pipe and 5 Ski jump) on the user's request**, plus committed the user's `AVATAR.md` brief (SPEC phase 5).
   Clean merge; type check passes, game modules load, badminton plays. Pushed `main`.
+- **Minigolf fix (user: "can't get to the holes; the windmill's turning parts have big hitboxes"):** the holes
+  shortcut failed only because the running server was from before the merge (3 holes) → restarted. Windmill: the
+  drawn blades are an X (diagonals) but the hitboxes were a + (turned 45°), so the ball hit invisible blades. Now
+  the hitboxes follow the drawn blades and are a bit smaller (`bladeHitboxLength` 0.9, `bladeHitboxWidth` 0.7 in
+  `TUNING.course`); checked with the physics debug view.
 
 ### Kick players from the lobby (2026-10-31, user request)
 - **Built, waiting for the user's test.** Hover a player's face under Play → red × (`.face-kick` in

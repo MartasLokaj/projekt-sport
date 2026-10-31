@@ -15,7 +15,10 @@ import { TUNING } from '../../shared/tuning.ts';
 
 /** Kenney kit measurements (kit units), for the windmill and the flag. */
 const KIT_FLOOR = 0.063;
-const KIT_BLADE_LENGTH = 0.6;
+/** Each windmill blade lies along a diagonal (an X): from the hub to this far out, this wide each side, this thick each side. */
+const KIT_BLADE_LENGTH = 0.773;
+const KIT_BLADE_HALF_WIDTH = 0.104;
+const KIT_BLADE_HALF_THICKNESS = 0.042;
 
 /**
  * A point the lane passes through (local coordinates, z = forward from the tee), its floor height and half-width.
@@ -824,17 +827,22 @@ function addWindmillBlades(model: THREE.Object3D, blades: THREE.Object3D, world:
   const hub = blades.getWorldPosition(new THREE.Vector3());
   const baseRotation = model.getWorldQuaternion(new THREE.Quaternion());
   const scale = cfg.tileSize * cfg.bladeScale;
-  const half = KIT_BLADE_LENGTH * scale;
-  const width = 0.06 * scale;
-  const thickness = 0.05 * scale;
+  // The hitbox is a little smaller than the drawn blade (bladeHitboxLength / bladeHitboxWidth), so the ball is
+  // only stopped where it clearly touches a blade.
+  const half = KIT_BLADE_LENGTH * scale * cfg.bladeHitboxLength;
+  const width = KIT_BLADE_HALF_WIDTH * scale * cfg.bladeHitboxWidth;
+  const thickness = KIT_BLADE_HALF_THICKNESS * scale;
 
   const body = world.createRigidBody(
     R.RigidBodyDesc.kinematicPositionBased()
       .setTranslation(hub.x, hub.y, hub.z)
       .setRotation({ x: baseRotation.x, y: baseRotation.y, z: baseRotation.z, w: baseRotation.w }),
   );
-  world.createCollider(R.ColliderDesc.cuboid(half, width, thickness).setFriction(0.2).setRestitution(0.5), body);
-  world.createCollider(R.ColliderDesc.cuboid(width, half, thickness).setFriction(0.2).setRestitution(0.5), body);
+  // Two long boxes through the hub make the X, turned 45° like the drawn blades.
+  const diagonal = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 4);
+  const r = { x: diagonal.x, y: diagonal.y, z: diagonal.z, w: diagonal.w };
+  world.createCollider(R.ColliderDesc.cuboid(half, width, thickness).setRotation(r).setFriction(0.2).setRestitution(0.5), body);
+  world.createCollider(R.ColliderDesc.cuboid(width, half, thickness).setRotation(r).setFriction(0.2).setRestitution(0.5), body);
 
   let angle = 0;
   const spin = new THREE.Quaternion();

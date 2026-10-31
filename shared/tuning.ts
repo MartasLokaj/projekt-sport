@@ -114,6 +114,9 @@ export const TUNING = {
     tapInSpeed: 1,
     /** The windmill's blades are made this much longer than in the kit, so they reach the lane. */
     bladeScale: 1.5,
+    /** The blades' hitbox compared with the drawn blade: length and width (1 = exactly as drawn, smaller = easier). */
+    bladeHitboxLength: 0.9,
+    bladeHitboxWidth: 0.7,
     /** How fast the windmill turns (degrees per second). */
     windmillDegreesPerSecond: 50,
     /** Half-width of the lane is set per hole; this is the cup's radius. */
