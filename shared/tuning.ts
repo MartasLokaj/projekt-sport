@@ -672,10 +672,89 @@ export const TUNING = {
     splitCameraBack: 4.0,
     /** The shuttle is drawn this much bigger than real, so it is easy to follow from the sofa. */
     shuttleScale: 2.4,
-    /** Look: sand, court, lines, sky. */
+    /** Colour of the sand kicked up by the players (the beach itself is in `beach` below). */
     sandColour: '#ecd3a0',
-    courtColour: '#e3bf85',
-    skyColour: '#9fd8ff',
+
+    // The beach venue (host/badminton/venue/). The court runs along z; west (-x) is the deck and the sea,
+    // north (-z) the open beach and the sea, east (+x) palms, the palapa and rocks, south (+z) a palm grove and hills.
+    beach: {
+      /** Change this number for a different (but always repeatable) placement of palms and rocks. */
+      seed: 21,
+      skyTop: '#2f8fe6',
+      skyHorizon: '#cdeeff',
+      clouds: 26,
+      /** Sea: height of its surface, colours from the shore outwards, and how far out the surf breaks on the reef (metres). */
+      seaLevel: -0.6,
+      seaShallow: '#5fe3d6',
+      seaMid: '#1fb5c9',
+      seaDeep: '#1867b8',
+      reefDistance: 34,
+      /** The north shore's waterline (z), and over how many metres the beach slopes down to it. */
+      northShoreZ: -24,
+      beachSlope: 9,
+      /** Sand: dry and wet colour, size of one texture repeat (metres), bumpiness, ground detail (metres per cell) and area [x0, z0, x1, z1]. */
+      sandDry: '#fff6e2',
+      sandWet: '#d9bb8a',
+      sandTextureSize: 3,
+      sandBumpiness: 1.5,
+      groundCell: 1,
+      groundArea: [-16, -42, 72, 78],
+      /** The deck on the west: its sand-side edge (x), width, length (z from..to), height above the sand, umbrella spacing. */
+      wallX: -9.6,
+      deckWidth: 2.6,
+      deckFromZ: -14,
+      deckToZ: 40,
+      deckHeight: 0.5,
+      umbrellaEvery: 4.5,
+      /** The court lines (rope thickness) and the net: sag in the middle and mesh size (metres). */
+      ropeRadius: 0.028,
+      netSag: 0.06,
+      netCell: 0.07,
+      /** Palms leaning over the east edge of the court: how far out (x) and where along it (z). */
+      courtPalmsX: 7.2,
+      courtPalmsZ: [-4.5, 4],
+      /** Palm groves: [x, z, how many, radius]. */
+      groves: [
+        [13, -18, 5, 3.5],
+        [-3, 22, 6, 4],
+        [12, 17, 5, 4],
+        [22, 2, 7, 6],
+        [6, 30, 6, 6],
+        [40, 20, 8, 9],
+        [-4, 44, 7, 7],
+      ],
+      /** The palapa (x, z), volcanic rocks [x, z, size], and far green hills [x, z, width, height, depth]. */
+      palapa: [11.5, -3.5],
+      rocks: [
+        [15, -9, 0.9],
+        [16.5, -7.5, 0.6],
+        [17, 6, 1.1],
+        [15.5, 8, 0.5],
+        [8, 14, 0.8],
+        [-6, 15, 0.7],
+        [-7, 16.5, 0.45],
+        [9, -12.5, 0.6],
+      ],
+      hills: [
+        [-10, 64, 26, 9, 14],
+        [22, 70, 30, 12, 16],
+        [58, 30, 14, 10, 30],
+        [60, -10, 12, 7, 22],
+      ],
+      /** Feather flags [x, z, which way the banner faces (radians)]: by the net and at two corners. */
+      flags: [
+        [-5.2, 0.6, 0.4],
+        [5.0, -0.6, Math.PI - 0.4],
+        [-5.0, -11.6, -0.6],
+        [5.2, 11.6, Math.PI + 0.6],
+      ],
+      flagHeight: 3.3,
+      /** Wind: overall strength, and how far palms, flags and the net's band move. */
+      windStrength: 1,
+      palmSway: 0.35,
+      flagSway: 0.22,
+      netSway: 0.05,
+    },
   },
 
   // Swing Lab on the big screen: a shuttle drops to the hit line, the player swings when it gets there.
