@@ -113,6 +113,7 @@ Work in this order. Each phase ends with the user testing on real phones and app
 - Done when: it looks good enough to show friends and runs at 60 fps on the MacBook Air.
 
 **Phase 5 – Character editor on the phone**
+- **Full brief (2026-10-31): see AVATAR.md** (decisions, options, data model, phone and TV behaviour, steps). It supersedes the option list below.
 - Options: hairstyle (5+), eyes (5+), mouth (4+), hat (4+ including none), shirt colour, skin tone, putter colour. Live 3D preview on the phone. Saved in the phone's localStorage and shown on the host after joining.
 - Done when: players can create a character and keep it between sessions.
 
