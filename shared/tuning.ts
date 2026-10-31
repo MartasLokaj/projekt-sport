@@ -448,6 +448,47 @@ export const TUNING = {
   // Overhead or underhand is not read from the phone (test 2 showed it is unreliable): the game picks it
   // from where the character stands (back of the court = overhead, front = underhand unless a smash is possible).
   // Speeds in degrees per second, times in milliseconds. Every swing is saved to logs/badminton-swings.jsonl.
+  /** Sounds and music on the big screen (host/audio/sound.ts). Levels 0..1; M mutes everything. */
+  audio: {
+    master: 0.9,
+    /** All short sounds together, and all music together. */
+    effects: 0.9,
+    music: 0.45,
+    /** Each music track's own level, and how long one track fades over to the next (ms). */
+    musicLevels: { lobby: 0.8, minigolf: 0.9, badminton: 0.8 },
+    musicFadeMs: 900,
+    /** The same short sound plays at most once in this time (ms), e.g. a ball rattling along a border. */
+    repeatGapMs: 60,
+    /** Each short sound's own level (above 1 = louder than recorded, for quiet recordings; at most 4). */
+    levels: {
+      'ui-click': 0.6,
+      'ui-select': 0.7,
+      'ui-play': 0.8,
+      'ui-back': 0.6,
+      'ui-join': 1.6,
+      'ui-leave': 0.7,
+      sparkle: 0.5,
+      'golf-putt': 2,
+      'golf-wall': 2.5,
+      'golf-cup': 1.6,
+      'golf-splash': 0.9,
+      'shuttle-hit': 0.9,
+      'shuttle-smash': 1,
+      'shuttle-sand': 0.6,
+      'shuttle-net': 0.7,
+      'jingle-hole-in': 0.8,
+      'jingle-hole-in-one': 0.9,
+      'jingle-point': 0.6,
+      'jingle-win': 0.8,
+      'jingle-super-smash': 0.8,
+    },
+    /** Minigolf: a ball hitting a border faster than wallSpeed (m/s) clicks, louder when faster (full at wallLoud). */
+    wallSpeed: 0.6,
+    wallLoud: 6,
+    /** Beach: a wave rolls in every everyMs (random between the two), at this level and speed (pitch) range. */
+    waves: { everyMs: [3500, 7000], level: 0.35, rate: [0.85, 1.05] },
+  },
+
   /** The way from the cube into a game and back (host/hub/Hub.ts diveIn/pullOut, host/ui/transition.ts). */
   transition: {
     /** Play: the camera flies into the chosen side (seconds) and ends this far from the side's middle. */

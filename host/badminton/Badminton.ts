@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { SKIN_TONES, type PlayerInfo } from '../../shared/protocol.ts';
 import { TUNING } from '../../shared/tuning.ts';
+import { sound } from '../audio/sound.ts';
 import { Character } from '../game/character.ts';
 import { buildRacket, buildShuttle, setRacketColour } from './court.ts';
 import { buildBeach, type Venue } from './venue/beach.ts';
@@ -179,6 +180,8 @@ export class Badminton {
   private cpuServeAt = 0;
   /** The way in from the cube: until then the cameras glide down and nobody serves (see swoopIn). */
   private introEndsAt = 0;
+  /** The landing sound of the current flight has played. */
+  private landedSound = true;
   private readonly keys = new Set<string>();
   /** Scratch vectors for the racket head (swoosh). */
   private readonly headTip = new THREE.Vector3();
@@ -508,7 +511,10 @@ export class Badminton {
     // A Super Smash stops the shuttle at the racket for a moment (hit-stop) before it shoots off.
     const launchAt = kind === 'superSmash' ? when + cfg.superSmashHitStopMs : when;
     this.pendingHit = { contactAt: when, when: launchAt, athlete, kind, power, aim, quality, extraScatter, netChance };
-    if (kind === 'superSmash') this.superSmashJuice(athlete);
+    if (kind === 'superSmash') {
+      this.superSmashJuice(athlete);
+      sound.play('jingle-super-smash');
+    }
     if (launchAt <= Date.now()) this.launchPendingHit();
     return kind;
   }
@@ -541,6 +547,9 @@ export class Badminton {
     const cfg = TUNING.badminton;
     this.flight = flight;
     this.landedFx = false;
+    this.landedSound = false;
+    const hard = flight.kind === 'smash' || flight.kind === 'superSmash';
+    sound.play(hard ? 'shuttle-smash' : 'shuttle-hit', 1, hard ? 1 : 0.95 + Math.random() * 0.15);
     this.hits++;
     this.renderRally();
     this.receiver = -hitter.side as Side;
@@ -774,6 +783,7 @@ export class Badminton {
     const lead = w.score - loser.score;
     const won = w.score >= m.to && (lead >= m.winBy || (m.cap !== null && w.score >= m.cap));
     this.phase = won ? 'over' : 'point';
+    sound.play(won ? 'jingle-win' : 'jingle-point');
     this.pointEndsAt = Date.now() + cfg.pointPauseMs;
     const gamePoint = w.score >= m.to - 1 && (lead >= m.winBy - 1 || (m.cap !== null && w.score >= m.cap - 1));
     const tied = lead === 0 && w.score >= m.to - 1;
@@ -848,6 +858,11 @@ export class Badminton {
       this.landedFx = true;
       this.puffs.burst(this.flight.to, now, cfg.sandBurst);
       this.shakeUntil = now + cfg.shakeMs;
+    }
+    // The shuttle lands: a soft thud in the sand, or it drops off the net.
+    if (this.flight && !this.landedSound && this.flight.progressAt(now) >= 1 && !this.pendingHit) {
+      this.landedSound = true;
+      sound.play(this.flight.intoNet ? 'shuttle-net' : 'shuttle-sand');
     }
     this.puffs.update(now, dt);
     this.venue.update(dt);
@@ -1324,6 +1339,7 @@ export class Badminton {
   /** A Perfect hit: the racket glows gold and the phone gives a short buzz. */
   private perfect(a: Athlete): void {
     a.glowUntil = Date.now() + TUNING.badminton.perfectGlowMs;
+    sound.play('sparkle', 0.7, 1.2);
     if (a.human) this.onCue?.(a.seat, 'perfect');
   }
 

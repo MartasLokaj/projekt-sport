@@ -316,3 +316,20 @@
   opacity: 0;
   pointer-events: none;
 }
+
+/* "Sound off" badge (M), bottom right over everything. */
+#mute-badge {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2500;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(10, 12, 40, 0.75);
+  color: #fff;
+  font: 600 14px/1.2 var(--cw-font, sans-serif);
+  pointer-events: none;
+}
+#mute-badge[hidden] {
+  display: none;
+}

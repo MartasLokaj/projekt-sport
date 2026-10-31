@@ -6,6 +6,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import type { BallResult, GameState, PlayerInfo, SwingProgress } from '../../shared/protocol.ts';
 import { TUNING } from '../../shared/tuning.ts';
+import { sound } from '../audio/sound.ts';
 import { applyCurve, applyRollingResistance, createBall, curveFromTwist, shotSpeed } from './ball.ts';
 import { ADDRESS_DISTANCE, Character, lookOf } from './character.ts';
 import { buildHole, HOLES, isInCup, loadKit, type BuiltHole, type Kit } from './course.ts';
@@ -116,6 +117,8 @@ export class Game {
   private readonly cameraTarget = new THREE.Vector3();
   /** The way in from the cube: 0 = camera high above, 1 = landed at its usual spot (see swoopIn). */
   private swoop = 1;
+  /** The ball's velocity one physics step ago, to hear it bounce off a border. */
+  private readonly lastVel = new THREE.Vector3();
   private readonly followDir = new THREE.Vector3(0, 0, 1);
 
   static async create(container: HTMLElement, hud: GameHud): Promise<Game> {
@@ -503,6 +506,8 @@ export class Game {
     const speed = shotSpeed(power);
     this.ball.setLinvel({ x: Math.sin(yaw) * speed, y: 0, z: Math.cos(yaw) * speed }, true);
     this.followDir.set(Math.sin(yaw), 0, Math.cos(yaw));
+    sound.play('golf-putt', 0.4 + 0.6 * Math.min(1, power / 100), 1.1 - 0.2 * Math.min(1, power / 100));
+    this.lastVel.set(Math.sin(yaw) * speed, 0, Math.cos(yaw) * speed);
     this.curve = curve;
     const player = this.active ? this.players.get(this.active) : undefined;
     if (player) {
@@ -523,6 +528,7 @@ export class Game {
       return;
     }
     if (p.y < TUNING.physics.outOfBoundsY) {
+      sound.play('golf-splash');
       this.showMessage(this.hole.lane.overWater(p.x, p.z) ? 'Splash! +1' : 'Out of bounds! +1', 1800);
       this.resetBall(this.lastRest);
       this.finishTurn('out');
@@ -530,6 +536,7 @@ export class Game {
     }
 
     const v = this.ball.linvel();
+    this.listenForBounce(v);
     const cup = this.hole.cup;
     const toCupX = cup.x - p.x;
     const toCupZ = cup.z - p.z;
@@ -538,6 +545,7 @@ export class Game {
       // Extremely close and slow: steer it into the cup instead of stopping right at the edge.
       const speed = Math.max(0.5, Math.hypot(v.x, v.z));
       this.ball.setLinvel({ x: (toCupX / toCup) * speed, y: v.y, z: (toCupZ / toCup) * speed }, true);
+      this.lastVel.set((toCupX / toCup) * speed, v.y, (toCupZ / toCup) * speed); // steered, not a bounce
       this.restTime = 0;
       return;
     }
@@ -554,10 +562,24 @@ export class Game {
     }
   }
 
+  /** A ball that suddenly changes direction hit a border (or the windmill): a wooden knock, louder when faster. */
+  private listenForBounce(v: { x: number; y: number; z: number }): void {
+    const a = TUNING.audio;
+    const before = Math.hypot(this.lastVel.x, this.lastVel.z);
+    const now = Math.hypot(v.x, v.z);
+    if (before > a.wallSpeed && now > 0.05) {
+      const turn = (this.lastVel.x * v.x + this.lastVel.z * v.z) / (before * now);
+      if (turn < 0.8) sound.play('golf-wall', Math.min(1, before / a.wallLoud), 0.9 + Math.random() * 0.2);
+    }
+    this.lastVel.set(v.x, v.y, v.z);
+  }
+
   private holed(): void {
     this.state = 'holed';
     const player = this.active ? this.players.get(this.active) : undefined;
     const strokes = player?.strokes ?? 0;
+    sound.play('golf-cup');
+    window.setTimeout(() => sound.play(strokes === 1 ? 'jingle-hole-in-one' : 'jingle-hole-in'), 250);
     const diff = strokes - this.hole.def.par;
     const name =
       strokes === 1 ? 'HOLE IN ONE!' : ({ [-2]: 'Eagle!', [-1]: 'Birdie!', 0: 'Par', 1: 'Bogey' } as Record<number, string>)[diff];

@@ -6,6 +6,7 @@ import { LobbyUi } from './hub/lobbyUi.ts';
 import { Badminton } from './badminton/Badminton.ts';
 import { Lab } from './lab/Lab.ts';
 import { Flash } from './ui/transition.ts';
+import { sound, type MusicName } from './audio/sound.ts';
 
 // The big screen. The lobby is Cube World: a cube floating in space with one game on each side,
 // the QR code to join, and the players' characters standing on top. "Play" asks the server to start
@@ -45,6 +46,17 @@ function showHowTo(on: boolean): void {
 document.getElementById('title-play')!.addEventListener('click', () => showTitle(false));
 document.getElementById('title-how')!.addEventListener('click', () => showHowTo(true));
 document.getElementById('how-close')!.addEventListener('click', () => showHowTo(false));
+for (const id of ['title-play', 'title-how', 'how-close']) {
+  document.getElementById(id)!.addEventListener('click', () => sound.play('ui-click'));
+}
+
+// M mutes all sound (remembered on this computer); a small badge shows it.
+const muteBadge = document.createElement('div');
+muteBadge.id = 'mute-badge';
+muteBadge.textContent = '🔇 Sound off · M';
+document.body.append(muteBadge);
+muteBadge.hidden = !sound.muted;
+sound.playMusic('lobby');
 lobbyScreen.classList.add('on-title');
 
 const scoresEl = document.getElementById('hud-scores')!;
@@ -80,6 +92,8 @@ function transition(steps: () => Promise<void>): void {
 function enterGame(id: string, show: () => void | Promise<void>): void {
   transition(async () => {
     hub?.select(id);
+    sound.play('ui-play');
+    sound.playMusic(id as MusicName);
     lobbyScreen.classList.add('diving');
     const dive = hub?.diveIn();
     // The flash starts while the camera is still flying, so the dive ends in white without stopping.
@@ -99,6 +113,7 @@ function leaveGame(id: string, hide: () => void): void {
   transition(async () => {
     await flash.cover();
     hide();
+    sound.playMusic('lobby');
     lobbyScreen.hidden = false;
     hub?.start();
     showTitle(false);
@@ -388,6 +403,10 @@ window.addEventListener('keydown', (e) => {
   // A focused button handles Enter and Space itself (keyboard users can Tab to it).
   if (e.target instanceof HTMLButtonElement && (e.key === 'Enter' || e.key === ' ')) return;
   if (transitioning) return; // keys wait while the camera dives in or pulls out
+  if (e.key === 'm' || e.key === 'M') {
+    muteBadge.hidden = !sound.toggleMute();
+    return;
+  }
   if (lobbyUi.kickOpen) {
     lobbyUi.handleKickKey(e);
     return;
@@ -396,7 +415,10 @@ window.addEventListener('keydown', (e) => {
   if (onTitle && !playing && !labOpen) {
     if (!howTo.hidden) {
       if (e.key === 'Escape' || e.key === 'Enter') showHowTo(false);
-    } else if (e.key === 'Enter') showTitle(false);
+    } else if (e.key === 'Enter') {
+      sound.play('ui-click');
+      showTitle(false);
+    }
     return;
   }
   if (labOpen) {
@@ -415,7 +437,10 @@ window.addEventListener('keydown', (e) => {
     else if (e.key === 'Escape') {
       // Esc lets go of the chosen game; with nothing chosen it goes back to the title menu.
       if (hub?.selected) hub.select(null);
-      else showTitle(true);
+      else {
+        sound.play('ui-back');
+        showTitle(true);
+      }
     } else if (e.key === 'Enter') {
       if (hub?.selected) startSelected();
       else hub?.select('minigolf');
@@ -429,7 +454,10 @@ window.addEventListener('keydown', (e) => {
 
 void Hub.create(document.getElementById('hub-canvas')!).then((created) => {
   hub = created;
-  hub.onSelect = (face) => lobbyUi.showGame(face);
+  hub.onSelect = (face) => {
+    lobbyUi.showGame(face);
+    if (!transitioning) sound.play(face ? 'ui-select' : 'ui-back');
+  };
   hub.showcase = onTitle;
   hub.setPlayers(players);
   lobbyUi.showGame(hub.selected);

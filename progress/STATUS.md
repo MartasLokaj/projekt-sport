@@ -537,6 +537,23 @@ body, round mitten hands, sturdier legs, chunky shoes).
 - Step 3: Quick start + Saved screen (+ the other phone screens in the dark look).
   Step 4: outfits per game + same-colour name tags (then drop the `colour_taken` refusal).
 
+### Sounds (K3 + game sounds) — built 2026-10-31 (user: "ano, stáhni"), waiting for the user's ears
+- Downloaded (user approved the list): Kenney Interface Sounds (0.80 MB zip), Impact Sounds (0.76 MB), Music Jingles
+  (1.18 MB) via the site's Download button (zips in the user's ~/Downloads); OpenGameArt CC0: Beach Ocean Waves
+  wave_01 (626 KB), Flowerbed Fields loop (lobby), Feel Good Island Loop (minigolf), Happy Ukelele Island Surfing Theme
+  (badminton). 20 picked sounds + 3 music tracks converted to AAC `.m4a` (`afconvert`) in `host/assets/audio/`
+  (4.2 MB, mostly music), credits in `host/assets/audio/CREDITS.md` + README. Sounds were picked by name and measured
+  loudness (Claude cannot listen) — the user should listen; swapping a file = re-convert from the Kenney zip.
+- `host/audio/sound.ts`: Web Audio; effects bus + music bus + master; music crossfades (`musicFadeMs`) and loops;
+  waves on the beach as single waves every 3.5–7 s with random pitch; starts after the first key/click; M mutes
+  (localStorage `cubeworld.muted`, badge "🔇 Sound off · M"). All levels in `TUNING.audio`.
+- Where: lobby music, title buttons click, side chosen / let go, Play (dive), player lands on the cube / leaves,
+  look-change sparkle; minigolf music, putt (louder + lower for strong shots), border knock (sudden turn of the ball,
+  louder when faster), cup + jingle (hole-in-one has its own), splash; badminton music + waves, racket hit, smash,
+  Super Smash jingle, shuttle lands in sand / falls off the net, point jingle, match win jingle, Perfect sparkle.
+- Checked in the dev browser: all files decode, every event fires in play (minigolf and CPU-vs-CPU badminton), mute.
+  Not done: phone sounds, a volume slider (only levels in tuning + M).
+
 ### Approvals 2026-10-31 (evening)
 - User: "je to mega dobré" — **K4 dive-in transition, the new badminton camera, the footwork change (stop short +
   reach, calmer runs) and the gentle return to the cube are approved.** "We'll work a lot on the graphics later."

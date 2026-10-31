@@ -6,6 +6,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import type { PlayerInfo } from '../../shared/protocol.ts';
+import { sound } from '../audio/sound.ts';
 import { TUNING } from '../../shared/tuning.ts';
 import { buildRacket } from '../badminton/court.ts';
 import { Character, lookOf } from '../game/character.ts';
@@ -313,6 +314,7 @@ export class Hub {
     if (this.time - guest.sparkledAt < e.sparkleEvery || guest.drop >= 0) return;
     guest.sparkledAt = this.time;
     this.burstAt(guest, e.sparklePieces);
+    sound.play('sparkle', 0.6, 1 + Math.random() * 0.2);
   }
 
   /** A player pressed Save & play in the character editor: their character waves. */
@@ -321,6 +323,7 @@ export class Hub {
     if (!guest) return;
     guest.character.play('wave');
     this.burstAt(guest, TUNING.hub.confettiPieces);
+    sound.play('sparkle');
   }
 
   private burstAt(guest: Guest, pieces: number): void {
@@ -477,6 +480,7 @@ export class Hub {
       const at = root.getWorldPosition(new THREE.Vector3());
       const up = new THREE.Vector3(0, 1, 0).applyQuaternion(root.parent!.getWorldQuaternion(new THREE.Quaternion()));
       this.confetti.burst(at.addScaledVector(up, 0.3), guest.player.colour, up);
+      sound.play('ui-join');
       guest.character.play('cheer');
     }
     const squash = after < 0.35 ? Math.sin((after / 0.35) * Math.PI) * 0.22 : 0;
@@ -646,6 +650,7 @@ export class Hub {
     const at = root.getWorldPosition(new THREE.Vector3());
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(root.parent.getWorldQuaternion(new THREE.Quaternion()));
     this.confetti.burst(at.addScaledVector(up, 0.3), guest.player.colour, up);
+    sound.play('ui-leave');
     this.leaving.push({ guest, t: 0 });
   }
 
