@@ -546,6 +546,30 @@ export const TUNING = {
       lungeFrontLeg: -1.15,
       lungeBackLeg: 0.95,
     },
+    /**
+     * The coach (host/badminton/coach.ts) learns each player's swings and adapts the game to them, after
+     * minSwings swings, from the last `memory` ones.
+     * - Timing: the right moment moves by timingShare of the player's median offset (early/late), at most
+     *   maxTimingShift ms.
+     * - Power: scaled so the player's strong swing (their 80th percentile) gives strongPower, within powerScale
+     *   (never weaker than the phone says).
+     * - Aim: scaled so their wide swing (80th percentile of |aim|) gives wideAim, within aimScale.
+     * - Wi-Fi: when 1 in 10 swings arrives later than normalDelayMs, the game waits that much longer before
+     *   calling a miss (at most maxExtraGraceMs). Measured on real phones: median ~50 ms, 1 in 10 over ~300 ms.
+     */
+    coach: {
+      enabled: true,
+      minSwings: 5,
+      memory: 15,
+      timingShare: 0.6,
+      maxTimingShift: 120,
+      strongPower: 85,
+      powerScale: [1, 1.5],
+      wideAim: 0.75,
+      aimScale: [1, 1.6],
+      normalDelayMs: 150,
+      maxExtraGraceMs: 250,
+    },
     /** Contact height decides the stroke: from overheadFrom up = overhead, from driveFrom up = flat drive, lower = lift (m). */
     overheadFrom: 1.7,
     driveFrom: 1.0,

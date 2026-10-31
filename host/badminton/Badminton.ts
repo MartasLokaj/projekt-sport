@@ -5,6 +5,7 @@ import { Character } from '../game/character.ts';
 import { buildRacket, buildShuttle } from './court.ts';
 import { buildBeach, type Venue } from './venue/beach.ts';
 import { Birds, SandPuffs, Trail } from './effects.ts';
+import { Coach } from './coach.ts';
 import type { BadmintonCue } from '../../shared/protocol.ts';
 import { findContact, makeShot, type Contact, type Flight, type ShotKind } from './shuttle.ts';
 
@@ -163,6 +164,12 @@ export class Badminton {
   private readonly birds = new Birds(TUNING.badminton.birds);
   /** Tells a phone something (e.g. "Smash chance!"); set by host/main.ts. */
   onCue: ((side: Side, cue: BadmintonCue) => void) | null = null;
+  /** How each judged swing went, for the outcome log (set by host/main.ts). */
+  onOutcome: ((outcome: Record<string, unknown>) => void) | null = null;
+  /** Learns each player's timing, power, aim and Wi-Fi delay and adapts the game to them. */
+  readonly coach = new Coach();
+  /** The swing being judged now (raw values from the phone), until its verdict is known. */
+  private judging: { athlete: Athlete; outcome: Record<string, unknown> } | null = null;
 
   constructor(
     private readonly container: HTMLElement,
@@ -246,13 +253,32 @@ export class Badminton {
 
   /**
    * A swing from the phone playing `side`. at = the exact hit time (server clock = this Mac's clock),
-   * power 0..100, aim -1..1.
+   * power 0..100, aim -1..1, receivedAt = when the swing arrived here (for the coach's Wi-Fi delay).
    */
-  onSwing(side: Side, at: number, power: number, aim: number, short = false): void {
+  onSwing(side: Side, at: number, power: number, aim: number, short = false, receivedAt?: number): void {
     const cfg = TUNING.badminton;
     const a = this.athlete(side);
     if (!a.human) return;
     const now = Date.now();
+    // The coach adapts the swing to this player (see coach.ts); the raw values go to the outcome log.
+    if (receivedAt !== undefined) this.coach.noteDelay(a.name, receivedAt - at);
+    const advice = this.coach.advice(a.name);
+    const raw = { at, power, aim };
+    power = Math.min(100, power * advice.powerScale);
+    aim = THREE.MathUtils.clamp(aim * advice.aimScale, -1, 1);
+    at -= advice.timingShift;
+    const note = (offset: number): void => {
+      this.coach.noteTiming(a.name, offset);
+      this.judging = {
+        athlete: a,
+        outcome: {
+          player: a.name, offsetMs: Math.round(offset), shiftMs: Math.round(advice.timingShift),
+          powerRaw: raw.power, power: Math.round(power), aimRaw: raw.aim, aim: Number(aim.toFixed(2)),
+          delayMs: receivedAt === undefined ? null : receivedAt - raw.at, short, swingsLearned: advice.swings,
+          stroke: this.contact?.stroke ?? null, shot: this.flight?.kind ?? null,
+        },
+      };
+    };
     if (this.phase === 'serve' && this.server === side) {
       this.serve(a, now, power, aim, short);
       return;
@@ -261,6 +287,7 @@ export class Badminton {
     // A swing that arrives after the miss was already called: if it was really late, the character still dives.
     const missed = this.missedContact;
     if (missed && missed.side === side && at - missed.time > cfg.veryLateMs && at - missed.time < 1200) {
+      note(raw.at - missed.time);
       this.missedContact = null;
       this.lateMiss(a, now, at - missed.time);
       return;
@@ -269,6 +296,7 @@ export class Badminton {
     const contact = this.contact;
     const off = at - contact.time;
     const { early, late } = this.hitWindow();
+    note(raw.at - contact.time);
     // A strong overhead swing at a wobble is a Super Smash try: badly timed, the character falls.
     const there = this.flight.positionAt(this.flight.progressAt(at));
     const superTry = this.flight.kind === 'wobble' && !short && power >= cfg.superSmashPower && strokeAt(there.y) === 'overhead';
@@ -327,6 +355,7 @@ export class Badminton {
     if (superTry && there.y >= cfg.superSmashMinHeight) {
       this.hit(a, power, aim, quality, stroke, when, false, false, true);
       this.perfect(a);
+      this.judged(a, 'Super Smash!', 'perfect');
       return;
     }
     const kind = this.hit(a, power, aim, quality, stroke, when, short, offGood || weak);
@@ -559,6 +588,12 @@ export class Badminton {
     return true;
   }
 
+  /** Extra wait before calling a miss: for a slow Wi-Fi, and for a player whose right moment the coach moved later. */
+  private coachGrace(a: Athlete): number {
+    const advice = this.coach.advice(a.name);
+    return advice.extraGrace + Math.max(0, advice.timingShift);
+  }
+
   /** The hit window for the shuttle now coming (ms early, ms late): tighter against a Super Smash. */
   private hitWindow(): { early: number; late: number } {
     const cfg = TUNING.badminton;
@@ -668,7 +703,7 @@ export class Badminton {
           if (now < receiver.busyUntil) this.miss();
           else this.cpuTurn(receiver, now);
         }
-        else if (receiver.human && now > this.contact.time + this.hitWindow().late + cfg.lateGraceMs) {
+        else if (receiver.human && now > this.contact.time + this.hitWindow().late + cfg.lateGraceMs + this.coachGrace(receiver)) {
           this.showPop(receiver, 'Missed!');
           this.tip(receiver, 'late');
           this.miss();
@@ -1009,7 +1044,6 @@ export class Badminton {
    * Only for players (not the computer).
    */
   private showPop(a: Athlete, text: string): void {
-    if (!a.human || !TUNING.badminton.screenTexts) return;
     const tone = /Perfect/.test(text)
       ? 'perfect'
       : /Too|Way|Missed|missed|failed|Out of/.test(text)
@@ -1017,11 +1051,23 @@ export class Badminton {
         : /Wobble|Stretch/.test(text)
           ? 'wobble'
           : 'good';
+    this.judged(a, text, tone);
+    if (!a.human || !TUNING.badminton.screenTexts) return;
     a.pop.textContent = text;
     a.pop.className = `badminton-pop ${tone}`;
     void a.pop.offsetWidth; // restart the pop animation
     a.pop.classList.add('on');
     a.popUntil = Date.now() + TUNING.badminton.popMs;
+  }
+
+  /** The verdict for the swing being judged: a hit teaches the coach its power and aim; log the outcome. */
+  private judged(a: Athlete, verdict: string, tone: string): void {
+    const j = this.judging;
+    if (!j || j.athlete !== a) return;
+    this.judging = null;
+    const o = j.outcome;
+    if (tone !== 'miss') this.coach.noteHit(a.name, o.powerRaw as number, o.aimRaw as number);
+    this.onOutcome?.({ ...o, verdict, hit: tone !== 'miss', at: Date.now() });
   }
 
   /** After a miss, now and then a tip: "Wait for it!" (too early) or "Swing sooner!" (too late). */

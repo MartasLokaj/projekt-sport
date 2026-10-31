@@ -46,6 +46,13 @@ lobby.onBadmintonSwing = (entry) => {
     .then(() => appendFile(SWING_LOG, JSON.stringify(entry) + '\n'))
     .catch((err) => console.error('Could not save the swing log:', err));
 };
+// How the game judged each swing in a match (timing offset, the coach's corrections, the verdict).
+const OUTCOME_LOG = 'logs/badminton-outcomes.jsonl';
+lobby.onBadmintonOutcome = (entry) => {
+  void mkdir('logs', { recursive: true })
+    .then(() => appendFile(OUTCOME_LOG, JSON.stringify(entry) + '\n'))
+    .catch((err) => console.error('Could not save the outcome log:', err));
+};
 
 // WebSocket hub. Vite has its own WebSocket for reloading, so only take ours.
 const wss = new WebSocketServer({ noServer: true });

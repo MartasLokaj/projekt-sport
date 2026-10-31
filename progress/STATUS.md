@@ -307,7 +307,7 @@ running log of where we are, what the user decided, and what comes next).
     running there".** Agreed plan: step 1 footwork, step 2 a per-player "coach" (learns each player's timing
     offset, swing strength, aim spread and Wi-Fi delay; adapts after ~5 hits; outcome of each hit added to the
     swing log). User: "start with running, and make it do lunges like real badminton".
-  - **Footwork step — built, waiting for the user's phone test.** `TUNING.badminton.footwork`. After a shot the
+  - **Footwork step — approved by the user on phones ("Běhá a dělá výpady").** `TUNING.badminton.footwork`. After a shot the
     hitter goes straight to a base: deeper (`baseDepthVsNet` 6.2) when the other side meets the shuttle near the
     net (`frontContactDepth` 3.5) or low (a lift is coming), else `homeDepth`; shifted towards the other player's
     side (`baseFollowX`). Split-step hop as the other side hits (as long as the reaction time). Legs now have hip
@@ -317,8 +317,16 @@ running log of where we are, what the user decided, and what comes next).
     leg forward, body low, leaning towards the shuttle, held `lungeHoldMs` after the hit. Checked in the dev
     browser (CPU vs CPU, pictures from the side): drop hitters are back at 6.2 m before the reply, lunges at the net.
     Note: the app's browser pane can't open the self-signed https server; tested with a temporary http copy.
-  - Next: user tests footwork → step 2 coach (plan already agreed, files: new `host/badminton/coach.ts`,
-    `Badminton.ts`, `shared/tuning.ts`, swing log in `server/index.ts`).
+  - **Coach step — built, waiting for the user's phone test.** `host/badminton/coach.ts`, tuning
+    `TUNING.badminton.coach`. Per player name (kept while the server runs), from the last `memory` 15 swings,
+    after `minSwings` 5: right moment moved by `timingShare` 0.6 of the median early/late offset (max
+    `maxTimingShift` 120 ms); power scaled so their strong swing (80th pct) gives `strongPower` 85 (×1..1.5);
+    aim scaled so their wide swing gives `wideAim` 0.75 (×1..1.6); miss called later by the 90th-pct Wi-Fi delay
+    over `normalDelayMs` 150 (max 250 ms) and by a positive timing shift. Real data: delay median ~50 ms but 1 in 10
+    over ~300 ms; aim 80th pct only 0.5–0.6. Each judged swing → `logs/badminton-outcomes.jsonl` (host message
+    `badminton_outcome`): raw offset, shift, raw/adapted power and aim, delay, verdict. Console:
+    `badminton.coach.report()`. Scripted test (always 100 ms early): after 8 swings shift −53 ms, power 40→60.
+  - Next: user tests the coach → read `logs/badminton-outcomes.jsonl` to tune → B4 (2v2).
 
 ### GitHub and the cloud (2026-10-31)
 - Project is on GitHub: **private** repo `MartasLokaj/projekt-sport` (remote `origin`, branch `main`). `gh` CLI is in

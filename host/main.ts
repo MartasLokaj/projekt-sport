@@ -112,6 +112,7 @@ function showLab(on: boolean): void {
         const playerId = badmintonIds[side === 1 ? 0 : 1];
         if (playerId) send({ type: 'badminton_cue', playerId, cue });
       };
+      badminton.onOutcome = (outcome) => send({ type: 'badminton_outcome', outcome });
       if (import.meta.env.DEV) Object.assign(window, { badminton }); // for debugging in the browser console
       badminton.start(...badmintonPlayers(), lobbyUi.cpuLevel, lobbyUi.matchLength);
     } else lab.start();
@@ -184,7 +185,7 @@ function connect(): void {
     else if (msg.type === 'player_badminton_swing') {
       if (!badmintonScreen.hidden) {
         const side = msg.playerId === badmintonIds[0] ? 1 : msg.playerId === badmintonIds[1] ? -1 : null;
-        if (side !== null && !msg.ignored) badminton?.onSwing(side, msg.at, msg.power, msg.aim, msg.short);
+        if (side !== null && !msg.ignored) badminton?.onSwing(side, msg.at, msg.power, msg.aim, msg.short, msg.receivedAt);
       } else lab.onSwing(msg);
     }
   });

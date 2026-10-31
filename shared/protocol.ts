@@ -166,7 +166,9 @@ export type ClientMessage =
   | { type: 'clock_ping'; t: number }
   | ({ type: 'badminton_swing' } & BadmintonSwing)
   /** From the host: tell one player's phone something (it shows it and vibrates on Android). */
-  | { type: 'badminton_cue'; playerId: string; cue: BadmintonCue };
+  | { type: 'badminton_cue'; playerId: string; cue: BadmintonCue }
+  /** From the host: how a badminton swing was judged (timing, the coach's corrections), saved for tuning. */
+  | { type: 'badminton_outcome'; outcome: Record<string, unknown> };
 
 /** Sent by the server. */
 export type ServerMessage =

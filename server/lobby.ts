@@ -55,6 +55,8 @@ export class Lobby {
   private lab = false;
   /** Called for every badminton swing, so the server can save it for tuning. */
   onBadmintonSwing: ((entry: object) => void) | null = null;
+  /** Called with how the host judged each badminton swing (saved to the outcome log). */
+  onBadmintonOutcome: ((entry: object) => void) | null = null;
   private readonly isConnected = (id: string): boolean => this.seats.get(id)?.socket != null;
 
   constructor(
@@ -174,6 +176,12 @@ export class Lobby {
         if (!this.hosts.has(ws) || !['smash_chance', 'super_smash', 'perfect'].includes(msg.cue)) return;
         const socket = this.seats.get(msg.playerId)?.socket;
         if (socket) send(socket, { type: 'badminton_cue', cue: msg.cue });
+        return;
+      }
+      case 'badminton_outcome': {
+        if (!this.hosts.has(ws) || typeof msg.outcome !== 'object' || msg.outcome === null) return;
+        if (JSON.stringify(msg.outcome).length > 2000) return;
+        this.onBadmintonOutcome?.(msg.outcome);
         return;
       }
       case 'kick_player': {
