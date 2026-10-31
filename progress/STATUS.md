@@ -415,7 +415,9 @@ running log of where we are, what the user decided, and what comes next).
     a Perfect (the frame still glows gold). Hub (`host/hub/Hub.ts`) uses the same `buildRacket`.
   - User chose the **white (classic) shuttle**.
 
-### Badminton B4 — 2 v 2 (built 2026-10-31, user: "Bílý, postav B4"), waiting for the phone test
+### Badminton B4 — 2 v 2 (built 2026-10-31, user: "Bílý, postav B4") — **NOT TESTED (NEVYZKOUŠENO)**
+- **The user cannot test it now (not enough phones). Come back to it when they have 3–4 phones; do not treat B4
+  as approved until then.**
 - `Badminton.ts` now has 4 seats (`seats`; 0/2 near side, 1/3 far side; `near`/`far` = seats 0/1 = team captains:
   camera, score, half of the screen); `athletes` = the ones in play (2, or 4 in 2 v 2). `start(players[], level,
   length, doubles)`, `onSwing(seat, …)`, `onCue(seat, cue)`.
@@ -516,7 +518,7 @@ body, round mitten hands, sturdier legs, chunky shoes).
 
 ## Next action
 Summary of what is left, given to the user on 2026-10-31 (waiting for them to pick what comes first):
-- **Badminton:** phone test of the coach (then tune from `logs/badminton-outcomes.jsonl`); beach venue steps 2–4
+- **Badminton:** B4 2 v 2 built but NOT TESTED (waiting for 3–4 phones); phone test of the coach (then tune from `logs/badminton-outcomes.jsonl`); beach venue steps 2–4
   (beach outfits, shuttle look with 2 options, rackets); B4 2v2; sounds/music; intro + results screen (K4);
   real 60 fps check on the MacBook Air with two phones; later: Badminton face on the hub (B5), other venues.
 - **Minigolf:** J2 (holes 6 Castle, 7 Banked U-turn) and J3 (8 Bridge, 9 Finale), then `HOLE_COUNT` 9 and maybe a
