@@ -593,6 +593,7 @@ export class Badminton {
     }
     const spot = contact.position.clone();
     spot.x -= receiver.handSign * cfg.reach[contact.stroke];
+    spot.z += receiver.side * cfg.reachBack[contact.stroke]; // a little short of it, on its own side
     spot.y = 0;
     this.moveTo(receiver, spot, contact.time - cfg.jumpRiseMs - 60);
     // The computer jumps by itself; a player's character only jumps with the player's swing (see onSwing).
@@ -938,9 +939,11 @@ export class Badminton {
       const k = 1 - (a.splitUntil - now) / Math.max(1, cfg.reactionMs);
       a.bounce = Math.sin(THREE.MathUtils.clamp(k, 0, 1) * Math.PI) * fw.splitHop;
     } else if (distance > 0.02) {
-      const timeLeft = a.deadline === null ? 1 : Math.max(0.05, (a.deadline - now) / 1000);
       const assist = 1 + cfg.reachAssist;
-      const speed = Math.min(cfg.maxRunSpeed * assist, Math.max(cfg.runSpeed * assist, distance / timeLeft));
+      // To the shuttle: just fast enough to be there a moment early (calm when there is time); elsewhere: a run.
+      const timeLeft = a.deadline === null ? 1 : Math.max(0.05, ((a.deadline - now) / 1000) * fw.arriveShare);
+      const least = a.deadline === null ? cfg.runSpeed * assist : fw.calmRunSpeed;
+      const speed = Math.min(cfg.maxRunSpeed * assist, Math.max(least, distance / timeLeft));
       const dir = toTarget.normalize();
       a.wrapper.position.addScaledVector(dir, Math.min(distance, speed * dt));
       // Faster running = quicker, longer steps; a puff of sand at each step when really running.

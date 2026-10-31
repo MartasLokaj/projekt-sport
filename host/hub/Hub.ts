@@ -274,7 +274,7 @@ export class Hub {
     return new Promise((done) => (this.dive = { t: 0, seconds: TUNING.transition.diveSeconds, out: false, done }));
   }
 
-  /** Back from a game: the camera starts close to that game's side and pulls back out to the whole cube. */
+  /** Back from a game: the camera starts a little closer to that game's side and settles back to the whole cube. */
   pullOut(id: string): void {
     this.select(id);
     if (this.chosen < 0) return;
@@ -443,7 +443,7 @@ export class Hub {
     const dive = this.dive!;
     dive.t = Math.min(1, dive.t + dt / dive.seconds);
     // In: slow start, fast finish, like a dive. Out: fast start, gentle stop.
-    const near = dive.out ? (1 - dive.t) ** 3 : dive.t ** 3;
+    const near = dive.out ? TUNING.transition.pullOutFrom * (1 - dive.t) ** 3 : dive.t ** 3;
     if (this.chosen >= 0) {
       const side = this.faces[this.chosen].getWorldPosition(new THREE.Vector3());
       const from = this.camera.position.clone();

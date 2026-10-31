@@ -188,7 +188,7 @@ up to date too.
     flash (`host/ui/transition.ts` `Flash`, `#scene-flash` in `theme.css`) starts `flashInMs` before the dive ends,
     the game is swapped in behind it (minigolf waits for the course to load), then the game's camera glides down from
     high above/behind (`Game.swoopIn`, `Badminton.swoopIn`; badminton ignores swings and delays the computer's serve
-    until it lands). Back to the cube: flash → `Hub.pullOut(id)` (camera starts at the side and pulls out). Steps
+    until it lands). Back to the cube: flash → `Hub.pullOut(id)` (user: "ugly zoomed in" → now starts only `pullOutFrom` 0.15 of the way to the side and settles to the normal view of the whole cube). Steps
     run in a queue in `host/main.ts` (`enterGame` / `leaveGame`), host keys wait meanwhile. The Swing Lab (L) opens
     without a dive. Tuning `TUNING.transition`. Checked in the dev browser (fake server): minigolf and badminton in
     and out, camera paths, no serve during the swoop, no console errors.
@@ -459,6 +459,13 @@ up to date too.
   `keepInView`: if the team's feet/heads or the shuttle would leave the picture (margin `cameraFrameMargin`), the
   view widens up to `cameraFovMax` 72, then narrows back slowly. Measured after: 0 of 537 frames with the shuttle or
   feet out (full screen), split screen 2 of 459 shuttle frames. Waiting for the user's look.
+- **User (2026-10-31): "not bad, I see everything; but I don't like how fast he goes forward — keep a little
+  distance and just reach out with the racket".** The receiver now stops short of the contact on its own side
+  (`reachBack` overhead 0.15 / drive 0.5 / lift 0.8 m) and reaches with the lunge; running to the shuttle goes just
+  fast enough to arrive after `footwork.arriveShare` 0.85 of the time left, at least `footwork.calmRunSpeed` 3.5 m/s
+  (before: always at least `runSpeed`). Measured CPU vs CPU with many drops: a third less time running netwards,
+  fastest 10 % of the forward running 12.1 → 9.6 m/s (the median stays ~7 m/s: `findContact` still picks the earliest
+  reachable point, approved earlier). Side-view pictures: lunge with the racket reaching out, a step short of the shuttle.
 - Lower arcs (same flight times): serve apex 3.8, clear 4.0, lift 4.2, wobble 3.6. Overhead contacts still at
   ~3 m high, 6–6.7 m from the net.
 - Shuttle trail is now a glowing streak (two crossed ribbons, widest at the shuttle, fading to the tail; additive),

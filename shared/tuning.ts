@@ -461,7 +461,11 @@ export const TUNING = {
     swoopSeconds: 1.6,
     swoopHeight: 9,
     swoopBack: 6,
-    /** Back to the cube: the camera starts close to the side and pulls back out (seconds). */
+    /**
+     * Back to the cube: the camera starts this share of the way towards the side (0 = the normal view of the whole
+     * cube, 1 = right at the side) and settles back to the normal view (seconds).
+     */
+    pullOutFrom: 0.15,
     pullOutSeconds: 1.1,
   },
 
@@ -589,8 +593,12 @@ export const TUNING = {
      * - Lunge (výpad): a shuttle taken below overhead height closer than lungeDepth to the net, or a stretch
      *   (dive reach): the last step becomes a deep lunge, racket leg forward, body low and leaning towards the shuttle. It starts within lungeStartDistance
      *   (m) of the spot and lungeLeadMs before the contact, and is held lungeHoldMs after the hit.
+     * - Pace: running to the shuttle, the character goes just fast enough to get there after arriveShare of the time
+     *   left, but at least calmRunSpeed (m/s) — no sprinting when there is time.
      */
     footwork: {
+      calmRunSpeed: 3.5,
+      arriveShare: 0.85,
       baseDepthVsNet: 6.2,
       frontContactDepth: 3.5,
       baseFollowX: 0.3,
@@ -639,6 +647,11 @@ export const TUNING = {
     driveFrom: 1.0,
     /** How far beside the shuttle the character stands for each stroke, so the racket meets it (m). */
     reach: { overhead: 0.35, drive: 0.8, lift: 0.6 },
+    /**
+     * How far short of the shuttle the character stops, on its own side (m): it keeps a little distance and
+     * reaches out with the racket (and a lunge near the net) instead of running right under it.
+     */
+    reachBack: { overhead: 0.15, drive: 0.5, lift: 0.8 },
     /**
      * A smash is only possible from the back of the court: an overhead hit hard (power >= smashPower) at least
      * this far from the net (m). Closer to the net a hard overhead is a clear.
