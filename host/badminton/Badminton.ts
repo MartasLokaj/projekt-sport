@@ -3,7 +3,7 @@ import { SKIN_TONES, type PlayerInfo } from '../../shared/protocol.ts';
 import { TUNING } from '../../shared/tuning.ts';
 import { Character } from '../game/character.ts';
 import { buildCourt, buildRacket, buildShuttle } from './court.ts';
-import { SandPuffs, Trail } from './effects.ts';
+import { Birds, SandPuffs, Trail } from './effects.ts';
 import type { BadmintonCue } from '../../shared/protocol.ts';
 import { findContact, makeShot, type Contact, type Flight, type ShotKind } from './shuttle.ts';
 
@@ -17,7 +17,8 @@ import { findContact, makeShot, type Contact, type Flight, type ShotKind } from 
 //   (judged with the phone's exact hit time, so Wi-Fi delay does not matter). Closer = better shot.
 // - Aim: the direction of the swing (left / straight / right).
 // - Shot type comes from where the character meets the shuttle (see findContact).
-// - Rally scoring: every rally gives a point, the winner serves, first to pointsToWin.
+// - Rally scoring: every rally gives a point, the winner serves; the match length (Quick / Normal / Long) is
+//   chosen in the lobby. Long rallies escalate: a hit counter, seagulls, a fire trail, a "Rally ×N!" at the end.
 // - SHORT button on the phone (Shift on the Mac): a drop shot just over the net, or a short serve.
 // - A bad hit (too weak, timing outside the Good part, or a stretch) becomes a slow, wobbly "wobble" shot with
 //   a wavy trail: the other side's chance. Only a swing far too late makes the character dive and fall in the
@@ -83,6 +84,9 @@ export type BadmintonHud = {
   popFar: HTMLElement;
   /** "CPU: Normal" next to the score, in a match against the computer. */
   level: HTMLElement;
+  /** The rally hit counter in the corner of each half (near, far). */
+  rallyNear: HTMLElement;
+  rallyFar: HTMLElement;
 };
 
 type Phase = 'serve' | 'rally' | 'point' | 'over';
@@ -115,8 +119,11 @@ export class Badminton {
   private decided = false;
   /** Super Smashes so far in this rally (each next one is faster), and whether the last one's landing burst played. */
   private superChain = 0;
-  /** Rallies played so far (for spacing out the tips). */
+  /** Rallies played so far (for spacing out the tips), and hits in the rally now (the serve counts). */
   private rallies = 0;
+  private hits = 0;
+  /** The match length (chosen in the lobby). */
+  private length: keyof typeof TUNING.badminton.matchLengths = TUNING.badminton.matchLength;
   /** The computer's difficulty (keys 1 / 2 / 3). */
   private level: keyof typeof TUNING.badminton.cpuLevels = TUNING.badminton.cpuLevel;
   private landedFx = false;
@@ -141,6 +148,7 @@ export class Badminton {
   private readonly keys = new Set<string>();
   private readonly trail = new Trail();
   private readonly puffs = new SandPuffs(TUNING.badminton.sandColour);
+  private readonly birds = new Birds(TUNING.badminton.birds);
   /** Tells a phone something (e.g. "Smash chance!"); set by host/main.ts. */
   onCue: ((side: Side, cue: BadmintonCue) => void) | null = null;
 
@@ -173,7 +181,7 @@ export class Badminton {
     this.shadow.rotation.x = -Math.PI / 2;
     this.shuttle.scale.setScalar(cfg.shuttleScale);
     this.shadow.scale.setScalar(cfg.shuttleScale);
-    this.scene.add(this.shuttle, this.shadow, this.trail.mesh, this.puffs.group);
+    this.scene.add(this.shuttle, this.shadow, this.trail.mesh, this.puffs.group, this.birds.group);
 
     this.near = this.makeAthlete(1, hud.feedbackNear, hud.popNear);
     this.far = this.makeAthlete(-1, hud.feedbackFar, hud.popFar);
@@ -185,8 +193,14 @@ export class Badminton {
    * Starts a new match: near = the first phone's player, far = the second phone's player or null for the
    * computer, which plays at `level` (chosen in the lobby; keys 1 2 3 still change it during the match).
    */
-  start(near: PlayerInfo | null, far: PlayerInfo | null, level: keyof typeof TUNING.badminton.cpuLevels = this.level): void {
+  start(
+    near: PlayerInfo | null,
+    far: PlayerInfo | null,
+    level: keyof typeof TUNING.badminton.cpuLevels = this.level,
+    length: keyof typeof TUNING.badminton.matchLengths = this.length,
+  ): void {
     this.level = level;
+    this.length = length;
     this.setPlayers(near, far);
     this.newMatch();
     this.snapAthletes();
@@ -327,6 +341,8 @@ export class Badminton {
     this.pendingHit = null;
     this.superChain = 0;
     this.rallies++;
+    this.hits = 0;
+    this.renderRally();
     for (const a of [this.near, this.far]) {
       a.down = null;
       a.busyUntil = 0;
@@ -424,6 +440,8 @@ export class Badminton {
     const cfg = TUNING.badminton;
     this.flight = flight;
     this.landedFx = false;
+    this.hits++;
+    this.renderRally();
     this.receiver = -hitter as Side;
     const receiver = this.athlete(this.receiver);
     this.moveTo(this.athlete(hitter), new THREE.Vector3(0, 0, hitter * cfg.homeDepth), null);
@@ -575,14 +593,19 @@ export class Badminton {
     this.server = winner;
     this.renderScore();
     const cfg = TUNING.badminton;
-    const won = w.score >= cfg.pointsToWin && w.score - loser.score >= cfg.winBy;
+    const m = cfg.matchLengths[this.length];
+    const lead = w.score - loser.score;
+    const won = w.score >= m.to && (lead >= m.winBy || (m.cap !== null && w.score >= m.cap));
     this.phase = won ? 'over' : 'point';
     this.pointEndsAt = Date.now() + cfg.pointPauseMs;
-    const gamePoint = w.score >= cfg.pointsToWin - 1 && w.score - loser.score >= cfg.winBy - 1;
-    const tied = w.score === loser.score && w.score >= cfg.pointsToWin - 1;
+    const gamePoint = w.score >= m.to - 1 && (lead >= m.winBy - 1 || (m.cap !== null && w.score >= m.cap - 1));
+    const tied = lead === 0 && w.score >= m.to - 1;
+    const lastPoint = tied && m.cap !== null && w.score === m.cap - 1;
+    const rally = this.hits >= cfg.rallyThresholds.celebrate ? `\nRally ×${this.hits}!` : '';
     this.hud.message.textContent = won
-      ? `${w.name} wins! ${this.near.score} : ${this.far.score}\nEnter: play again · Esc: back to the cube`
-      : `Point to ${w.name}!${tied ? '\nDeuce: win by 2' : gamePoint ? '\nGame point!' : ''}`;
+      ? `${w.name} wins! ${this.near.score} : ${this.far.score}${rally}\nEnter: play again · Esc: back to the cube`
+      : `Point to ${w.name}!${rally}${lastPoint ? '\nNext point wins!' : tied ? '\nDeuce: win by 2' : gamePoint ? '\nGame point!' : ''}`;
+    this.hud.message.classList.toggle('long-rally', rally !== '');
     this.hud.message.hidden = false;
     w.character.play('cheer');
     loser.character.play('slump');
@@ -624,9 +647,13 @@ export class Badminton {
 
     this.updateShuttle(now);
     const flying = this.phase === 'rally' && !!this.flight && this.flight.progressAt(now) < 1 && !this.pendingHit;
-    const trailKind = flying ? this.flight!.kind : null;
-    const trailColour = trailKind === 'superSmash' ? cfg.superSmashTrailColour : cfg.wobbleTrailColour;
-    this.trail.update(this.shuttle.position, now, trailKind === 'wobble' || trailKind === 'superSmash', trailColour, cfg.trailMs);
+    // Each shot has its own trail; in a fiery rally every shot except a wobble or a Super Smash burns.
+    const kind = this.flight?.kind;
+    const fiery = this.hits >= cfg.rallyThresholds.fire && kind !== 'wobble' && kind !== 'superSmash';
+    const style = !kind ? cfg.trails.clear : fiery ? cfg.fireTrail : cfg.trails[kind];
+    this.trail.update(this.shuttle.position, now, flying, style.colour, style.ms);
+    const rallyOn = this.phase === 'rally' || this.phase === 'point';
+    this.birds.update(dt, rallyOn && this.hits >= cfg.rallyThresholds.birds, this.hits >= cfg.rallyThresholds.fire);
     // A Super Smash landing: a big sand burst and a shake.
     if (this.flight?.kind === 'superSmash' && !this.landedFx && this.flight.progressAt(now) >= 1) {
       this.landedFx = true;
@@ -912,6 +939,22 @@ export class Badminton {
     a.feedback.hidden = false;
     a.feedback.classList.toggle('super', big);
     a.feedbackUntil = Date.now() + (big ? 1800 : 1400);
+  }
+
+  /** "Rally 7" in the corner of each player's half, from rallyThresholds.show hits; hotter colours as it grows. */
+  private renderRally(): void {
+    const cfg = TUNING.badminton.rallyThresholds;
+    for (const [el, show] of [
+      [this.hud.rallyNear, true],
+      [this.hud.rallyFar, this.far.human],
+    ] as const) {
+      el.hidden = !show || this.hits < cfg.show;
+      if (el.hidden) continue;
+      el.textContent = this.hits >= cfg.fire ? `🔥 Rally ${this.hits}` : `Rally ${this.hits}`;
+      el.className = `badminton-rally${this.hits >= cfg.fire ? ' fire' : this.hits >= cfg.birds ? ' hot' : ''}`;
+      void el.offsetWidth; // restart the bump
+      el.classList.add('bump');
+    }
   }
 
   private renderScore(): void {

@@ -278,7 +278,15 @@ running log of where we are, what the user decided, and what comes next).
   - User: "good, but I want the difficulty already where I pick Versus CPU or 1 v 1" → done: the Versus CPU mode row
     in the lobby card has Easy / Normal / Pro (`GameMode.levels`, `LobbyUi.cpuLevel`, keys 1 2 3 in the lobby too);
     `Badminton.start(near, far, level)` uses it (keys 1 2 3 still work during the match).
-  - Next: user tests → step 5 (rally escalation, shot trails by type, match options) — plan first.
+  - **Mechanics step 5 — built (user: "ano jdeme na to"), waiting for the test.** Rally hits counter (`hits`,
+    serve counts) in the top-left of each half from `rallyThresholds.show` 3, orange from `birds` 5 (seagulls
+    `Birds` in `effects.ts` circle the court), red "🔥" + fire trail on every shot (except wobble / Super Smash)
+    from `fire` 10, "Rally ×N!" under the point message from `celebrate` 5. Trails by shot type (`trails`,
+    `fireTrail`). Match length in the lobby card's Match row: Quick (to 4, win by 2) / Normal (to 11, win by 2,
+    cap 15) / Long (to 21, win by 2, cap 30) (`matchLengths`, `FaceInfo.matchLengths`, mode detail "{length}",
+    `Badminton.start(…, level, length)`); messages "Game point!", "Deuce: win by 2", "Next point wins!" (at the
+    cap). Music / louder waves wait for sounds in B5 (none yet). Scripted: 11:9 wins, 15:14 wins by the cap.
+  - Next: user tests step 5 → B4 (2v2) — plan first.
 
 ### GitHub and the cloud (2026-10-31)
 - Project is on GitHub: **private** repo `MartasLokaj/projekt-sport` (remote `origin`, branch `main`). `gh` CLI is in

@@ -171,7 +171,7 @@ Status: decisions so far are recorded here. Do not start building Badminton unti
 **Proposed (user agreed in principle, details to tune)**
 - Modes: 1v1, 2v2 and 1 player vs CPU (CPU difficulty levels).
 - ~~Shot type comes from the swing~~ (replaced, see Decided: shot type from court position). Power comes from the swing speed. ~~Hitting early/late sends the shuttle left/right~~ (replaced: the swing direction aims, see Decided).
-- ~~Short party matches: rally scoring to 11 points.~~ Decided (user, 2026-10-31): rally scoring **to 4 points, win by 2** (4 : 4 → play on until someone leads by 2).
+- ~~Short party matches: rally scoring to 11 points.~~ Decided (user, 2026-10-31): rally scoring **to 4 points, win by 2** (4 : 4 → play on until someone leads by 2) by default; the lobby card offers Quick (to 4) / Normal (to 11, cap 15) / Long (to 21, cap 30), always win by 2. The computer's level (Easy / Normal / Pro) is chosen in the Versus CPU row.
 - **Court (user, 2026-10-31):** 25 % bigger than a real singles court, so the characters run more; they also bounce on their toes while waiting.
 - The shuttle is slow, so Wi-Fi delay matters less than in tennis. Badminton needs **instant** swing detection, unlike minigolf's "wait until still" flow. Use a generous, tunable hit window and compensate for network delay (timestamps).
 

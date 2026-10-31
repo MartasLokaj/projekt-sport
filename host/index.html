@@ -79,6 +79,17 @@
       .badminton-pop.good { background: rgba(43, 138, 0, 0.85); }
       .badminton-pop.wobble { background: rgba(140, 60, 200, 0.85); }
       .badminton-pop.miss { background: rgba(217, 58, 63, 0.88); }
+      /* Rally hit counter in the top-left corner of each half; hotter as the rally grows. */
+      .badminton-rally {
+        position: absolute; top: 24px; left: 20px; z-index: 2; padding: 6px 16px; border-radius: 14px;
+        background: rgba(255, 255, 255, 0.9); font-size: 24px; font-weight: 900; color: #1f3247;
+      }
+      #badminton-screen.split #badminton-rally-far { left: calc(50% + 20px); }
+      .badminton-rally.hot { background: #ffb547; }
+      .badminton-rally.fire { background: linear-gradient(#ff7a1a, #e0301e); color: #ffffff; box-shadow: 0 0 20px rgba(255, 90, 20, 0.7); }
+      .badminton-rally.bump { animation: rally-bump 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+      @keyframes rally-bump { from { transform: scale(1.35); } }
+      #badminton-message.long-rally { color: #ffe066; }
       #badminton-level {
         position: absolute; top: 24px; right: 20px; z-index: 2; background: rgba(255, 255, 255, 0.9); border-radius: 14px;
         padding: 6px 14px; font-size: 18px; font-weight: 800;
@@ -248,6 +259,10 @@
         <div class="pick-modes">
           <span class="cw-label">Modes</span>
           <ul id="pick-modes"></ul>
+          <div id="pick-length" hidden>
+            <span class="cw-label">Match</span>
+            <div class="mode-levels" role="radiogroup" aria-label="Match length"></div>
+          </div>
         </div>
         <button id="start" class="cw-btn cw-btn--play" type="button" disabled><span id="start-label">Play</span><kbd>Enter</kbd></button>
         <div id="pick-faces" aria-label="Players who joined"></div>
@@ -291,6 +306,8 @@
       <div id="badminton-pop-near" class="badminton-pop" hidden></div>
       <div id="badminton-pop-far" class="badminton-pop" hidden></div>
       <div id="badminton-level" hidden></div>
+      <div id="badminton-rally-near" class="badminton-rally" hidden></div>
+      <div id="badminton-rally-far" class="badminton-rally" hidden></div>
       <div id="badminton-keys">Prototype · swing your phone when the shuttle reaches you · Mac: Space swings (hold ← → to aim, W weak, Shift short), ↑ swings for player 2 · 1 2 3 computer level · Esc back to the cube</div>
     </div>
 

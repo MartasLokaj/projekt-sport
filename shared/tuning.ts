@@ -568,9 +568,29 @@ export const TUNING = {
     wobbleAimShare: 0.3,
     wobbleSway: 0.35,
     wobbleSwaysPerFlight: 5,
-    /** Wavy trail behind a wobble shot: colour and length (ms). */
-    wobbleTrailColour: '#c45cff',
-    trailMs: 600,
+    /**
+     * Trails behind the shuttle, one style per shot (colour, how long the trail is in ms). Chosen to be easy to
+     * tell apart, also in split screen. In a fiery rally (rallyThresholds.fire) every shot except a wobble or a
+     * Super Smash gets the fire trail.
+     */
+    trails: {
+      serve: { colour: '#ffffff', ms: 300 },
+      clear: { colour: '#ffffff', ms: 300 },
+      lift: { colour: '#ffffff', ms: 300 },
+      drive: { colour: '#3fe0e0', ms: 380 },
+      drop: { colour: '#5be36b', ms: 380 },
+      shortServe: { colour: '#5be36b', ms: 380 },
+      smash: { colour: '#ff5a36', ms: 520 },
+      superSmash: { colour: '#ffb400', ms: 700 },
+      wobble: { colour: '#c45cff', ms: 600 },
+    },
+    fireTrail: { colour: '#ff7a1a', ms: 650 },
+    /**
+     * Long rallies (hits in one rally, the serve counts): the counter shows from `show`, the seagulls circle from
+     * `birds`, a fire trail from `fire`, and a rally of at least `celebrate` gets a "Rally ×N!" when it ends.
+     */
+    rallyThresholds: { show: 3, birds: 5, fire: 10, celebrate: 5 },
+    birds: 7,
     /**
      * Super Smash: a strong (>= superSmashPower) overhead hit on a wobble shot, met at least superSmashMinHeight
      * high (with the swing's jump) and timed in the Good part of the window. Allowed from anywhere on the court
@@ -585,9 +605,8 @@ export const TUNING = {
     superSmashMaxSpeed: 1.8,
     /** Returning a Super Smash: a tighter hit window (ms, too early / too late). */
     superSmashDefenseWindowMs: { early: 180, late: 130 },
-    /** Juice: the shuttle stops at the racket for a moment, a gold trail, camera shake and a sand burst on landing. */
+    /** Juice: the shuttle stops at the racket for a moment, camera shake and a sand burst on landing (trail: see trails). */
     superSmashHitStopMs: 300,
-    superSmashTrailColour: '#ffb400',
     shakeStrength: 0.25,
     shakeMs: 450,
     sandBurst: 34,
@@ -611,9 +630,16 @@ export const TUNING = {
     },
     cpuLevel: 'normal' as 'easy' | 'normal' | 'pro',
 
-    /** Rally scoring: first to pointsToWin, but you must lead by winBy (4 : 4 → 5 : 4 → 6 : 4 wins). Pause after a point (ms). */
-    pointsToWin: 4,
-    winBy: 2,
+    /**
+     * Match lengths (chosen in the lobby card), rally scoring: first to `to`, you must lead by `winBy`, but the
+     * one who reaches `cap` wins anyway (null = no cap). Pause after a point (ms).
+     */
+    matchLengths: {
+      quick: { label: 'Quick', to: 4, winBy: 2, cap: null },
+      normal: { label: 'Normal', to: 11, winBy: 2, cap: 15 },
+      long: { label: 'Long', to: 21, winBy: 2, cap: 30 },
+    },
+    matchLength: 'quick' as 'quick' | 'normal' | 'long',
     pointPauseMs: 1600,
 
     /** Camera behind the player: height, distance behind the baseline, and how far down the court it looks. */

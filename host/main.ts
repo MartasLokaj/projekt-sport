@@ -105,13 +105,15 @@ function showLab(on: boolean): void {
         popNear: document.getElementById('badminton-pop-near')!,
         popFar: document.getElementById('badminton-pop-far')!,
         level: document.getElementById('badminton-level')!,
+        rallyNear: document.getElementById('badminton-rally-near')!,
+        rallyFar: document.getElementById('badminton-rally-far')!,
       });
       badminton.onCue = (side, cue) => {
         const playerId = badmintonIds[side === 1 ? 0 : 1];
         if (playerId) send({ type: 'badminton_cue', playerId, cue });
       };
       if (import.meta.env.DEV) Object.assign(window, { badminton }); // for debugging in the browser console
-      badminton.start(...badmintonPlayers(), lobbyUi.cpuLevel);
+      badminton.start(...badmintonPlayers(), lobbyUi.cpuLevel, lobbyUi.matchLength);
     } else lab.start();
   } else {
     lab.stop();

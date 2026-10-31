@@ -371,6 +371,19 @@
   background: var(--accent);
   color: #1a0d05;
 }
+/* Match length: Quick / Normal / Long under the modes. */
+#pick-length {
+  display: flex;
+  align-items: center;
+  gap: var(--cw-s3);
+  margin-top: var(--cw-s2);
+}
+#pick-length[hidden] {
+  display: none;
+}
+#pick-length .mode-levels {
+  flex: 1 1 auto;
+}
 .mode b {
   display: block;
   font-size: var(--cw-fs-body);

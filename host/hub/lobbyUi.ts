@@ -1,4 +1,5 @@
 import type { PlayerInfo } from '../../shared/protocol.ts';
+import { TUNING } from '../../shared/tuning.ts';
 import { FACES, type FaceInfo } from './faces.ts';
 
 // The page parts of the Cube World lobby around the 3D cube: the join panel (QR code, room code) and
@@ -14,6 +15,15 @@ const LEVELS: { id: CpuLevel; label: string; key: string }[] = [
   { id: 'normal', label: 'Normal', key: '2' },
   { id: 'pro', label: 'Pro', key: '3' },
 ];
+
+/** How long a match lasts, chosen in the card (badminton: see TUNING.badminton.matchLengths). */
+export type MatchLength = keyof typeof TUNING.badminton.matchLengths;
+
+/** "first to 11, win by 2, max 15" */
+function lengthText(length: MatchLength): string {
+  const m = TUNING.badminton.matchLengths[length];
+  return `first to ${m.to}, win by ${m.winBy}${m.cap === null ? '' : `, max ${m.cap}`}`;
+}
 
 /** What the Play button would do for a game right now. */
 export type PlayState = { enabled: boolean; label: string; note: string; warn: boolean };
@@ -31,6 +41,8 @@ export class LobbyUi {
   onKick: (playerId: string) => void = () => {};
   /** The computer's difficulty for the next match against it (Easy / Normal / Pro in the mode row, or keys 1 2 3). */
   cpuLevel: CpuLevel = 'normal';
+  /** The match length for the next match (Quick / Normal / Long in the card's Match row). */
+  matchLength: MatchLength = TUNING.badminton.matchLength;
 
   private readonly $ = (id: string): HTMLElement => document.getElementById(id)!;
   private readonly pick = this.$('pick');
@@ -130,6 +142,26 @@ export class LobbyUi {
     }
   }
 
+  /** The Match row (Quick / Normal / Long) under the modes, for games that have it. */
+  private renderLengths(face: FaceInfo): void {
+    const row = this.$('pick-length');
+    row.hidden = !face.matchLengths;
+    if (!face.matchLengths) return;
+    const buttons = (Object.keys(TUNING.badminton.matchLengths) as MatchLength[]).map((id) => {
+      const button = el('button', id === this.matchLength ? 'is-on' : '', TUNING.badminton.matchLengths[id].label) as HTMLButtonElement;
+      button.type = 'button';
+      button.title = lengthText(id);
+      button.setAttribute('role', 'radio');
+      button.setAttribute('aria-checked', String(id === this.matchLength));
+      button.addEventListener('click', () => {
+        this.matchLength = id;
+        this.renderGame(false);
+      });
+      return button;
+    });
+    row.querySelector('.mode-levels')!.replaceChildren(...buttons);
+  }
+
   setCpuLevel(level: CpuLevel): void {
     this.cpuLevel = level;
     this.renderGame(false);
@@ -222,7 +254,7 @@ export class LobbyUi {
     const modes = face.modes.map((mode, i) => {
       const item = el('li', i === (active < 0 ? 0 : active) ? 'mode is-active' : 'mode');
       const text = el('div', '');
-      text.append(el('b', '', mode.label), el('span', '', mode.detail));
+      text.append(el('b', '', mode.label), el('span', '', mode.detail.replace('{length}', lengthText(this.matchLength))));
       item.append(text);
       if (mode.levels) {
         // Easy / Normal / Pro for the computer, right in its mode row.
@@ -243,6 +275,7 @@ export class LobbyUi {
       return item;
     });
     this.$('pick-modes').replaceChildren(...modes);
+    this.renderLengths(face);
 
     const play = this.playState(face);
     this.start.disabled = !play.enabled;

@@ -72,3 +72,56 @@ export class SandPuffs {
     }
   }
 }
+
+/** Seagulls circling high above the court during a long rally: simple white V shapes that flap. */
+export class Birds {
+  readonly group = new THREE.Group();
+  private readonly birds: { root: THREE.Group; wings: THREE.Mesh[]; angle: number; radius: number; height: number; phase: number }[] = [];
+  private shown = 0;
+  private angleSpeed = 0.35;
+
+  constructor(count: number) {
+    const material = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.8, side: THREE.DoubleSide });
+    const wing = new THREE.PlaneGeometry(0.7, 0.18);
+    wing.translate(0.35, 0, 0); // hinge at the body
+    for (let i = 0; i < count; i++) {
+      const root = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), material);
+      body.scale.set(1, 0.8, 2);
+      const left = new THREE.Mesh(wing, material);
+      const right = new THREE.Mesh(wing, material);
+      right.scale.x = -1;
+      left.rotation.x = right.rotation.x = -Math.PI / 2;
+      root.add(body, left, right);
+      root.visible = false;
+      this.group.add(root);
+      this.birds.push({
+        root,
+        wings: [left, right],
+        angle: (i / count) * Math.PI * 2,
+        radius: 4.5 + Math.random() * 4,
+        height: 4.8 + Math.random() * 1.8,
+        phase: Math.random() * 10,
+      });
+    }
+  }
+
+  /** active: the rally is long enough; excited: even longer (they circle faster). */
+  update(dt: number, active: boolean, excited: boolean): void {
+    this.shown = Math.max(0, Math.min(1, this.shown + (active ? dt : -dt) * 0.8));
+    this.angleSpeed += ((excited ? 0.8 : 0.35) - this.angleSpeed) * Math.min(1, dt * 2);
+    for (const b of this.birds) {
+      b.root.visible = this.shown > 0.01;
+      if (!b.root.visible) continue;
+      b.angle += dt * this.angleSpeed * (8 / b.radius);
+      b.phase += dt * (excited ? 14 : 9);
+      // They fly in from far above and settle into their circle.
+      const height = b.height + (1 - this.shown) * 12;
+      b.root.position.set(Math.cos(b.angle) * b.radius, height + Math.sin(b.phase * 0.3) * 0.4, Math.sin(b.angle) * b.radius);
+      b.root.rotation.y = -b.angle; // facing along the circle
+      const flap = Math.sin(b.phase) * 0.6;
+      b.wings[0].rotation.z = flap;
+      b.wings[1].rotation.z = -flap;
+    }
+  }
+}

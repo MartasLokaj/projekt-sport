@@ -32,6 +32,8 @@ export type FaceInfo = {
   /** One line on how you play with the phone. */
   controls: string;
   modes: readonly GameMode[];
+  /** The card offers a match length (Quick / Normal / Long); "{length}" in a mode's detail shows the chosen one. */
+  matchLengths?: boolean;
   normal: Vec;
   forward: Vec;
 };
@@ -78,9 +80,10 @@ export const FACES: readonly FaceInfo[] = [
     maxPlayers: 2,
     controls: 'Swing like a racket',
     modes: [
-      { label: 'Versus CPU', detail: 'One phone · first to 4, win by 2', players: [0, 1], levels: true },
-      { label: '1 v 1', detail: 'Two phones · split screen', players: [2, 4] },
+      { label: 'Versus CPU', detail: 'One phone · {length}', players: [0, 1], levels: true },
+      { label: '1 v 1', detail: 'Two phones · split screen · {length}', players: [2, 4] },
     ],
+    matchLengths: true,
     normal: [1, 0, 0],
     forward: [0, 0, 1],
   },
