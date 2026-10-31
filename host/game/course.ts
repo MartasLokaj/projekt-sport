@@ -221,7 +221,8 @@ class Lane {
     const origin = new THREE.Vector3(def.place.x, 0, def.place.z);
     const toWorld = (p: PathPoint): THREE.Vector3 => new THREE.Vector3(p.x, 0, p.z).applyAxisAngle(UP, yaw).add(origin);
     const curve = new THREE.CatmullRomCurve3(def.path.map(toWorld), false, 'centripetal');
-    const widthCurve = new THREE.CatmullRomCurve3(def.path.map((p) => new THREE.Vector3(p.w ?? 1.1, 0, 0)));
+    const widen = TUNING.course.laneWidthScale;
+    const widthCurve = new THREE.CatmullRomCurve3(def.path.map((p) => new THREE.Vector3((p.w ?? 1.1) * widen, 0, 0)));
     // Heights ease smoothly from point to point without overshooting (a curve would dip below the ground).
     const heightAt = (t: number): number => {
       const f = t * (def.path.length - 1);
@@ -280,6 +281,8 @@ class Lane {
         tangent = this.tangents[i0];
       }
     }
+    // Past the round ends, keep counting along the lane (so the checker pattern carries on there too).
+    if (best === 0 || best === this.points.length - 1) along += (x - point.x) * tangent.x + (z - point.z) * tangent.z;
     // Sideways from the centre line: positive to the left of the way the lane runs.
     const side = (x - point.x) * tangent.z - (z - point.z) * tangent.x;
     return { distance: Math.sqrt(bestDistance), width, height: point.y, point, along, side };

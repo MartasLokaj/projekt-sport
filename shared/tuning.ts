@@ -118,6 +118,8 @@ export const TUNING = {
     /** How finely the lane curve is sampled and the lane surface divided (smaller = smoother, slower to build). */
     laneSpacing: 0.08,
     floorCell: 0.1,
+    /** All lanes are made this much wider than drawn in HOLES (1 = as drawn). */
+    laneWidthScale: 1.2,
     /** The wooden border: thickness and height above the floor, how far its outer side reaches down into the ground, bevel on the top edges. */
     bumperWidth: 0.2,
     bumperHeight: 0.26,
@@ -148,15 +150,15 @@ export const TUNING = {
 
   camera: {
     /** While aiming: distance behind the ball and height above it. */
-    aimDistance: 3.4,
-    aimHeight: 1.6,
+    aimDistance: 2.7,
+    aimHeight: 1.3,
     /** While aiming the camera looks at a point this far ahead of the ball. */
     aimLookAhead: 3,
     /** While aiming the camera looks a little towards the golfer's side, so the character is in view. */
     aimSideShift: 0.25,
     /** While the ball rolls: distance and height. */
-    followDistance: 3.6,
-    followHeight: 2.4,
+    followDistance: 3.0,
+    followHeight: 2.0,
     /** How quickly the camera catches up (bigger = snappier). */
     smoothing: 3,
   },
