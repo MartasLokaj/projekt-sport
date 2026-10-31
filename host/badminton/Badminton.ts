@@ -41,8 +41,8 @@ type Athlete = {
   /** World x of the racket hand relative to the body: +1 or -1. */
   handSign: number;
   runPhase: number;
-  /** A jump to meet a high shuttle: how high (m) and when it peaks (host clock). */
-  jump: { height: number; peak: number } | null;
+  /** A jump to meet a high shuttle: how high (m), when it peaks (host clock) and how long it takes to go up (ms). */
+  jump: { height: number; peak: number; rise: number } | null;
   /** Swing animation: which stroke and when it started. */
   swing: { stroke: Stroke | 'serve'; start: number } | null;
   pose: { x: number; z: number };
@@ -87,6 +87,8 @@ export class Badminton {
   private contact: Contact | null = null;
   /** The receiver's hit has been decided (hit, or missed). */
   private decided = false;
+  /** A hit waiting for the top of the character's jump. */
+  private pendingHit: { when: number; athlete: Athlete; kind: ShotKind; power: number; aim: number; quality: number } | null = null;
   private pointEndsAt = 0;
   private cpuServeAt = 0;
   private readonly keys = new Set<string>();
@@ -173,9 +175,15 @@ export class Badminton {
       this.serve(a, now, power, aim);
       return;
     }
-    if (this.phase !== 'rally' || this.receiver !== side || this.decided || !this.contact) return;
+    if (this.phase !== 'rally' || this.receiver !== side || this.decided || !this.contact || !this.flight) return;
     const off = at - this.contact.time;
-    a.swing = { stroke: this.contact.stroke, start: now };
+    // The character only jumps with the player's own swing, as high as the shuttle is at that moment:
+    // swing early and it jumps (and may miss), swing late and the shuttle is lower, so it stays on the ground.
+    const there = this.flight.positionAt(this.flight.progressAt(at));
+    const stroke = strokeAt(there.y);
+    const jump = Math.min(cfg.reachHeight, there.y) - cfg.standingReach;
+    a.jump = jump > 0 ? { height: jump, peak: now + cfg.swingJumpRiseMs, rise: cfg.swingJumpRiseMs } : null;
+    a.swing = { stroke, start: now + (jump > 0 ? cfg.swingJumpRiseMs - 140 : 0) };
     if (off < -cfg.hitWindowEarlyMs) {
       this.showFeedback(a, `Too early! (${Math.round(-off)} ms)`);
       return;
@@ -188,7 +196,7 @@ export class Badminton {
     const size = Math.abs(off);
     const window = off < 0 ? cfg.hitWindowEarlyMs : cfg.hitWindowMs;
     const quality = size <= cfg.perfectMs ? 1 : 1 - (size - cfg.perfectMs) / (window - cfg.perfectMs);
-    const kind = this.hit(a, power, aim, quality);
+    const kind = this.hit(a, power, aim, quality, stroke, jump > 0 ? now + cfg.swingJumpRiseMs : now);
     const verdict = quality >= 1 ? 'Perfect!' : `Good · ${Math.round(size)} ms ${off < 0 ? 'early' : 'late'}`;
     this.showFeedback(a, `${shotName(kind)} · ${verdict}`);
   }
@@ -208,6 +216,7 @@ export class Badminton {
     this.flight = null;
     this.contact = null;
     this.decided = false;
+    this.pendingHit = null;
     const server = this.athlete(this.server);
     const other = this.athlete(-this.server as Side);
     // Even score: serve from the right service court, odd: from the left (right = +x for the near side, -x for the far side).
@@ -231,21 +240,27 @@ export class Badminton {
     this.phase = 'rally';
   }
 
-  /** The athlete meets the shuttle at the contact point. Returns the shot played. */
-  private hit(athlete: Athlete, power: number, aim: number, quality: number): ShotKind {
+  /**
+   * The athlete hits the shuttle with this stroke at time `when` (host clock; for a jump, at the top of it).
+   * The return shot starts from wherever the shuttle is then: the shuttle never slows down to wait.
+   */
+  private hit(athlete: Athlete, power: number, aim: number, quality: number, stroke: Stroke, when: number): ShotKind {
     const cfg = TUNING.badminton;
-    const contact = this.contact!;
+    const there = this.flight!.positionAt(this.flight!.progressAt(when));
     // A smash only from the back of the court; elsewhere a hard overhead is a clear.
-    const back = Math.abs(contact.position.z) >= cfg.smashFromDepth;
-    const kind: ShotKind = contact.stroke !== 'overhead' ? contact.stroke : back && power >= cfg.smashPower ? 'smash' : 'clear';
+    const back = Math.abs(there.z) >= cfg.smashFromDepth;
+    const kind: ShotKind = stroke !== 'overhead' ? stroke : back && power >= cfg.smashPower ? 'smash' : 'clear';
     this.decided = true;
-    // The shuttle never slows down to wait for the phone: when the swing's message arrives a moment after
-    // the hit, the return shot starts from where the shuttle is by then.
-    const now = Date.now();
-    const late = this.flight !== null && now > contact.time;
-    const from = late ? this.flight!.positionAt(this.flight!.progressAt(now)) : contact.position;
-    this.launch(makeShot(kind, from, athlete.side, aim, power / 100, quality, late ? now : contact.time), athlete.side);
+    this.pendingHit = { when, athlete, kind, power, aim, quality };
+    if (when <= Date.now()) this.launchPendingHit();
     return kind;
+  }
+
+  private launchPendingHit(): void {
+    const p = this.pendingHit!;
+    this.pendingHit = null;
+    const from = this.flight!.positionAt(this.flight!.progressAt(p.when));
+    this.launch(makeShot(p.kind, from, p.athlete.side, p.aim, p.power / 100, p.quality, p.when), p.athlete.side);
   }
 
   /** A new flight from `hitter`'s side: the other side runs to meet it, the hitter goes back home. */
@@ -260,8 +275,9 @@ export class Badminton {
     spot.x -= receiver.handSign * cfg.reach[this.contact.stroke];
     spot.y = 0;
     this.moveTo(receiver, spot, this.contact.time - cfg.jumpRiseMs - 60);
+    // The computer jumps by itself; a player's character only jumps with the player's swing (see onSwing).
     const jump = this.contact.position.y - cfg.standingReach;
-    receiver.jump = jump > 0 ? { height: jump, peak: this.contact.time } : null;
+    receiver.jump = jump > 0 && !receiver.human ? { height: jump, peak: this.contact.time, rise: cfg.jumpRiseMs } : null;
     this.moveTo(this.athlete(hitter), new THREE.Vector3(0, 0, hitter * cfg.homeDepth), null);
   }
 
@@ -285,7 +301,7 @@ export class Badminton {
       const smashPower = TUNING.badminton.smashPower;
       power = Math.random() < cfg.smashChance ? Math.max(power, smashPower + 5) : Math.min(power, smashPower - 5);
     }
-    this.hit(cpu, power, (Math.random() * 2 - 1) * cfg.aimRange, 0.5 + Math.random() * 0.5);
+    this.hit(cpu, power, (Math.random() * 2 - 1) * cfg.aimRange, 0.5 + Math.random() * 0.5, contact.stroke, now);
   }
 
   private pointTo(winner: Side): void {
@@ -320,6 +336,7 @@ export class Badminton {
       const c = cfg.cpu;
       this.serve(server, now, c.power[0] + Math.random() * (c.power[1] - c.power[0]), (Math.random() * 2 - 1) * c.aimRange);
     } else if (this.phase === 'rally' && this.flight) {
+      if (this.pendingHit && now >= this.pendingHit.when) this.launchPendingHit();
       if (!this.decided && this.contact) {
         const receiver = this.athlete(this.receiver);
         if (!receiver.human && now >= this.contact.time) this.cpuTurn(receiver, now);
@@ -406,7 +423,7 @@ export class Badminton {
     // Jumping up to meet a high shuttle: up, at the top when the racket meets it, then down.
     let lift = 0;
     if (a.jump) {
-      const t = (now - a.jump.peak) / cfg.jumpRiseMs;
+      const t = (now - a.jump.peak) / a.jump.rise;
       if (t > 1) a.jump = null;
       else if (t > -1) lift = a.jump.height * (1 - t * t);
     }
@@ -423,7 +440,10 @@ export class Badminton {
     } else {
       if (a.swing) a.swing = null;
       const waiting = this.phase === 'rally' && !this.decided && this.contact && this.receiver === a.side;
-      if (waiting && this.contact!.time - now < 600) pose = WINDUP[this.contact!.stroke];
+      // Racket ready as the shuttle comes: the computer just before its hit, a player as soon as the shuttle
+      // crosses into their half (so the racket does not give away the moment to swing).
+      const coming = a.human ? Math.sign(this.shuttle.position.z) === a.side : this.contact !== null && this.contact.time - now < 600;
+      if (waiting && coming) pose = WINDUP[this.contact!.stroke];
       else if (this.phase === 'serve' && this.server === a.side) pose = { x: 0.9, z: -0.3 };
       const k = Math.min(1, dt * 12);
       a.pose = { x: a.pose.x + (pose.x - a.pose.x) * k, z: a.pose.z + (pose.z - a.pose.z) * k };
@@ -562,6 +582,12 @@ export class Badminton {
   private readonly onKeyUp = (e: KeyboardEvent): void => {
     this.keys.delete(e.key);
   };
+}
+
+/** Which stroke meets the shuttle at this height. */
+function strokeAt(height: number): Stroke {
+  const cfg = TUNING.badminton;
+  return height >= cfg.overheadFrom ? 'overhead' : height >= cfg.driveFrom ? 'drive' : 'lift';
 }
 
 function shotName(kind: ShotKind): string {

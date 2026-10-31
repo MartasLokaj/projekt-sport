@@ -168,6 +168,12 @@ running log of where we are, what the user decided, and what comes next).
     on the toes while the other side plays (`readyBounce`), computer aims across the whole court (`cpu.aimRange` 1);
     **smash only from the back** (`smashFromDepth` 4.6; the old "high at the front = smash" rule is gone).
     Scripted test: smashes only from 5.0–6.0 m, a match ended 4 : 2 with "Game point!".
+  - User: "good, but I don't like that it jumps by itself — then it is too easy to know when to hit; bigger shuttle".
+    **Done:** a player's character jumps only with the swing, to the shuttle's height at the swing moment
+    (`swingJumpRiseMs` 180; the return starts at the top of the jump from wherever the shuttle is: `pendingHit`);
+    stroke from the height at the swing (`strokeAt`); racket windup for players starts when the shuttle enters
+    their half; the computer still jumps by itself; `shuttleScale` 2.4. Scripted: no jump before the swing,
+    early swing → 1.2 m jump, late → 0.16 m hop, chest-height on time → no jump.
   - Next: user test (also with two phones) → B4 2v2 (plan first).
 
 ## How the user likes to work

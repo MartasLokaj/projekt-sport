@@ -412,6 +412,11 @@ export const TUNING = {
     standingReach: 1.8,
     /** A jump takes this long to go up (and the same to come down, milliseconds). */
     jumpRiseMs: 320,
+    /**
+     * A player's character only jumps with the player's swing; that jump is quicker (milliseconds to the top),
+     * and the racket meets the shuttle at the top.
+     */
+    swingJumpRiseMs: 180,
     lowestContact: 0.3,
     reactionMs: 150,
     /** Contact height decides the stroke: from overheadFrom up = overhead, from driveFrom up = flat drive, lower = lift (m). */
@@ -475,7 +480,7 @@ export const TUNING = {
     splitCameraFov: 62,
     splitCameraBack: 4.0,
     /** The shuttle is drawn this much bigger than real, so it is easy to follow from the sofa. */
-    shuttleScale: 1.6,
+    shuttleScale: 2.4,
     /** Look: sand, court, lines, sky. */
     sandColour: '#ecd3a0',
     courtColour: '#e3bf85',
