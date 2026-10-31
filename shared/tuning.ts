@@ -192,13 +192,26 @@ export const TUNING = {
     groundDepth: 0.21,
     /** Island ground around the course (units) and its grass colour boost. */
     islandMargin: 3.2,
-    islandGrassTint: [0.62, 1.0, 0.45],
+    islandGrassTint: [0.78, 1.3, 0.5],
     /** Grass covers the island up to this part of its size (1 = the edge of the flat top); beyond is beach. */
     grassReach: 0.86,
     /** How finely the island ground is divided, and how big one repeat of its grass and sand textures is. */
     islandCell: 0.25,
     islandTextureSize: 2.5,
     rocksPerIsland: 9,
+    /** Meadow patches on the island grass: how big one patch is (units), and the colour boost of the darkest and lightest grass. */
+    meadowPatchSize: 3.5,
+    meadowDark: [0.72, 0.82, 0.68],
+    meadowLight: [1.38, 1.3, 1.0],
+    /** Grassy hills on each island: how many, how wide (from..to), how high (from..to), and how far from the lane they must stay. */
+    hillsPerIsland: 5,
+    hillSize: [1.6, 3.2],
+    hillHeight: [0.5, 1.2],
+    hillClearance: 2.5,
+    /** Grey boulders in the grass: groups per island, size of the big stone (from..to), distance from the border. */
+    boulderGroups: 5,
+    boulderSize: [0.3, 0.6],
+    boulderClearance: 1.2,
     clouds: 22,
     /** Haze in the distance: starts at fogNear, fully hazy at fogFar. */
     fogNear: 55,

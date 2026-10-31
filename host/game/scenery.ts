@@ -85,6 +85,17 @@ export class Scenery {
     const uvs: number[] = [];
     const reaches: number[] = [];
     const bumpers = hole.lane.outerEdge;
+    // A few soft grassy hills, placed away from the course (so they never block the view along the lane).
+    const hills: { x: number; z: number; size: number; height: number }[] = [];
+    for (let attempt = 0; attempt < 200 && hills.length < c.hillsPerIsland; attempt++) {
+      const angle = random() * Math.PI * 2;
+      const r = 0.35 + random() * 0.45;
+      const x = centre.x + Math.cos(angle) * radius.x * r;
+      const z = centre.z + Math.sin(angle) * radius.y * r;
+      const spot = hole.lane.nearest(x, z);
+      if (spot.distance - spot.width < c.hillClearance + 0.5) continue;
+      hills.push({ x, z, size: c.hillSize[0] + random() * (c.hillSize[1] - c.hillSize[0]), height: c.hillHeight[0] + random() * (c.hillHeight[1] - c.hillHeight[0]) });
+    }
     const groundAt = (x: number, z: number): number => {
       const r = reach(x, z);
       // Flat top, gentle beach down into the sea, small natural bumps on the grass.
@@ -93,6 +104,12 @@ export class Scenery {
       // Near the course the ground follows the lane (on a hill too); the bumpers' slopes sink into it.
       const spot = hole.lane.nearest(x, z);
       const fromEdge = spot.distance - spot.width;
+      // The hills: round bumps that fade out towards the course and towards the beach.
+      const away = THREE.MathUtils.smoothstep(fromEdge, c.hillClearance - 1.3, c.hillClearance) * (1 - THREE.MathUtils.smoothstep(r, 0.75, 0.95));
+      for (const h of hills) {
+        const d2 = ((x - h.x) ** 2 + (z - h.z) ** 2) / (h.size * h.size);
+        if (d2 < 4) y += h.height * Math.exp(-d2 * 1.6) * away;
+      }
       const blend = THREE.MathUtils.smoothstep(-fromEdge, -(bumpers + 1.6), -bumpers * 0.6);
       return THREE.MathUtils.lerp(y, Math.max(y, spot.height - c.groundDepth), blend);
     };
@@ -123,16 +140,29 @@ export class Scenery {
       const wiggle = Math.sin(positions[k * 3] * 1.7) * Math.sin(positions[k * 3 + 2] * 1.3) * 0.025;
       return THREE.MathUtils.smoothstep(r + wiggle, c.grassReach - 0.03, c.grassReach + 0.04);
     });
+    // Patches of lighter and darker grass, like a meadow: 0 = darkest, 1 = lightest.
+    const phase = [random() * 9, random() * 9, random() * 9, random() * 9];
+    const meadow = reaches.map((_, k) => {
+      const x = positions[k * 3] / c.meadowPatchSize;
+      const z = positions[k * 3 + 2] / c.meadowPatchSize;
+      const n =
+        0.5 +
+        0.3 * Math.sin(x * 1.3 + phase[0]) * Math.sin(z * 1.1 + phase[1]) +
+        0.2 * Math.sin((x - z) * 2.1 + phase[2]) * Math.sin((x + z) * 1.7 + phase[3]);
+      return THREE.MathUtils.smoothstep(n, 0.3, 0.7);
+    });
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs.map((v) => v / c.islandTextureSize), 2));
     geometry.setAttribute('sandiness', new THREE.Float32BufferAttribute(sandiness, 1));
+    geometry.setAttribute('meadow', new THREE.Float32BufferAttribute(meadow, 1));
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
     const island = new THREE.Mesh(geometry, islandMaterial());
     island.receiveShadow = true;
     this.group.add(island);
     this.addRocks(hole, centre, radius, reach, top, random);
+    this.addBoulders(hole, centre, radius, reach, groundAt, random);
     plantIsland(this.planter, { hole, centre, radius, reach, groundAt }, random);
     return { centre: new THREE.Vector2(centre.x, centre.z), radius: radius.clone().multiplyScalar(1.02) };
   }
@@ -174,6 +204,59 @@ export class Scenery {
     rocks.castShadow = true;
     rocks.receiveShadow = true;
     this.group.add(rocks);
+  }
+
+  /**
+   * Grey, chunky low-poly boulders lying in the grass in little groups (one big stone with a couple of
+   * small ones), now and then, away from the course.
+   */
+  private addBoulders(
+    hole: BuiltHole,
+    centre: THREE.Vector3,
+    radius: THREE.Vector2,
+    reach: (x: number, z: number) => number,
+    groundAt: (x: number, z: number) => number,
+    random: () => number,
+  ): void {
+    const c = TUNING.scenery;
+    const shapes = [0, 1, 2].map(() => boulderGeometry(random));
+    const material = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.95, flatShading: true });
+    const meshes = shapes.map((shape) => new THREE.InstancedMesh(shape, material, c.boulderGroups * 3));
+    const counts = [0, 0, 0];
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const add = (x: number, z: number, size: number): void => {
+      const k = Math.floor(random() * shapes.length);
+      q.setFromEuler(new THREE.Euler(random() * 0.4, random() * Math.PI * 2, random() * 0.4));
+      m.compose(new THREE.Vector3(x, groundAt(x, z) + size * 0.15, z), q, new THREE.Vector3(size * (1 + random() * 0.4), size * (0.7 + random() * 0.3), size));
+      meshes[k].setMatrixAt(counts[k], m);
+      meshes[k].setColorAt(counts[k], new THREE.Color().setHSL(0.6, 0.04, 0.55 + random() * 0.15));
+      counts[k]++;
+    };
+    let groups = 0;
+    for (let attempt = 0; attempt < 300 && groups < c.boulderGroups; attempt++) {
+      const angle = random() * Math.PI * 2;
+      const r = 0.25 + random() * 0.6;
+      const x = centre.x + Math.cos(angle) * radius.x * r;
+      const z = centre.z + Math.sin(angle) * radius.y * r;
+      const spot = hole.lane.nearest(x, z);
+      if (spot.distance - spot.width < hole.lane.outerEdge + c.boulderClearance || reach(x, z) > 0.85) continue;
+      const big = c.boulderSize[0] + random() * (c.boulderSize[1] - c.boulderSize[0]);
+      add(x, z, big);
+      // A couple of small stones next to the big one.
+      const small = 1 + Math.floor(random() * 2);
+      for (let s = 0; s < small; s++) {
+        const a = random() * Math.PI * 2;
+        add(x + Math.cos(a) * big * 1.3, z + Math.sin(a) * big * 1.3, big * (0.3 + random() * 0.25));
+      }
+      groups++;
+    }
+    meshes.forEach((mesh, k) => {
+      mesh.count = counts[k];
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      this.group.add(mesh);
+    });
   }
 
   /** Puffy cotton-ball clouds around the horizon, drifting slowly. */
@@ -374,14 +457,19 @@ function islandMaterial(): THREE.MeshStandardMaterial {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.sandMap = { value: sand };
     shader.uniforms.sandColour = { value: new THREE.Color(c.sand) };
+    shader.uniforms.meadowDark = { value: new THREE.Vector3(...c.meadowDark) };
+    shader.uniforms.meadowLight = { value: new THREE.Vector3(...c.meadowLight) };
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute float sandiness;\nvarying float vSandiness;')
-      .replace('#include <uv_vertex>', '#include <uv_vertex>\nvSandiness = sandiness;');
+      .replace('#include <common>', '#include <common>\nattribute float sandiness;\nattribute float meadow;\nvarying float vSandiness;\nvarying float vMeadow;')
+      .replace('#include <uv_vertex>', '#include <uv_vertex>\nvSandiness = sandiness;\nvMeadow = meadow;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform sampler2D sandMap;\nuniform vec3 sandColour;\nvarying float vSandiness;')
+      .replace(
+        '#include <common>',
+        '#include <common>\nuniform sampler2D sandMap;\nuniform vec3 sandColour;\nuniform vec3 meadowDark;\nuniform vec3 meadowLight;\nvarying float vSandiness;\nvarying float vMeadow;',
+      )
       .replace(
         '#include <map_fragment>',
-        '#include <map_fragment>\nvec3 sandSample = sandColour * texture2D(sandMap, vMapUv * 1.3).rgb;\ndiffuseColor.rgb = mix(diffuseColor.rgb, sandSample, vSandiness);',
+        '#include <map_fragment>\ndiffuseColor.rgb *= mix(meadowDark, meadowLight, vMeadow);\nvec3 sandSample = sandColour * texture2D(sandMap, vMapUv * 1.3).rgb;\ndiffuseColor.rgb = mix(diffuseColor.rgb, sandSample, vSandiness);',
       );
   };
   islandMaterialCache = material;
@@ -405,6 +493,25 @@ function sandTexture(): THREE.Texture {
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
+}
+
+/** A chunky, faceted stone: a rough ball with its corners pushed in and out a little. */
+function boulderGeometry(random: () => number): THREE.BufferGeometry {
+  const geometry = new THREE.IcosahedronGeometry(1, 0);
+  const position = geometry.getAttribute('position');
+  // Corners that share a spot must move together, or the stone would crack open.
+  const moved = new Map<string, number>();
+  for (let i = 0; i < position.count; i++) {
+    const key = `${position.getX(i).toFixed(3)},${position.getY(i).toFixed(3)},${position.getZ(i).toFixed(3)}`;
+    let scale = moved.get(key);
+    if (scale === undefined) {
+      scale = 0.75 + random() * 0.45;
+      moved.set(key, scale);
+    }
+    position.setXYZ(i, position.getX(i) * scale, position.getY(i) * scale * 0.8, position.getZ(i) * scale);
+  }
+  geometry.computeVertexNormals();
+  return geometry;
 }
 
 /** The same "random" numbers every time, so the world always looks the same. */

@@ -47,6 +47,17 @@ running log of where we are, what the user decided, and what comes next).
     - **Wind** (swaying trees/grass) — the user wants it in 4c.
     - Still need a **light CC0 tree source** (e.g. Quaternius stylized nature packs, or another CC0 set). Propose
       options with sizes to the user. Use instancing; keep 60 fps.
+- **4b redo 3 (user, 2026-10-31, reference: a mobile minigolf screenshot) — done, waiting for the user's test:**
+  user chose **wooden borders** (replacing the round turf bumpers) and to **keep the rounded lanes**.
+  - **G1** lane turf = two-green **checker** pattern following the lane (shader, `laneCoord` = distance along /
+    -1..1 across; `turfLight`, `turfDark`, `checkerLength`, `checkerColumns`), **wooden border** (bevelled plank,
+    lighter top, painted grain/knots/joints; `bumperWidth/Height/Depth`, `woodBevel`, `woodColour`,
+    `woodPlankLength`), **white cup rim** (`cupRimWidth`). Ball bounce checked (stays in, same restitution).
+  - **G2** lanes **20 % wider** (`laneWidthScale` 1.2), **camera closer/lower** (aim 2.7/1.3, follow 3.0/2.0).
+  - **G3** islands: brighter grass with **meadow patches** (`meadowPatchSize`, `meadowDark`, `meadowLight`),
+    soft **hills** away from the lane (`hillsPerIsland`, `hillSize`, `hillHeight`, `hillClearance`), groups of
+    grey low-poly **boulders** (`boulderGroups`, `boulderSize`, `boulderClearance`). All in `TUNING.course` /
+    `TUNING.scenery`.
 - **4c Juice — not started:** hole intro fly-over with "Hole N · Par P", confetti on hole-in (+ special hole-in-one
   celebration), ball trail, impact particles, small camera nudge on hit, sounds (Kenney CC0 audio — ask before
   download), phone vibration on hole-in (host → server → phone `vibrate` message), podium with winner celebration,
