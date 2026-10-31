@@ -112,6 +112,7 @@ export function plantIsland(planter: Planter, island: IslandInfo, random: () => 
     return null;
   };
   const place = (name: string, x: number, z: number, scale: number): void => {
+    if (groundAt(x, z) < TUNING.scenery.seaLevel + 0.15) return; // not in a pond
     planter.add(name, new THREE.Vector3(x, groundAt(x, z) - 0.02, z), random() * Math.PI * 2, scale);
   };
 

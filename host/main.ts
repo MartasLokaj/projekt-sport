@@ -143,7 +143,13 @@ function startSelected(): void {
     openBadminton('game');
     return;
   }
-  send({ type: 'start_game' });
+  send({ type: 'start_game', firstHole: firstHoleForTesting() });
+}
+
+/** Testing shortcut: open the page with ?hole=4 to start the game at hole 4. */
+function firstHoleForTesting(): number {
+  const hole = Number(new URLSearchParams(location.search).get('hole'));
+  return Number.isFinite(hole) && hole >= 1 ? hole - 1 : 0;
 }
 
 let socket: WebSocket | null = null;
@@ -351,7 +357,7 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (e.key === 'Enter' && phase === 'hole_end') send({ type: 'next_hole' });
-  else if (e.key === 'Enter' && phase === 'game_end') send({ type: 'start_game' });
+  else if (e.key === 'Enter' && phase === 'game_end') send({ type: 'start_game', firstHole: firstHoleForTesting() });
   else if (e.key === 'Escape' && phase !== 'lobby') send({ type: 'end_game' });
 });
 

@@ -32,10 +32,11 @@ export class Match {
     return this.current;
   }
 
-  start(playerIds: string[], isConnected: (id: string) => boolean): void {
+  /** firstHole: a testing shortcut to start later in the course (the skipped holes show "–" on the scoreboard). */
+  start(playerIds: string[], isConnected: (id: string) => boolean, firstHole = 0): void {
     this.order = [...playerIds];
     this.holeScores = new Map(playerIds.map((id) => [id, []]));
-    this.startHole(0, isConnected);
+    this.startHole(firstHole, isConnected);
   }
 
   /** After a hole's scoreboard: on to the next hole. */
@@ -102,7 +103,7 @@ export class Match {
         const done = this.done.get(id) ?? null;
         const score = this.score(id);
         const holeScores = this.holeScores.get(id) ?? [];
-        const finished = holeScores.reduce((sum, s) => sum + s, 0);
+        const finished = holeScores.reduce((sum, s) => sum + (s ?? 0), 0);
         return { id, strokes, done, score, holeScores, total: finished + (this.phase === 'playing' ? score : 0) };
       }),
     };
@@ -117,7 +118,10 @@ export class Match {
     this.turn++;
     const waiting = this.order.filter((id) => !this.done.has(id));
     if (waiting.length === 0) {
-      for (const id of this.order) this.holeScores.get(id)?.push(this.score(id));
+      for (const id of this.order) {
+        const scores = this.holeScores.get(id);
+        if (scores) scores[this.hole] = this.score(id);
+      }
       this.phase = this.hole + 1 >= HOLE_COUNT ? 'game_end' : 'hole_end';
       this.current = null;
       return;

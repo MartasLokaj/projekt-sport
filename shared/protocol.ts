@@ -4,7 +4,7 @@ export const WS_PATH = '/ws';
 
 export const MAX_PLAYERS = 4;
 /** Number of holes in a game (the holes themselves are defined on the host, host/game/course.ts). */
-export const HOLE_COUNT = 3;
+export const HOLE_COUNT = 5;
 export const ROOM_CODE_LENGTH = 4;
 export const NAME_MAX_LENGTH = 12;
 export const SHIRT_COLOURS = ['#ff5a5f', '#ffb400', '#3ec300', '#00a6ed', '#9b5cff', '#ff7ac6'] as const;
@@ -149,7 +149,8 @@ export type ClientMessage =
   | ({ type: 'practice' } & Stroke)
   | ({ type: 'swing_progress' } & SwingProgress)
   /** From the host, or from the leader's phone. */
-  | { type: 'start_game' }
+  /** firstHole (0-based) is a testing shortcut: start the game at that hole (the host page's ?hole=N). */
+  | { type: 'start_game'; firstHole?: number }
   /** From the host, or from the leader's phone, after a hole's scoreboard. */
   | { type: 'next_hole' }
   /** From the host: back to the lobby. */

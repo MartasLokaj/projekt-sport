@@ -1,5 +1,6 @@
 import type { WebSocket } from 'ws';
 import {
+  HOLE_COUNT,
   MAX_PLAYERS,
   NAME_MAX_LENGTH,
   ROOM_CODE_LENGTH,
@@ -134,7 +135,8 @@ export class Lobby {
         if (!this.match.canStart) return;
         const players = [...this.seats.values()].filter((s) => s.socket).map((s) => s.id);
         if (players.length === 0) return;
-        this.match.start(players, this.isConnected);
+        const firstHole = Math.max(0, Math.min(HOLE_COUNT - 1, Math.floor(Number(msg.firstHole) || 0)));
+        this.match.start(players, this.isConnected, firstHole);
         this.broadcastGame();
         return;
       }

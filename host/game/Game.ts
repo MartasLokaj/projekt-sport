@@ -517,7 +517,7 @@ export class Game {
       return;
     }
     if (p.y < TUNING.physics.outOfBoundsY) {
-      this.showMessage('Out of bounds! +1', 1800);
+      this.showMessage(this.hole.lane.overGap(p.x, p.z) ? 'Splash! +1' : 'Out of bounds! +1', 1800);
       this.resetBall(this.lastRest);
       this.finishTurn('out');
       return;
@@ -609,11 +609,7 @@ export class Game {
     const step = this.world.timestep;
     this.stepAccumulator += dt;
     while (this.stepAccumulator >= step) {
-      this.hole.update(step);
-      applyRollingResistance(this.ball, this.world, RAPIER, step);
-      if (this.state === 'rolling') applyCurve(this.ball, this.curve, step);
-      this.world.step();
-      this.checkBall(step);
+      this.physicsStep(step);
       this.stepAccumulator -= step;
     }
 
@@ -628,6 +624,15 @@ export class Game {
     this.scenery.update(dt, this.camera);
     this.updateCamera(dt);
     this.composer.render(dt);
+  }
+
+  /** One physics step: obstacles move, the grass slows the ball, a twisted shot curves, then the rules look at the ball. */
+  private physicsStep(step: number): void {
+    this.hole.update(step);
+    applyRollingResistance(this.ball, this.world, RAPIER, step);
+    if (this.state === 'rolling') applyCurve(this.ball, this.curve, step);
+    this.world.step();
+    this.checkBall(step);
   }
 
   private updateAimLine(): void {

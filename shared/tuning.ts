@@ -75,6 +75,11 @@ export const TUNING = {
     shotCurveExponent: 0.5,
     /** How strongly the grass slows the ball (units per second, every second). Bigger = shorter rolls. */
     rollingResistance: 2.2,
+    /** On slopes the grass slows the ball less (so it rolls back down a ramp instead of sticking): from this steepness (degrees)... */
+    slopeFrom: 3,
+    /** ...to this steepness, where the slow-down is only this part of rollingResistance. */
+    slopeFull: 8,
+    slopeResistance: 0.25,
     /** Extra slow-down that grows with speed, a bit like air. */
     linearDamping: 0.1,
     angularDamping: 0.3,
@@ -138,6 +143,13 @@ export const TUNING = {
     checkerColumns: 4,
     /** The white rim around the cup. */
     cupRimWidth: 0.045,
+    /** Pipes over the lane: paint colour, wall thickness, how flat the arch is (1 = half circle), length of the white rims at the ends. */
+    tubeColour: '#2f9bff',
+    tubeThickness: 0.07,
+    tubeFlatten: 0.72,
+    tubeRimLength: 0.2,
+    /** Thickness of the wooden boards under the edges of a gap (jump). */
+    gapBoardThickness: 0.1,
   },
 
   physics: {
@@ -197,6 +209,12 @@ export const TUNING = {
     grassReach: 0.86,
     /** How finely the island ground is divided, and how big one repeat of its grass and sand textures is. */
     islandCell: 0.25,
+    /** The pond under a jump: how far it reaches out from the lane's edge, how steep its banks are (units), how deep below the sea surface. */
+    pondWidth: 3.2,
+    /** How much wider (along the lane) the pond gets away from the lane. */
+    pondSpread: 1.1,
+    pondSlope: 0.45,
+    pondDepth: 0.5,
     islandTextureSize: 2.5,
     rocksPerIsland: 9,
     /** Meadow patches on the island grass: how big one patch is (units), and the colour boost of the darkest and lightest grass. */

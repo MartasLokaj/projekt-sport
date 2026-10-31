@@ -28,13 +28,23 @@ export function shotSpeed(power: number): number {
 
 /** Grass slows a rolling ball down by a steady amount, so it stops cleanly instead of creeping. Call every physics step. */
 export function applyRollingResistance(ball: RAPIER.RigidBody, world: RAPIER.World, R: typeof RAPIER, dt: number): void {
-  if (!isOnFloor(ball, world, R)) return;
+  const p = ball.translation();
+  const ray = new R.Ray({ x: p.x, y: p.y, z: p.z }, { x: 0, y: -1, z: 0 });
+  const hit = world.castRayAndGetNormal(ray, TUNING.ball.radius + 0.03, true, undefined, undefined, undefined, ball);
+  if (!hit) return;
   const v = ball.linvel();
   const speed = Math.hypot(v.x, v.z);
   if (speed === 0) return;
-  const scale = Math.max(0, speed - TUNING.ball.rollingResistance * dt) / speed;
+  // On a slope the grass holds the ball less, so a ball that stops on a ramp rolls back down instead of sticking.
+  const b = TUNING.ball;
+  const steep = THREE_DEG * Math.acos(Math.min(1, hit.normal.y));
+  const slope = Math.min(1, Math.max(0, (steep - b.slopeFrom) / (b.slopeFull - b.slopeFrom)));
+  const resistance = b.rollingResistance * (1 - slope * (1 - b.slopeResistance));
+  const scale = Math.max(0, speed - resistance * dt) / speed;
   ball.setLinvel({ x: v.x * scale, y: v.y, z: v.z * scale }, true);
 }
+
+const THREE_DEG = 180 / Math.PI;
 
 /** True when there is ground right under the ball (it is rolling, not flying or falling). */
 export function isOnFloor(ball: RAPIER.RigidBody, world: RAPIER.World, R: typeof RAPIER): boolean {
