@@ -38,6 +38,9 @@ export class Character {
    */
   armPose: { x: number; z: number } | null = null;
 
+  /** What the free hand holds while standing (see setGear). */
+  private gear: THREE.Object3D | null = null;
+
   private stance: 'address' | 'stand' = 'stand';
   private mood: Mood = 'idle';
   private moodTime = 0;
@@ -62,7 +65,7 @@ export class Character {
     this.root.add(this.body);
     this.standArms = [this.makeArm(1), this.makeArm(-1)];
     this.torso.add(...this.standArms);
-    if (options.putter !== false) this.addHangingPutter(this.standArms[1]);
+    if (options.putter !== false) this.setGear('putter');
     this.root.traverse((o) => (o.castShadow = true));
   }
 
@@ -326,10 +329,19 @@ export class Character {
     return arm;
   }
 
-  /** While waiting, the putter hangs from one hand, its head resting on the ground. */
-  private addHangingPutter(arm: THREE.Group): void {
-    const hand = new THREE.Vector3(0, -0.17, 0);
-    arm.add(makePutter(hand, new THREE.Vector3(0.03, -0.42, 0.1)));
+  /**
+   * What the character holds in its right hand while standing: the putter (its head resting on the ground),
+   * any other object (e.g. a badminton racket, built in the arm's own coordinates with the hand at
+   * (0, -0.17, 0) and pointing down the arm), or nothing.
+   */
+  setGear(gear: 'putter' | THREE.Object3D | null): void {
+    const arm = this.standArms[1];
+    if (this.gear) arm.remove(this.gear);
+    this.gear = gear === 'putter' ? makePutter(new THREE.Vector3(0, -0.17, 0), new THREE.Vector3(0.03, -0.42, 0.1)) : gear;
+    if (this.gear) {
+      this.gear.traverse((o) => (o.castShadow = true));
+      arm.add(this.gear);
+    }
   }
 }
 

@@ -7,6 +7,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import type { PlayerInfo } from '../../shared/protocol.ts';
 import { TUNING } from '../../shared/tuning.ts';
+import { buildRacket } from '../badminton/court.ts';
 import { Character } from '../game/character.ts';
 import { loadForest } from '../game/vegetation.ts';
 import { FaceSign } from './sign.ts';
@@ -513,6 +514,8 @@ export class Hub {
       let guest = this.guests.get(player.id);
       if (!guest) {
         const character = new Character({ shirt: player.colour, skin: player.skinTone, handedness: player.handedness });
+        // On the Badminton side everyone holds a racket instead of the putter.
+        if (FACES[this.chosen].id === 'badminton') character.setGear(heldRacket(player.colour));
         // Someone who just joined jumps down onto the cube (if its side is already turned up).
         const arriving = this.arrivals.has(player.id) && this.spinner.quaternion.angleTo(this.poses[this.chosen]) < 0.2;
         guest = { player, character, tag: makeTag(), age: arriving ? 10 : 0, hitUntil: 0, hitText: '', drop: arriving ? 0 : -1, spot: new THREE.Vector3() };
@@ -591,6 +594,17 @@ export class Hub {
       if (name.textContent !== text) name.textContent = text;
     });
   }
+}
+
+/** A badminton racket held at the ready, its head up and a little forward, in the player's colour. */
+function heldRacket(colour: string): THREE.Group {
+  const grip = new THREE.Group();
+  grip.position.set(0, -0.17, 0); // the hand
+  grip.rotation.x = -2.5; // from pointing down the arm to pointing up and forward
+  const racket = buildRacket(colour);
+  racket.position.y = 0.17; // buildRacket's handle starts at the hand
+  grip.add(racket);
+  return grip;
 }
 
 // ---------- Space backdrop ----------
