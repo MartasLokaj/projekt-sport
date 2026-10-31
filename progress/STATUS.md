@@ -174,7 +174,16 @@ running log of where we are, what the user decided, and what comes next).
     stroke from the height at the swing (`strokeAt`); racket windup for players starts when the shuttle enters
     their half; the computer still jumps by itself; `shuttleScale` 2.4. Scripted: no jump before the swing,
     early swing → 1.2 m jump, late → 0.16 m hop, chest-height on time → no jump.
-  - Next: user test (also with two phones) → B4 2v2 (plan first).
+  - User: "okay, this is divine" — approved.
+  - Next: B4 2v2 (plan first, wait for OK).
+
+### GitHub and the cloud (2026-10-31)
+- Project is on GitHub: **private** repo `MartasLokaj/projekt-sport` (remote `origin`, branch `main`). `gh` CLI is in
+  `~/.local/gh/bin/gh` (not on PATH; logged in as MartasLokaj, git credential helper set up with `gh auth setup-git`).
+- The user connected GitHub to claude.ai and started their own **cloud session redesigning the Cube World hub**
+  (they did not like the cube much). That work is on its own branch in the cloud: **don't touch `host/hub/` here**;
+  merge its branch only when the user asks. This session continues with badminton (functionality).
+- Push `main` after each milestone so the cloud can pick it up.
 
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.
@@ -231,7 +240,7 @@ running log of where we are, what the user decided, and what comes next).
 - Turf brightness/tint can still be tuned (`turfTint`, `bumperTint`, `islandGrassTint`).
 
 ## Next action
-**Badminton B3:** get the user's test with two phones (split screen), then plan B4 (2v2).
+**Badminton B4:** propose the 2v2 plan, wait for OK, build it. (Cloud session redesigns the hub — leave `host/hub/` alone.)
 Older (paused):
 Cube World: 2a (host hub) is built — get the user's test on the TV with real phones, then 2b (registry + phone control), then 2c.
 After that 4c (juice, incl. **wind**: trees and grass swaying), then ask the user to approve Phase 4.
