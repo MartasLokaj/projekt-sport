@@ -74,6 +74,14 @@ running log of where we are, what the user decided, and what comes next).
     Hole 4: tee on a hill, the ball dives down the pipe onto the green (any shot over ~20 % gets through; power
     decides how far it shoots out). Hole 5: ramp + 1 unit gap, needs ~65 % power; weaker = splash. `HOLE_COUNT` = 5
     for now. Testing shortcut: host page `?hole=N` starts at hole N (server: `start_game.firstHole`).
+  - **J1 approved by the user ("vše funguje skvěle").**
+  - **J2 — done, waiting for the user's test.** Hole 6 (Castle): a slope up to the Kenney `structure-gate-building`
+    standing across the lane (scaled to span it, `castleOverhang`; HoleDef `castle`), the ball must go through the
+    arch (~0.6 wide for the ball's centre); a miss bounces off the wall and rolls back down the slope; through the
+    arch it is downhill to the cup. (The "safe detour" from the plan was dropped: the lane would need a fork.)
+    Hole 7 (Banked U-turn): path point `bank` (degrees, eases like the height) tilts the floor and borders; the U-turn
+    winds downhill, fast balls ride up the outer wall, then a slope down to the cup. To make balls roll out of the
+    curve, the grass now holds less from 2° to 5° of slope (`slopeFrom/slopeFull` were 3/8). `HOLE_COUNT` = 7.
 - **4c Juice — not started:** hole intro fly-over with "Hole N · Par P", confetti on hole-in (+ special hole-in-one
   celebration), ball trail, impact particles, small camera nudge on hit, sounds (Kenney CC0 audio — ask before
   download), phone vibration on hole-in (host → server → phone `vibrate` message), podium with winner celebration,

@@ -76,9 +76,9 @@ export const TUNING = {
     /** How strongly the grass slows the ball (units per second, every second). Bigger = shorter rolls. */
     rollingResistance: 2.2,
     /** On slopes the grass slows the ball less (so it rolls back down a ramp instead of sticking): from this steepness (degrees)... */
-    slopeFrom: 3,
+    slopeFrom: 2,
     /** ...to this steepness, where the slow-down is only this part of rollingResistance. */
-    slopeFull: 8,
+    slopeFull: 5,
     slopeResistance: 0.25,
     /** Extra slow-down that grows with speed, a bit like air. */
     linearDamping: 0.1,
@@ -151,6 +151,8 @@ export const TUNING = {
     tubeThickness: 0.07,
     tubeFlatten: 0.72,
     tubeRimLength: 0.2,
+    /** The castle gate is this much wider than the lane with its borders (it stands over them). */
+    castleOverhang: 0.3,
     /** Thickness of the wooden boards under the edges of a gap (jump). */
     gapBoardThickness: 0.1,
   },

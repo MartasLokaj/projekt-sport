@@ -19,6 +19,8 @@ const KIT_FLOOR = 0.063;
 const KIT_BLADE_LENGTH = 0.773;
 const KIT_BLADE_HALF_WIDTH = 0.104;
 const KIT_BLADE_HALF_THICKNESS = 0.042;
+/** Width of the Kenney castle gate building (kit units). */
+const KIT_GATE_WIDTH = 0.92;
 
 /**
  * A point the lane passes through (local coordinates, z = forward from the tee), its floor height and half-width.
@@ -27,8 +29,10 @@ const KIT_BLADE_HALF_THICKNESS = 0.042;
  *   instead of easing in and out softly;
  * - gap: there is no floor at all (a jump over water; a ball that falls in is out of bounds);
  * - tube: the lane runs through a pipe.
+ * bank tilts the lane sideways at this point (degrees, positive = the left side of the way the lane runs is higher),
+ * like a banked curve in a velodrome; it eases from point to point like the height.
  */
-export type PathPoint = { x: number; z: number; y?: number; w?: number; ramp?: boolean; gap?: boolean; tube?: boolean };
+export type PathPoint = { x: number; z: number; y?: number; w?: number; bank?: number; ramp?: boolean; gap?: boolean; tube?: boolean };
 
 /** A stretch of the lane, in units along it from the tee end. */
 export type Stretch = { from: number; to: number };
@@ -42,6 +46,8 @@ export type HoleDef = {
   path: PathPoint[];
   /** A windmill over the lane, this far from the tee (in units along the lane). */
   windmill?: number;
+  /** A castle gate over the lane, this far from the tee: the ball must go through its arch. */
+  castle?: number;
 };
 
 export const HOLES: HoleDef[] = [
@@ -120,6 +126,41 @@ export const HOLES: HoleDef[] = [
       { x: -3.4, z: 11.6, w: 1.45 },
     ],
   },
+  {
+    // Hole 6: up a slope to a castle gate. Through the arch it is downhill to the cup; miss it and the ball rolls back down.
+    number: 6,
+    par: 3,
+    place: { x: 8, z: -36, yaw: 90 },
+    castle: 6.9,
+    path: [
+      { x: 0, z: 0, w: 1.05 },
+      { x: 0, z: 2.4, w: 1.15 },
+      { x: 0, z: 6.2, y: 0.55, w: 1.3, ramp: true },
+      { x: 0, z: 7.6, y: 0.55, w: 1.3 },
+      { x: 0, z: 8.6, y: 0.55, w: 1.2 },
+      { x: 0.6, z: 10.8, w: 1.1 },
+      { x: 2.2, z: 12.6, w: 1.25 },
+      { x: 4.4, z: 13.1, w: 1.45 },
+    ],
+  },
+  {
+    // Hole 7: a banked U-turn like a velodrome that winds downhill (hit it hard and the ball rides up the wall), then on down to the cup.
+    number: 7,
+    par: 3,
+    place: { x: 66, z: 38, yaw: 0 },
+    path: [
+      { x: 0, z: 0, y: 1.3, w: 1.05 },
+      { x: 0, z: 3, y: 1.3, w: 1.0 },
+      { x: 0.2, z: 5.4, y: 1.2, w: 1.0, bank: 14, ramp: true },
+      { x: -1, z: 7.8, y: 1.0, w: 1.0, bank: 22, ramp: true },
+      { x: -3.4, z: 8.7, y: 0.85, w: 1.0, bank: 22, ramp: true },
+      { x: -5.8, z: 7.8, y: 0.68, w: 1.0, bank: 22, ramp: true },
+      { x: -6.8, z: 5.4, y: 0.48, w: 1.0, bank: 14, ramp: true },
+      { x: -6.8, z: 3, y: 0.26, w: 1.0, ramp: true },
+      { x: -6.8, z: 0.4, y: 0, w: 1.05, ramp: true },
+      { x: -6.2, z: -2, w: 1.45 },
+    ],
+  },
 ];
 
 export type Kit = Map<string, GLTF>;
@@ -158,7 +199,7 @@ export type BuiltHole = {
 
 export async function loadKit(): Promise<Kit> {
   const loader = new GLTFLoader();
-  const names = ['windmill', 'flag-red'];
+  const names = ['windmill', 'flag-red', 'structure-gate-building'];
   const loaded = await Promise.all(names.map(async (name) => [name, await loader.loadAsync(`/host/assets/minigolf/${name}.glb`)] as const));
   return new Map(loaded);
 }
@@ -236,6 +277,11 @@ export function buildHole(def: HoleDef, kit: Kit, world: RAPIER.World, R: typeof
     occluders.push(model);
   }
 
+  if (def.castle !== undefined) {
+    const model = addCastle(group, lane, def.castle, kit, walls);
+    occluders.push(model);
+  }
+
   // Pipes over the lane: they hold the ball in, and fade out like the windmill when they hide it.
   for (const stretch of lane.tubes) {
     const tube = buildTube(lane, stretch);
@@ -272,7 +318,9 @@ export function buildHole(def: HoleDef, kit: Kit, world: RAPIER.World, R: typeof
       bounds: lane.bounds(outerEdge),
       nearest: (x, z) => {
         const n = lane.nearest(x, z);
-        return { distance: n.distance, width: n.width, height: n.height, along: n.along };
+        // On a banked curve the floor is higher on one side: give the height at the lane's edge on this side.
+        const height = n.height + n.tilt * THREE.MathUtils.clamp(n.side, -n.width, n.width);
+        return { distance: n.distance, width: n.width, height, along: n.along };
       },
       outerEdge,
       gaps: lane.gaps,
@@ -290,6 +338,8 @@ class Lane {
   readonly points: THREE.Vector3[] = [];
   readonly widths: number[] = [];
   readonly tangents: THREE.Vector3[] = [];
+  /** How much the floor rises per unit to the left (tan of the bank angle), at every sample. */
+  readonly tilts: number[] = [];
   readonly spacing: number;
   /** Stretches with no floor, and stretches inside a pipe (units along the lane). */
   readonly gaps: Stretch[];
@@ -312,6 +362,11 @@ class Lane {
       const ease = def.path[k + 1].ramp ? THREE.MathUtils.clamp(f, 0, 1) : THREE.MathUtils.smoothstep(f, 0, 1);
       return THREE.MathUtils.lerp(def.path[k].y ?? 0, def.path[k + 1].y ?? 0, ease);
     };
+    const tiltAt = (t: number): number => {
+      const k = stretchAt(t);
+      const ease = THREE.MathUtils.smoothstep(t * (def.path.length - 1) - k, 0, 1);
+      return Math.tan(THREE.MathUtils.degToRad(THREE.MathUtils.lerp(def.path[k].bank ?? 0, def.path[k + 1].bank ?? 0, ease)));
+    };
     const count = Math.ceil(curve.getLength() / TUNING.course.laneSpacing);
     this.spacing = curve.getLength() / count;
     const stretches: number[] = [];
@@ -320,6 +375,7 @@ class Lane {
       this.points.push(curve.getPoint(t).setY(heightAt(t)));
       this.widths.push(widthCurve.getPoint(t).x);
       this.tangents.push(curve.getTangent(t).setY(0).normalize());
+      this.tilts.push(tiltAt(t));
       stretches.push(stretchAt(t));
     }
     /** The parts of the lane where the path's flag is set, as stretches along the lane. */
@@ -361,8 +417,19 @@ class Lane {
     return { point: this.points[i], tangent: this.tangents[i], width: this.widths[i] };
   }
 
-  /** The closest point of the centre curve to (x, z): how far it is, and the lane's width and floor height there. */
-  nearest(x: number, z: number): { distance: number; width: number; height: number; point: THREE.Vector3; along: number; side: number } {
+  /** Floor height at sample i, `side` units to the left of the centre line (banked curves are higher on one side). */
+  floorAt(i: number, side: number): number {
+    return this.points[i].y + this.tilts[i] * side;
+  }
+
+  /**
+   * The closest point of the centre curve to (x, z): how far it is, the lane's width, the centre line's height and
+   * the bank's tilt there, the distance along the lane and how far to the side (positive = left).
+   */
+  nearest(
+    x: number,
+    z: number,
+  ): { distance: number; width: number; height: number; tilt: number; point: THREE.Vector3; along: number; side: number } {
     let best = 0;
     let bestDistance = Infinity;
     for (let i = 0; i < this.points.length; i++) {
@@ -375,6 +442,7 @@ class Lane {
     // Refine on the neighbouring segments, so the edge comes out smooth.
     let point = this.points[best];
     let width = this.widths[best];
+    let tilt = this.tilts[best];
     let along = best * this.spacing;
     let tangent = this.tangents[best];
     for (const j of [best - 1, best + 1]) {
@@ -392,6 +460,7 @@ class Lane {
         bestDistance = d;
         point = new THREE.Vector3(px, a.y + (b.y - a.y) * t, pz);
         width = this.widths[i0] + (this.widths[i0 + 1] - this.widths[i0]) * t;
+        tilt = this.tilts[i0] + (this.tilts[i0 + 1] - this.tilts[i0]) * t;
         along = (i0 + t) * this.spacing;
         tangent = this.tangents[i0];
       }
@@ -400,7 +469,7 @@ class Lane {
     if (best === 0 || best === this.points.length - 1) along += (x - point.x) * tangent.x + (z - point.z) * tangent.z;
     // Sideways from the centre line: positive to the left of the way the lane runs.
     const side = (x - point.x) * tangent.z - (z - point.z) * tangent.x;
-    return { distance: Math.sqrt(bestDistance), width, height: point.y, point, along, side };
+    return { distance: Math.sqrt(bestDistance), width, height: point.y, tilt, point, along, side };
   }
 
   bounds(margin: number): THREE.Box3 {
@@ -430,16 +499,17 @@ function buildFloor(lane: Lane, cup: THREE.Vector3, cupRadius: number): THREE.Bu
       const edge = n.width + overlap;
       const gap = lane.gapAt(n.along);
       let inLane = n.distance <= edge;
-      const position = new THREE.Vector3(x, n.height, z);
+      const position = new THREE.Vector3(x, n.height + n.tilt * n.side, z);
       if (gap) {
         // Over a gap: pulled back onto the nearer edge of the gap, so the turf ends in a straight line there.
         inLane = false;
         const k = lane.index(n.along - gap.from < gap.to - n.along ? gap.from : gap.to);
         const reach = lane.widths[k] + overlap;
-        position.copy(lane.points[k]).addScaledVector(lane.left(k), THREE.MathUtils.clamp(n.side, -reach, reach));
+        const side = THREE.MathUtils.clamp(n.side, -reach, reach);
+        position.copy(lane.points[k]).addScaledVector(lane.left(k), side).setY(lane.floorAt(k, side));
       } else if (!inLane) {
         const out = new THREE.Vector3(x - n.point.x, 0, z - n.point.z).normalize();
-        position.set(n.point.x + out.x * edge, n.height, n.point.z + out.z * edge);
+        position.set(n.point.x + out.x * edge, n.height + n.tilt * Math.sign(n.side) * edge, n.point.z + out.z * edge);
       }
       const toCup = Math.hypot(x - cup.x, z - cup.z);
       const inCup = toCup < cupRadius;
@@ -506,12 +576,16 @@ function buildBumper(lane: Lane): THREE.BufferGeometry {
   const capSteps = 24;
   const leftSide = (from: number, to: number): EdgeSpot[] => {
     const spots: EdgeSpot[] = [];
-    for (let i = from; i <= to; i++) spots.push({ point: lane.points[i].clone().addScaledVector(lane.left(i), lane.widths[i]), out: lane.left(i) });
+    for (let i = from; i <= to; i++) {
+      spots.push({ point: lane.points[i].clone().addScaledVector(lane.left(i), lane.widths[i]).setY(lane.floorAt(i, lane.widths[i])), out: lane.left(i) });
+    }
     return spots;
   };
   const rightSide = (from: number, to: number): EdgeSpot[] => {
     const spots: EdgeSpot[] = [];
-    for (let i = from; i >= to; i--) spots.push({ point: lane.points[i].clone().addScaledVector(lane.left(i), -lane.widths[i]), out: lane.left(i).negate() });
+    for (let i = from; i >= to; i--) {
+      spots.push({ point: lane.points[i].clone().addScaledVector(lane.left(i), -lane.widths[i]).setY(lane.floorAt(i, -lane.widths[i])), out: lane.left(i).negate() });
+    }
     return spots;
   };
   const cupEnd = (): EdgeSpot[] => {
@@ -519,7 +593,7 @@ function buildBumper(lane: Lane): THREE.BufferGeometry {
     for (let k = 1; k < capSteps; k++) {
       const a = (k / capSteps) * Math.PI;
       const out = lane.left(n).multiplyScalar(Math.cos(a)).addScaledVector(lane.tangents[n], Math.sin(a));
-      spots.push({ point: lane.points[n].clone().addScaledVector(out, lane.widths[n]), out });
+      spots.push({ point: lane.points[n].clone().addScaledVector(out, lane.widths[n]).setY(lane.floorAt(n, Math.cos(a) * lane.widths[n])), out });
     }
     return spots;
   };
@@ -528,7 +602,7 @@ function buildBumper(lane: Lane): THREE.BufferGeometry {
     for (let k = 1; k < capSteps; k++) {
       const a = (k / capSteps) * Math.PI;
       const out = lane.left(0).multiplyScalar(-Math.cos(a)).addScaledVector(lane.tangents[0], -Math.sin(a));
-      spots.push({ point: lane.points[0].clone().addScaledVector(out, lane.widths[0]), out });
+      spots.push({ point: lane.points[0].clone().addScaledVector(out, lane.widths[0]).setY(lane.floorAt(0, -Math.cos(a) * lane.widths[0])), out });
     }
     return spots;
   };
@@ -814,6 +888,29 @@ function addCupPit(group: THREE.Group, cup: THREE.Vector3, radius: number, world
   rim.position.set(cup.x, cup.y + 0.004, cup.z);
   rim.receiveShadow = true;
   group.add(inside, bottom, rim);
+}
+
+/**
+ * A Kenney castle gate standing across the lane, scaled so its walls reach over both wooden borders.
+ * The walls and the arch are solid; the ball has to roll through the arch.
+ */
+function addCastle(group: THREE.Group, lane: Lane, distance: number, kit: Kit, walls: TriangleSoup): THREE.Object3D {
+  const cfg = TUNING.course;
+  const spot = lane.at(distance);
+  const model = kit.get('structure-gate-building')!.scene.clone(true);
+  const span = (spot.width + cfg.bumperWidth) * 2 + cfg.castleOverhang;
+  model.scale.setScalar(span / KIT_GATE_WIDTH);
+  model.rotation.y = Math.atan2(spot.tangent.x, spot.tangent.z);
+  model.position.set(spot.point.x, spot.point.y - 0.01, spot.point.z);
+  model.traverse((o) => {
+    o.castShadow = true;
+    o.receiveShadow = true;
+    if (o instanceof THREE.Mesh) o.material = (o.material as THREE.Material).clone();
+  });
+  group.add(model);
+  model.updateMatrixWorld(true);
+  addModelTriangles(model, new THREE.Object3D(), walls, (local) => local.every((v) => v.y < 0.005));
+  return model;
 }
 
 /**
