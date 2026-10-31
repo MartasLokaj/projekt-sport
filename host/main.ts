@@ -2,7 +2,7 @@ import { WS_PATH, type ClientMessage, type GameState, type PlayerInfo, type Serv
 import { TUNING } from '../shared/tuning.ts';
 import { Game } from './game/Game.ts';
 import { Hub } from './hub/Hub.ts';
-import type { FaceInfo } from './hub/faces.ts';
+import { LobbyUi } from './hub/lobbyUi.ts';
 import { Badminton } from './badminton/Badminton.ts';
 import { Lab } from './lab/Lab.ts';
 
@@ -10,18 +10,41 @@ import { Lab } from './lab/Lab.ts';
 // the QR code to join, and the players' characters standing on top. "Play" asks the server to start
 // a match; the server's game_state then switches between lobby, playing and the scoreboard.
 
-const qrEl = document.getElementById('qr') as HTMLImageElement;
-const joinUrlEl = document.getElementById('join-url')!;
-const roomCodeEl = document.getElementById('room-code')!;
 const offlineBanner = document.getElementById('offline-banner')!;
 const lobbyScreen = document.getElementById('lobby-screen')!;
 const gameScreen = document.getElementById('game-screen')!;
 const startButton = document.getElementById('start') as HTMLButtonElement;
-const pickTitle = document.getElementById('pick-title')!;
-const pickDescription = document.getElementById('pick-description')!;
-const pickPlayers = document.getElementById('pick-players')!;
-const pickCard = document.getElementById('pick')!;
-const joinedList = document.getElementById('joined')!;
+const lobbyUi = new LobbyUi();
+
+// The title menu: the spinning cube behind frosted glass, with Play and How to Play.
+const titleScreen = document.getElementById('title-screen')!;
+const titleMenu = document.getElementById('title-menu')!;
+const howTo = document.getElementById('how-to')!;
+let onTitle = true;
+
+function showTitle(on: boolean): void {
+  onTitle = on;
+  titleScreen.classList.toggle('away', !on);
+  lobbyScreen.classList.toggle('on-title', on);
+  if (hub) hub.showcase = on;
+  if (on) {
+    hub?.select(null);
+    showHowTo(false);
+  } else {
+    (document.activeElement as HTMLElement | null)?.blur();
+  }
+}
+
+function showHowTo(on: boolean): void {
+  howTo.hidden = !on;
+  titleMenu.hidden = on;
+  document.getElementById(on ? 'how-close' : 'title-play')!.focus();
+}
+
+document.getElementById('title-play')!.addEventListener('click', () => showTitle(false));
+document.getElementById('title-how')!.addEventListener('click', () => showHowTo(true));
+document.getElementById('how-close')!.addEventListener('click', () => showHowTo(false));
+lobbyScreen.classList.add('on-title');
 
 const scoresEl = document.getElementById('hud-scores')!;
 const scoreboardEl = document.getElementById('scoreboard')!;
@@ -95,16 +118,8 @@ function showLab(on: boolean): void {
 }
 
 function showHostInfo(msg: Extract<ServerMessage, { type: 'host_info' }>): void {
-  roomCodeEl.textContent = msg.room;
+  lobbyUi.setRoom(msg.room, msg.qrDataUrl, msg.joinUrl);
   document.getElementById('lab-room')!.textContent = msg.room;
-  if (msg.qrDataUrl && msg.joinUrl) {
-    qrEl.src = msg.qrDataUrl;
-    qrEl.hidden = false;
-    joinUrlEl.textContent = `or open ${msg.joinUrl.split('?')[0]} and type the code`;
-  } else {
-    qrEl.hidden = true;
-    joinUrlEl.textContent = 'This computer is not connected to a Wi-Fi network, so phones cannot join.';
-  }
 }
 
 function el(tag: string, className: string, text = ''): HTMLElement {
@@ -114,46 +129,14 @@ function el(tag: string, className: string, text = ''): HTMLElement {
   return element;
 }
 
-/** The chosen game's card (it slides away while no game is chosen). */
-function showPick(face: FaceInfo | null): void {
-  pickCard.classList.toggle('away', !face);
-  if (!face) return;
-  pickTitle.textContent = face.title;
-  pickDescription.textContent = face.description;
-  const ready = players.filter((p) => p.connected).length;
-  pickPlayers.textContent = face.available
-    ? `${face.players} · ${ready === 0 ? 'waiting for players to join' : `${ready} ready`}`
-    : face.players;
-  if (face.id === 'badminton') {
-    // The prototype: one player against the computer (the keyboard works without a phone too).
-    startButton.textContent = 'Play prototype (Enter)';
-    startButton.disabled = false;
-    pickPlayers.textContent = `Prototype · ${ready >= 2 ? '2 players, split screen' : '1 player vs CPU'} · L: Swing Lab`;
-    return;
-  }
-  startButton.textContent = face.available ? 'Play (Enter)' : 'Coming soon';
-  startButton.disabled = !face.available || ready === 0;
-}
-
-/** Who has joined, under the QR code. */
-function showJoined(): void {
-  joinedList.replaceChildren(
-    ...players.map((p) => {
-      const item = el('li', p.connected ? '' : 'away');
-      const dot = el('span', 'dot');
-      dot.style.background = p.colour;
-      item.append(dot, document.createTextNode(p.connected ? p.name : `${p.name} (away)`));
-      return item;
-    }),
-  );
-}
-
 function startSelected(): void {
+  if (!lobbyUi.playState(hub?.selected).enabled) return;
+  lobbyUi.pressPlay();
   if (hub?.selected?.id === 'badminton') {
     openBadminton('game');
     return;
   }
-  if (hub?.selected?.available && players.some((p) => p.connected)) send({ type: 'start_game' });
+  send({ type: 'start_game' });
 }
 
 let socket: WebSocket | null = null;
@@ -167,6 +150,7 @@ function connect(): void {
   socket = ws;
   ws.addEventListener('open', () => {
     offlineBanner.hidden = true;
+    lobbyUi.setOnline(true);
     send({ type: 'host_hello' });
   });
   ws.addEventListener('message', (event) => {
@@ -175,8 +159,7 @@ function connect(): void {
     else if (msg.type === 'lobby_state') {
       players = msg.players;
       hub?.setPlayers(players);
-      showJoined();
-      if (hub) showPick(hub.selected);
+      lobbyUi.setPlayers(players);
       game?.setPlayers(players);
       lab.setPlayers(players);
       if (!badmintonScreen.hidden) badminton?.setPlayers(...badmintonPlayers());
@@ -201,6 +184,7 @@ function connect(): void {
   });
   ws.addEventListener('close', () => {
     offlineBanner.hidden = false;
+    lobbyUi.setOnline(false);
     setTimeout(connect, TUNING.network.reconnectDelayMs);
   });
 }
@@ -237,6 +221,7 @@ async function onGameState(state: GameState): Promise<void> {
       lobbyScreen.hidden = false;
       // Back to the cube, with the game we just played in front.
       hub?.start();
+      showTitle(false);
       hub?.select('minigolf');
     }
     return;
@@ -319,8 +304,17 @@ function renderScores(state: GameState): void {
 startButton.addEventListener('click', startSelected);
 document.getElementById('turn-left')!.addEventListener('click', () => hub?.cycle(-1));
 document.getElementById('turn-right')!.addEventListener('click', () => hub?.cycle(1));
+lobbyUi.onChoose = (id) => hub?.select(id);
 window.addEventListener('keydown', (e) => {
+  // A focused button handles Enter and Space itself (keyboard users can Tab to it).
+  if (e.target instanceof HTMLButtonElement && (e.key === 'Enter' || e.key === ' ')) return;
   const phase = lastState?.phase ?? 'lobby';
+  if (onTitle && !playing && !labOpen) {
+    if (!howTo.hidden) {
+      if (e.key === 'Escape' || e.key === 'Enter') showHowTo(false);
+    } else if (e.key === 'Enter') showTitle(false);
+    return;
+  }
   if (labOpen) {
     const inLab = badmintonScreen.hidden;
     if (e.key === 'Escape' || (inLab && (e.key === 'l' || e.key === 'L'))) send({ type: 'lab_mode', on: false });
@@ -333,8 +327,11 @@ window.addEventListener('keydown', (e) => {
     }
     if (e.key === 'ArrowLeft') hub?.cycle(-1);
     else if (e.key === 'ArrowRight') hub?.cycle(1);
-    else if (e.key === 'Escape') hub?.select(null);
-    else if (e.key === 'Enter') {
+    else if (e.key === 'Escape') {
+      // Esc lets go of the chosen game; with nothing chosen it goes back to the title menu.
+      if (hub?.selected) hub.select(null);
+      else showTitle(true);
+    } else if (e.key === 'Enter') {
       if (hub?.selected) startSelected();
       else hub?.select('minigolf');
     }
@@ -347,9 +344,10 @@ window.addEventListener('keydown', (e) => {
 
 void Hub.create(document.getElementById('hub-canvas')!).then((created) => {
   hub = created;
-  hub.onSelect = showPick;
+  hub.onSelect = (face) => lobbyUi.showGame(face);
+  hub.showcase = onTitle;
   hub.setPlayers(players);
-  showPick(hub.selected);
+  lobbyUi.showGame(hub.selected);
   if (!playing && !labOpen) hub.start();
   if (import.meta.env.DEV) Object.assign(window, { hub }); // for debugging in the browser console
 });

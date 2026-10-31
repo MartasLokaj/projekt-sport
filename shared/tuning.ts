@@ -289,11 +289,60 @@ export const TUNING = {
     glowColour: '#7ff3ff',
     skyTop: '#0b0f2e',
     skyBottom: '#3a1f5c',
-    stars: 1500,
+    stars: 2200,
+    /** How much each star layer (near, middle, far) turns along with the cube: the depth effect. */
+    starParallax: [0.06, 0.03, 0.008],
+    /** Glowing specks floating round the cube, and how strong the coloured clouds far behind are. */
+    dust: 140,
+    nebulaOpacity: 0.28,
+    /** How much the colour clouds and the planets turn along with the cube (depth: planets are nearer than the clouds). */
+    nebulaParallax: 0.004,
+    planetParallax: 0.08,
+    /** A shooting star every so many seconds (from..to), and how long one takes to cross. */
+    shootingStarEvery: [5, 11],
+    shootingStarSeconds: 0.9,
+    /** The light outline round the cube: how much bigger than the cube it is, and how bright. */
+    outlineScale: 1.035,
+    outlineStrength: 1.6,
+    /** The glowing frame round the chosen side (0..1), and how much the cube pops when a game is chosen. */
+    frameOpacity: 0.85,
+    /** The soft glow lying on the chosen side (share of the frame's brightness). */
+    sideGlow: 0.55,
+    /** While a game is chosen, the other sides are drawn this bright (1 = not dimmed). */
+    dimOthers: 0.45,
+    /** The name sign at the back of the chosen side: how far in from the edge, and how long it takes to spring up (s). */
+    signInset: 0.45,
+    signPopSeconds: 0.6,
+    /** Trees at the edges lean out over the edge by this much (radians). */
+    overhangLean: 0.4,
+    /** The minigolf waterfall: where along the front edge it pours (sideways, -3..3) and how wide it is. */
+    waterfallX: 0.15,
+    waterfallWidth: 0.55,
+    /** Things orbiting the cube: radius, seconds per round, tilt of the orbit (degrees), size. */
+    orbiters: [
+      { kind: 'golfball', radius: 6.6, seconds: 24, tilt: 18, size: 0.32 },
+      { kind: 'shuttle', radius: 7.6, seconds: 33, tilt: -22, size: 1.6 },
+      { kind: 'cube', radius: 8.4, seconds: 41, tilt: 52, size: 0.45 },
+    ],
+    choosePop: 0.025,
+    /** How high the cube hops (bouncing) when a game is chosen. */
+    switchHop: 0.45,
+    /** A newly joined player jumps down onto the cube: from how high, how long the fall takes (s). */
+    dropHeight: 4,
+    dropSeconds: 0.55,
+    /** Confetti when they land: pieces per burst, how fast they shoot up, how wide they spread, how long they live (s). */
+    confettiPieces: 70,
+    confettiSpeed: 6,
+    confettiSpread: 3.5,
+    confettiSeconds: 1.8,
     /** Camera: distance from the cube, height and field of view (degrees). Closer = bigger cube. */
     cameraDistance: 16.5,
     cameraHeight: 3.5,
     cameraFov: 40,
+    /** On screens narrower than this (width / height) the camera steps back so the cube still fits. */
+    fitAspect: 1.3,
+    /** On upright screens, how far up the cube sits (share of the screen height), above the game card. */
+    portraitLift: 0.08,
     /** Zooming with the mouse wheel or a trackpad pinch: nearest and farthest camera distance, and how fast. */
     zoomMin: 9,
     zoomMax: 32,
@@ -303,6 +352,8 @@ export const TUNING = {
     spinFriction: 3,
     /** While nobody touches it, the cube turns slowly by itself (radians per second). */
     idleSpin: 0.12,
+    /** ...and a little faster behind the title menu (radians per second). */
+    titleSpin: 0.35,
     /** The cube's starting pose (degrees): tipped towards us and turned, so three sides show. */
     startTiltDegrees: 22,
     startTurnDegrees: -32,
@@ -323,6 +374,7 @@ export const TUNING = {
     exposure: 1.05,
     bloomStrength: 0.55,
   },
+
 
   // Badminton swing detection (Swing Lab, phase B1). The phone is held like a racket handle,
   // with the top of the phone where the racket head would be. No button: a fast enough turn is a swing.

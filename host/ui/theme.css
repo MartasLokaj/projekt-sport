@@ -1,0 +1,307 @@
+/*
+ * Cube World design system: colours, type, spacing, corners, shadows, motion and the shared building
+ * blocks (panels, buttons, chips, keycaps). Every screen on the big screen uses these, so the
+ * whole game looks like one thing. Change a value here and it changes everywhere.
+ */
+
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/host/assets/fonts/nunito-sans-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/host/assets/fonts/nunito-sans-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+:root {
+  /* Colour: deep space behind everything, soft white text, one colour per job. */
+  --cw-space-0: #060920;
+  --cw-space-1: #0e1236;
+  --cw-space-2: #251551;
+  --cw-surface: rgba(18, 20, 56, 0.6);
+  --cw-surface-strong: rgba(24, 26, 70, 0.86);
+  --cw-surface-raised: rgba(255, 255, 255, 0.06);
+  --cw-stroke: rgba(255, 255, 255, 0.1);
+  --cw-stroke-strong: rgba(255, 255, 255, 0.2);
+  --cw-text: #f3f5ff;
+  --cw-text-2: rgba(226, 231, 255, 0.74);
+  --cw-text-3: rgba(226, 231, 255, 0.5);
+  --cw-play: #3ddc84; /* primary action: play, start, go */
+  --cw-play-deep: #1f9e57;
+  --cw-play-ink: #05261a;
+  --cw-link: #4da8ff; /* multiplayer: phones, rooms, players */
+  --cw-link-soft: rgba(77, 168, 255, 0.16);
+  --cw-warn: #ffb547;
+  --cw-warn-soft: rgba(255, 181, 71, 0.16);
+  --cw-good: #3ddc84;
+  --cw-good-soft: rgba(61, 220, 132, 0.16);
+  --cw-bad: #ff6b81;
+  --cw-glow: #7ff3ff;
+
+  /* Type: one friendly face, five sizes. */
+  --cw-font: 'Nunito Sans', ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  --cw-fs-display: clamp(34px, 3vw, 52px); /* game titles */
+  --cw-fs-action: clamp(20px, 1.6vw, 26px); /* primary buttons */
+  --cw-fs-title: clamp(16px, 1.2vw, 19px); /* panel headings, names */
+  --cw-fs-body: clamp(14px, 1.05vw, 16px); /* descriptions */
+  --cw-fs-small: 13px; /* hints, technical details */
+  --cw-fs-micro: 11px; /* labels in caps */
+
+  /* Spacing on a 4 px grid. */
+  --cw-s1: 4px;
+  --cw-s2: 8px;
+  --cw-s3: 12px;
+  --cw-s4: 16px;
+  --cw-s5: 24px;
+  --cw-s6: 32px;
+  --cw-gutter: clamp(16px, 2vw, 32px);
+
+  /* Corners. */
+  --cw-r-sm: 10px;
+  --cw-r-md: 16px;
+  --cw-r-lg: 24px;
+  --cw-r-pill: 999px;
+
+  /* Shadows: panels float above the world. */
+  --cw-shadow-panel: 0 24px 60px rgba(2, 3, 18, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --cw-shadow-pop: 0 10px 28px rgba(2, 3, 18, 0.45);
+
+  /* Motion: quick for touches, a little longer for things that move across the screen. */
+  --cw-fast: 120ms;
+  --cw-base: 220ms;
+  --cw-slow: 420ms;
+  --cw-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --cw-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --cw-fast: 1ms;
+    --cw-base: 1ms;
+    --cw-slow: 1ms;
+  }
+}
+
+/* ---------- Panel: frosted glass floating over the 3D world ---------- */
+
+.cw-panel {
+  background: var(--cw-surface);
+  border: 1px solid var(--cw-stroke);
+  border-radius: var(--cw-r-lg);
+  box-shadow: var(--cw-shadow-panel);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  color: var(--cw-text);
+}
+
+.cw-label {
+  margin: 0;
+  font-size: var(--cw-fs-micro);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cw-text-3);
+}
+
+/* ---------- Buttons ---------- */
+
+.cw-btn {
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--cw-s3);
+  border: none;
+  cursor: pointer;
+  color: var(--cw-text);
+  background: var(--cw-surface-raised);
+  border-radius: var(--cw-r-pill);
+  transition: transform var(--cw-fast) var(--cw-ease), background var(--cw-base), box-shadow var(--cw-base), color var(--cw-base);
+  -webkit-tap-highlight-color: transparent;
+}
+.cw-btn:focus-visible {
+  outline: 3px solid var(--cw-link);
+  outline-offset: 3px;
+}
+.cw-btn:disabled {
+  cursor: default;
+}
+
+/* The big green Play button: rises on hover, sinks when pressed. */
+.cw-btn--play {
+  width: 100%;
+  min-height: 60px;
+  padding: 0 var(--cw-s5);
+  font-size: var(--cw-fs-action);
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  color: var(--cw-play-ink);
+  background: linear-gradient(180deg, #5ef09c, var(--cw-play));
+  box-shadow: 0 5px 0 var(--cw-play-deep), 0 12px 28px rgba(61, 220, 132, 0.35);
+}
+.cw-btn--play:not(:disabled):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 7px 0 var(--cw-play-deep), 0 16px 34px rgba(61, 220, 132, 0.45);
+}
+.cw-btn--play:not(:disabled):active,
+.cw-btn--play.is-pressed {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 var(--cw-play-deep), 0 6px 16px rgba(61, 220, 132, 0.3);
+}
+.cw-btn--play:disabled {
+  color: var(--cw-text-3);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px var(--cw-stroke);
+}
+.cw-btn--play kbd {
+  font: inherit;
+  font-size: var(--cw-fs-micro);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(5, 38, 26, 0.14);
+}
+.cw-btn--play:disabled kbd {
+  display: none;
+}
+
+/* Second choice next to a Play button: a quiet glass pill. */
+.cw-btn--ghost {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 var(--cw-s5);
+  font-size: var(--cw-fs-title);
+  font-weight: 800;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px var(--cw-stroke-strong);
+}
+.cw-btn--ghost:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.14);
+}
+.cw-btn--ghost:active {
+  transform: translateY(2px);
+}
+
+/* Round arrow buttons. */
+.cw-btn--icon {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: inset 0 0 0 1px var(--cw-stroke);
+}
+.cw-btn--icon:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+.cw-btn--icon:active {
+  transform: scale(0.92);
+}
+
+/* ---------- Chips: small coloured status labels ---------- */
+
+.cw-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--cw-r-pill);
+  font-size: var(--cw-fs-micro);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--cw-text-2);
+  background: var(--cw-surface-raised);
+}
+.cw-chip::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.cw-chip.is-good {
+  color: var(--cw-good);
+  background: var(--cw-good-soft);
+}
+.cw-chip.is-link {
+  color: var(--cw-link);
+  background: var(--cw-link-soft);
+}
+.cw-chip.is-warn {
+  color: var(--cw-warn);
+  background: var(--cw-warn-soft);
+}
+
+/* ---------- Keycaps in hints ---------- */
+
+.cw-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--cw-text);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.3), inset 0 0 0 1px var(--cw-stroke);
+}
+
+/* ---------- Avatars: a little round chibi face in the player's colours ---------- */
+
+.cw-avatar {
+  --shirt: #888;
+  --skin: #f1c7a5;
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 120%, var(--shirt) 0 46%, transparent 47%), rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 2px var(--shirt);
+  overflow: hidden;
+}
+.cw-avatar::before {
+  /* the head */
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 18%;
+  width: 56%;
+  height: 52%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: var(--skin);
+}
+.cw-avatar::after {
+  /* two eyes */
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 41%;
+  width: 3px;
+  height: 4px;
+  border-radius: 2px;
+  transform: translateX(-50%);
+  box-shadow: -4px 0 0 #2a2140, 4px 0 0 #2a2140;
+}

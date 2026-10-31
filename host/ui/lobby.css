@@ -1,0 +1,793 @@
+/*
+ * Cube World lobby: the join panel (left), the chosen game's card (right), the brand, the key hints
+ * and the title menu, all floating over the 3D cube. Built from the pieces in theme.css.
+ */
+
+#lobby-screen {
+  position: fixed;
+  inset: 0;
+  background: var(--cw-space-0);
+  color: var(--cw-text);
+  font-family: var(--cw-font);
+  overflow: hidden;
+}
+#hub-canvas {
+  position: absolute;
+  inset: 0;
+}
+/* A soft dark edge, so the panels and text read well over the stars. */
+#lobby-screen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(3, 4, 18, 0.55) 100%);
+}
+#lobby-screen > *:not(#hub-canvas) {
+  z-index: 1;
+}
+
+/* ---------- Brand ---------- */
+
+.cw-brand {
+  position: absolute;
+  top: var(--cw-gutter);
+  left: var(--cw-gutter);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: clamp(18px, 1.5vw, 24px);
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+.cw-brand-mark {
+  width: 1.2em;
+  height: 1.2em;
+  border-radius: 28%;
+  background: linear-gradient(135deg, #c9bcff 0 50%, #9d89ff 50%);
+  box-shadow: 0 0 18px rgba(127, 243, 255, 0.55), inset 0 0 0 2px rgba(255, 255, 255, 0.35);
+  transform: rotate(12deg);
+}
+
+/* ---------- Join panel (left) ---------- */
+
+#join {
+  position: absolute;
+  top: 50%;
+  left: var(--cw-gutter);
+  max-height: calc(100% - 2 * var(--cw-gutter));
+  width: clamp(250px, 20vw, 310px);
+  transform: translate(0, -50%);
+  transition: transform var(--cw-slow) var(--cw-ease), opacity var(--cw-base);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--cw-s3);
+  padding: var(--cw-s5) var(--cw-s4) var(--cw-s4);
+  overflow: hidden auto;
+  scrollbar-width: none;
+}
+/* Everyone who joined is connected: the panel shrinks to a small QR for latecomers (hover opens it again). */
+@media (min-width: 901px) and (min-aspect-ratio: 1/1) {
+  #join.is-compact:not(:hover) {
+    width: 190px;
+    gap: var(--cw-s2);
+    padding: var(--cw-s3);
+  }
+  #join.is-compact:not(:hover) .join-step,
+  #join.is-compact:not(:hover) #join-url,
+  #join.is-compact:not(:hover) #help,
+  #join.is-compact:not(:hover) #link-status {
+    display: none;
+  }
+  #join.is-compact:not(:hover) .join-head h2 {
+    font-size: var(--cw-fs-small);
+  }
+  #join.is-compact:not(:hover) #room-code span {
+    width: 24px;
+    height: 30px;
+    font-size: 17px;
+  }
+  #join.is-compact:not(:hover) .room {
+    justify-content: center;
+    padding: 4px 8px;
+  }
+  #join.is-compact:not(:hover) .room .cw-label {
+    display: none;
+  }
+}
+#join {
+  transition: transform var(--cw-slow) var(--cw-ease), opacity var(--cw-base), width var(--cw-slow) var(--cw-ease), padding var(--cw-slow) var(--cw-ease);
+}
+/* The join panel only shows while a game is chosen. */
+#join.away {
+  transform: translate(calc(-100% - var(--cw-gutter) * 2), -50%);
+  opacity: 0;
+  pointer-events: none;
+}
+.join-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cw-s2);
+}
+.join-head h2 {
+  margin: 0;
+  font-size: var(--cw-fs-title);
+  font-weight: 900;
+}
+/* The QR code stays black on white with a quiet border, so every phone camera reads it. */
+.qr-frame {
+  position: relative;
+  padding: 10px;
+  border-radius: var(--cw-r-md);
+  background: #ffffff;
+  box-shadow: 0 0 0 4px var(--cw-link-soft), 0 10px 30px rgba(77, 168, 255, 0.25);
+}
+#qr {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  image-rendering: pixelated;
+}
+.qr-missing {
+  margin: 0;
+  padding: var(--cw-s5) var(--cw-s3);
+  color: #42306b;
+  font-size: var(--cw-fs-body);
+  font-weight: 700;
+  text-align: center;
+}
+.join-step {
+  margin: 0;
+  font-size: var(--cw-fs-body);
+  font-weight: 700;
+  color: var(--cw-text-2);
+  text-align: center;
+}
+.room {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cw-s2);
+  padding: var(--cw-s2) var(--cw-s3);
+  border-radius: var(--cw-r-md);
+  background: var(--cw-surface-raised);
+}
+#room-code {
+  display: flex;
+  gap: 4px;
+}
+#room-code span {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 38px;
+  border-radius: 8px;
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--cw-text);
+  background: rgba(77, 168, 255, 0.14);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.25);
+}
+#join-url {
+  margin: -4px 0 0;
+  font-size: var(--cw-fs-small);
+  color: var(--cw-text-3);
+  text-align: center;
+  line-height: 1.5;
+}
+.join-address {
+  display: block;
+  font-weight: 800;
+  color: var(--cw-text-2);
+  overflow-wrap: anywhere;
+}
+#help {
+  font-size: var(--cw-fs-small);
+  color: var(--cw-text-2);
+}
+#help summary {
+  cursor: pointer;
+  font-weight: 800;
+  color: var(--cw-text-3);
+  list-style: none;
+}
+#help summary::-webkit-details-marker {
+  display: none;
+}
+#help summary::before {
+  content: '?';
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-right: 6px;
+  border-radius: 50%;
+  font-size: 11px;
+  color: var(--cw-text);
+  background: rgba(255, 255, 255, 0.12);
+}
+#help p {
+  margin: var(--cw-s2) 0 0;
+  line-height: 1.45;
+}
+
+/* ---------- Game card (right) ---------- */
+
+#pick {
+  --accent: var(--cw-play);
+  position: absolute;
+  top: 50%;
+  right: var(--cw-gutter);
+  width: clamp(290px, 23vw, 370px);
+  box-sizing: border-box;
+  max-height: calc(100% - 2 * var(--cw-gutter));
+  overflow: hidden auto;
+  scrollbar-width: none;
+  padding: var(--cw-s4) var(--cw-s4) var(--cw-s4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--cw-s3);
+  transform: translate(0, -50%);
+  transition: transform var(--cw-slow) var(--cw-ease), opacity var(--cw-base);
+}
+#pick.away {
+  transform: translate(calc(100% + var(--cw-gutter) * 2), -50%);
+  opacity: 0;
+  pointer-events: none;
+}
+/* The game's picture: its icon on a glowing tile in the game's colour. */
+.pick-art {
+  position: relative;
+  height: clamp(96px, 13vh, 150px);
+  border-radius: var(--cw-r-md);
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 70% 30%, color-mix(in srgb, var(--accent) 55%, transparent), transparent 65%),
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 30%, #141640), #12143a);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+  transition: background var(--cw-slow);
+}
+.pick-art svg {
+  position: absolute;
+  right: 8%;
+  bottom: -6%;
+  height: 112%;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.35));
+}
+.pick-art .cw-chip {
+  position: absolute;
+  z-index: 1;
+  top: var(--cw-s3);
+  left: var(--cw-s3);
+  background: rgba(8, 10, 34, 0.55);
+}
+.pick-head h2 {
+  margin: 0;
+  font-size: var(--cw-fs-display);
+  font-weight: 900;
+  line-height: 1.02;
+  letter-spacing: -0.01em;
+}
+#pick-description {
+  margin: 6px 0 0;
+  font-size: var(--cw-fs-body);
+  line-height: 1.4;
+  color: var(--cw-text-2);
+}
+.pick-facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--cw-s2);
+  margin: 0;
+}
+.pick-facts div {
+  padding: var(--cw-s2) var(--cw-s3);
+  border-radius: var(--cw-r-sm);
+  background: var(--cw-surface-raised);
+}
+.pick-facts dt {
+  font-size: var(--cw-fs-micro);
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cw-text-3);
+}
+.pick-facts dd {
+  margin: 2px 0 0;
+  font-size: var(--cw-fs-body);
+  font-weight: 800;
+}
+#pick-modes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.mode {
+  display: flex;
+  align-items: center;
+  gap: var(--cw-s3);
+  padding: var(--cw-s2) var(--cw-s3);
+  border-radius: var(--cw-r-sm);
+  border: 1px solid var(--cw-stroke);
+  transition: border-color var(--cw-base), background var(--cw-base);
+}
+.mode::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 2px solid var(--cw-stroke-strong);
+}
+.mode.is-active {
+  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.mode.is-active::before {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+}
+.mode b {
+  display: block;
+  font-size: var(--cw-fs-body);
+  font-weight: 800;
+}
+.mode span {
+  font-size: var(--cw-fs-small);
+  color: var(--cw-text-3);
+}
+#pick-note {
+  min-height: 1.3em;
+  margin: -4px 0 0;
+  font-size: var(--cw-fs-small);
+  font-weight: 700;
+  color: var(--cw-text-3);
+  text-align: center;
+}
+#pick-note.is-warn {
+  color: var(--cw-warn);
+}
+.pick-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cw-s2);
+  padding-top: var(--cw-s3);
+  border-top: 1px solid var(--cw-stroke);
+}
+#pick-dots {
+  display: flex;
+  gap: 4px;
+}
+.pick-nav .cw-btn--icon {
+  width: 36px;
+  height: 36px;
+  font-size: 18px;
+}
+/* One small picture per side of the cube; the chosen one is lit in its game's colour. */
+#pick-dots button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 3px;
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 1px var(--cw-stroke);
+  opacity: 0.55;
+  transition: transform var(--cw-base) var(--cw-spring), opacity var(--cw-base), box-shadow var(--cw-base), background var(--cw-base);
+}
+#pick-dots button svg {
+  width: 100%;
+  height: 100%;
+}
+#pick-dots button:hover {
+  opacity: 0.9;
+  transform: translateY(-2px);
+}
+#pick-dots button.is-current {
+  opacity: 1;
+  transform: scale(1.12);
+  background: color-mix(in srgb, var(--dot) 22%, transparent);
+  box-shadow: inset 0 0 0 2px var(--dot), 0 0 14px color-mix(in srgb, var(--dot) 60%, transparent);
+}
+#pick-dots button:focus-visible {
+  outline: 2px solid var(--cw-link);
+  outline-offset: 3px;
+}
+/* The faces of the players who joined, under the Play button. */
+#pick-faces {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  min-height: 0;
+}
+#pick-faces:empty {
+  display: none;
+}
+#pick-faces .cw-avatar {
+  width: 36px;
+  height: 36px;
+  animation: face-in var(--cw-slow) var(--cw-spring);
+}
+#pick-faces .cw-avatar.is-away {
+  opacity: 0.4;
+  filter: grayscale(0.7);
+}
+@keyframes face-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.6);
+  }
+}
+.swap-in {
+  animation: swap-in var(--cw-slow) var(--cw-ease);
+}
+@keyframes swap-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* "Choose a game" while the cube floats freely. */
+#pick-hint {
+  position: absolute;
+  top: 50%;
+  right: var(--cw-gutter);
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--cw-s3);
+  padding: var(--cw-s3) var(--cw-s4);
+  border-radius: var(--cw-r-pill);
+  font-size: var(--cw-fs-body);
+  font-weight: 800;
+  transition: opacity var(--cw-base), transform var(--cw-slow) var(--cw-ease);
+}
+#pick-hint.away {
+  opacity: 0;
+  transform: translate(20px, -50%);
+  pointer-events: none;
+}
+
+/* ---------- Title menu: the spinning cube behind frosted glass, Play and How to Play ---------- */
+
+#lobby-screen > #title-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  padding: var(--cw-gutter);
+  box-sizing: border-box;
+  background: radial-gradient(ellipse at 50% 45%, rgba(37, 21, 81, 0.25), rgba(6, 9, 32, 0.6));
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  transition: opacity var(--cw-slow) var(--cw-ease), backdrop-filter var(--cw-slow), visibility 0s;
+}
+#title-screen.away {
+  opacity: 0;
+  visibility: hidden;
+  backdrop-filter: blur(0);
+  -webkit-backdrop-filter: blur(0);
+  transition: opacity var(--cw-slow) var(--cw-ease), backdrop-filter var(--cw-slow), visibility 0s var(--cw-slow);
+}
+.title-menu {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(380px, 100%);
+  text-align: center;
+  animation: title-in 700ms var(--cw-ease);
+}
+.title-mark {
+  width: 64px;
+  height: 64px;
+  margin-bottom: var(--cw-s4);
+  border-radius: 28%;
+  background: linear-gradient(135deg, #c9bcff 0 50%, #9d89ff 50%);
+  box-shadow: 0 0 40px rgba(127, 243, 255, 0.55), inset 0 0 0 3px rgba(255, 255, 255, 0.35);
+  animation: mark-float 4s ease-in-out infinite;
+}
+.title-menu h1 {
+  margin: 0;
+  font-size: clamp(48px, 7vw, 96px);
+  font-weight: 900;
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  text-shadow: 0 6px 30px rgba(127, 243, 255, 0.35);
+}
+.title-tagline {
+  margin: var(--cw-s3) 0 var(--cw-s6);
+  font-size: var(--cw-fs-title);
+  font-weight: 700;
+  color: var(--cw-text-2);
+}
+.title-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cw-s3);
+  width: 100%;
+}
+#how-to {
+  width: min(560px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  box-sizing: border-box;
+  padding: var(--cw-s5);
+  animation: title-in var(--cw-slow) var(--cw-spring);
+}
+#how-to h2 {
+  margin: 0 0 var(--cw-s4);
+  font-size: var(--cw-fs-display);
+  font-weight: 900;
+}
+.how-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cw-s3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+.how-steps li {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  column-gap: var(--cw-s3);
+  counter-increment: step;
+}
+.how-steps li::before {
+  content: counter(step);
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-weight: 900;
+  color: var(--cw-play-ink);
+  background: var(--cw-play);
+}
+.how-steps b {
+  font-size: var(--cw-fs-title);
+  font-weight: 900;
+}
+.how-steps span {
+  font-size: var(--cw-fs-body);
+  line-height: 1.45;
+  color: var(--cw-text-2);
+}
+.how-steps .cw-key {
+  color: var(--cw-text);
+}
+.how-tip {
+  margin: var(--cw-s4) 0;
+  padding: var(--cw-s3);
+  border-radius: var(--cw-r-md);
+  font-size: var(--cw-fs-small);
+  line-height: 1.45;
+  color: var(--cw-text-2);
+  background: var(--cw-surface-raised);
+}
+.how-tip b {
+  color: var(--cw-text);
+}
+@keyframes title-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+}
+@keyframes mark-float {
+  50% {
+    transform: translateY(-6px) rotate(8deg);
+  }
+}
+/* While the title menu is open, the cube's own panels and hints stay hidden. */
+#lobby-screen.on-title .cw-brand,
+#lobby-screen.on-title #pick-hint,
+#lobby-screen.on-title #hub-keys {
+  opacity: 0;
+  pointer-events: none;
+}
+.cw-brand,
+#hub-keys {
+  transition: opacity var(--cw-slow);
+}
+
+/* ---------- Key hints (bottom) ---------- */
+
+#hub-keys {
+  position: absolute;
+  bottom: var(--cw-gutter);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 18px;
+  max-width: calc(100% - 2 * clamp(290px, 23vw, 370px) - 4 * var(--cw-gutter));
+  font-size: var(--cw-fs-small);
+  font-weight: 700;
+  color: var(--cw-text-3);
+  pointer-events: none;
+}
+#hub-keys span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+/* ---------- Lost connection ---------- */
+
+#offline-banner {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  border-radius: var(--cw-r-pill);
+  font-family: var(--cw-font);
+  font-size: 17px;
+  font-weight: 800;
+  color: #2a0d12;
+  background: var(--cw-bad);
+  box-shadow: var(--cw-shadow-pop);
+}
+
+/* ---------- Smaller screens: never just shrink, re-arrange ---------- */
+
+/* Laptops with little height: a smaller QR code, the help folded away. */
+@media (max-height: 760px) {
+  #join {
+    width: clamp(230px, 18vw, 270px);
+    gap: var(--cw-s2);
+    padding-top: var(--cw-s4);
+  }
+  .pick-art {
+    height: 84px;
+  }
+}
+
+/* Tablets and narrow windows: the join panel becomes a bar on top, the game card a sheet at the bottom. */
+@media (max-width: 900px), (max-aspect-ratio: 1/1) {
+  .cw-brand {
+    display: none;
+  }
+  #join {
+    top: var(--cw-gutter);
+    right: var(--cw-gutter);
+    width: auto;
+    transform: none;
+    display: grid;
+    grid-template-columns: 96px 1fr;
+    grid-template-areas: 'qr head' 'qr room';
+    align-items: center;
+    column-gap: var(--cw-s4);
+    row-gap: var(--cw-s2);
+    padding: var(--cw-s3);
+  }
+  .join-head {
+    grid-area: head;
+  }
+  .qr-frame {
+    grid-area: qr;
+    padding: 6px;
+  }
+  .room {
+    grid-area: room;
+    padding: 4px 8px;
+  }
+  #room-code span {
+    width: 24px;
+    height: 30px;
+    font-size: 18px;
+  }
+  #join.away {
+    transform: translateY(calc(-100% - var(--cw-gutter)));
+  }
+  .join-step,
+  #join-url,
+  #help {
+    display: none;
+  }
+  #pick {
+    top: auto;
+    left: var(--cw-gutter);
+    right: var(--cw-gutter);
+    bottom: var(--cw-gutter);
+    width: auto;
+    max-height: 52%;
+    transform: none;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas: 'art head' 'facts facts' 'modes modes' 'play play' 'faces faces' 'note note' 'nav nav';
+  }
+  #pick.away {
+    transform: translateY(calc(100% + var(--cw-gutter)));
+  }
+  .pick-art {
+    grid-area: art;
+    height: 88px;
+  }
+  .pick-head {
+    grid-area: head;
+    align-self: center;
+  }
+  .pick-facts {
+    grid-area: facts;
+  }
+  .pick-modes {
+    grid-area: modes;
+  }
+  #start {
+    grid-area: play;
+  }
+  #pick-faces {
+    grid-area: faces;
+  }
+  #pick-note {
+    grid-area: note;
+  }
+  .pick-nav {
+    grid-area: nav;
+  }
+  #pick-hint {
+    top: auto;
+    right: 50%;
+    bottom: var(--cw-gutter);
+    transform: translateX(50%);
+  }
+  #pick-hint.away {
+    transform: translate(50%, 20px);
+  }
+  #hub-keys {
+    display: none;
+  }
+}
+
+/* Phones held upright: only what you need to start. */
+@media (max-width: 560px) {
+  #join {
+    grid-template-columns: 76px 1fr;
+  }
+  .join-head h2 {
+    font-size: var(--cw-fs-body);
+  }
+  #pick {
+    grid-template-columns: 96px 1fr;
+    gap: var(--cw-s2) var(--cw-s3);
+    padding: var(--cw-s3);
+  }
+  .pick-art {
+    height: 72px;
+  }
+  .pick-art .cw-chip,
+  .pick-facts,
+  .pick-modes {
+    display: none;
+  }
+  #pick-description {
+    font-size: var(--cw-fs-small);
+  }
+  .pick-head h2 {
+    font-size: 26px;
+  }
+}
