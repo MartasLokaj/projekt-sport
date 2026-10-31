@@ -134,9 +134,47 @@
     <div id="offline-banner" role="status" hidden>Lost connection to the game server · reconnecting…</div>
     <div id="lobby-screen">
       <div id="hub-canvas"></div>
-      <h1 class="cw-brand"><span class="cw-brand-mark" aria-hidden="true"></span>Cube World</h1>
+      <p class="cw-brand"><span class="cw-brand-mark" aria-hidden="true"></span>Cube World</p>
 
-      <aside id="join" class="cw-panel" aria-label="Join the game">
+      <div id="title-screen">
+        <div class="title-menu" id="title-menu">
+          <span class="title-mark" aria-hidden="true"></span>
+          <h1>Cube World</h1>
+          <p class="title-tagline">Party sports on a tiny planet. Your phone is the controller.</p>
+          <div class="title-buttons">
+            <button id="title-play" class="cw-btn cw-btn--play" type="button">Play<kbd>Enter</kbd></button>
+            <button id="title-how" class="cw-btn cw-btn--ghost" type="button">How to Play</button>
+          </div>
+        </div>
+        <section id="how-to" class="cw-panel" role="dialog" aria-modal="true" aria-labelledby="how-title" hidden>
+          <h2 id="how-title">How to Play</h2>
+          <ol class="how-steps">
+            <li>
+              <b>Choose a game first</b>
+              <span>Press Play, then spin the cube with the mouse and click a side (or use <span class="cw-key">←</span> <span class="cw-key">→</span>). Each side is a different sport.</span>
+            </li>
+            <li>
+              <b>Then join with your phones</b>
+              <span>Once a game is chosen, a QR code appears. Scan it with the phone camera, or open the address shown and type the room code. Phones must be on the same Wi-Fi as this computer.</span>
+            </li>
+            <li>
+              <b>Make your player</b>
+              <span>Type your name, pick your colours and tap Join. Your character appears on the cube.</span>
+            </li>
+            <li>
+              <b>Play!</b>
+              <span>Press Play or <span class="cw-key">Enter</span>. Swing your phone like a putter in Minigolf, like a racket in Badminton.</span>
+            </li>
+          </ol>
+          <p class="how-tip">
+            <b>Phone can't connect?</b> The first time, the phone shows a security warning: tap "Show Details" or
+            "Advanced" and continue. If the Mac asks whether "node" may accept incoming connections, click "Allow".
+          </p>
+          <button id="how-close" class="cw-btn cw-btn--play" type="button">Got it<kbd>Esc</kbd></button>
+        </section>
+      </div>
+
+      <aside id="join" class="cw-panel away" aria-label="Join the game">
         <div class="join-head">
           <h2>Join with your phone</h2>
           <span id="link-status" class="cw-chip is-link">Connecting</span>
@@ -151,11 +189,6 @@
           <b id="room-code" aria-live="polite"></b>
         </div>
         <p id="join-url"></p>
-        <div class="players-head">
-          <span class="cw-label">Players</span>
-          <span id="player-count">0 / 4</span>
-        </div>
-        <ul id="joined" aria-live="polite"></ul>
         <details id="help">
           <summary>Phone can't connect?</summary>
           <p>
@@ -196,10 +229,9 @@
         <span>Scroll to zoom</span>
         <span><span class="cw-key">←</span><span class="cw-key">→</span> choose</span>
         <span><span class="cw-key">Enter</span> play</span>
-        <span><span class="cw-key">Esc</span> let go</span>
+        <span><span class="cw-key">Esc</span> back</span>
         <span><span class="cw-key">L</span> swing lab</span>
       </div>
-      <div id="toasts" class="cw-toasts" aria-live="polite"></div>
     </div>
 
     <div id="lab-screen" hidden>

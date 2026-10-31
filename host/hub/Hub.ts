@@ -57,6 +57,8 @@ export class Hub {
   private drag: { x: number; y: number; moved: number; time: number } | null = null;
   private time = 0;
   private running = false;
+  /** Behind the title menu the cube turns a little faster, like a showcase. */
+  showcase = false;
   /** Camera distance from the cube: where it is now and where the zoom wants it. */
   private distance: number = TUNING.hub.cameraDistance;
   private targetDistance: number = TUNING.hub.cameraDistance;
@@ -229,7 +231,8 @@ export class Hub {
     } else if (!this.drag) {
       // Let go: keep spinning a little after a drag, slowing down, then drift slowly round by itself.
       this.spin.multiplyScalar(Math.exp(-c.spinFriction * dt));
-      if (this.spin.length() < c.idleSpin) this.spin.x += (c.idleSpin - this.spin.x) * Math.min(1, dt);
+      const idle = this.showcase ? c.titleSpin : c.idleSpin;
+      if (this.spin.length() < idle) this.spin.x += (idle - this.spin.x) * Math.min(1, dt);
       this.turnBy(this.spin.x * dt, this.spin.y * dt);
     }
     // Glide smoothly to the zoomed distance, along the same line of view.

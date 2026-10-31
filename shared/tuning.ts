@@ -315,6 +315,8 @@ export const TUNING = {
     spinFriction: 3,
     /** While nobody touches it, the cube turns slowly by itself (radians per second). */
     idleSpin: 0.12,
+    /** ...and a little faster behind the title menu (radians per second). */
+    titleSpin: 0.35,
     /** The cube's starting pose (degrees): tipped towards us and turned, so three sides show. */
     startTiltDegrees: 22,
     startTurnDegrees: -32,
@@ -336,13 +338,6 @@ export const TUNING = {
     bloomStrength: 0.55,
   },
 
-  // The lobby's page panels around the cube (host/hub/lobbyUi.ts, styles in host/ui/).
-  lobbyUi: {
-    /** How long a new player's seat says "Joining" before "Connected" (milliseconds). */
-    joiningMs: 1500,
-    /** How long a news toast ("Ana joined") stays on screen (milliseconds). */
-    toastMs: 3200,
-  },
 
   // Badminton swing detection (Swing Lab, phase B1). The phone is held like a racket handle,
   // with the top of the phone where the racket head would be. No button: a fast enough turn is a swing.

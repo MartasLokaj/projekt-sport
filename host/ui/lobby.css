@@ -1,6 +1,6 @@
 /*
  * Cube World lobby: the join panel (left), the chosen game's card (right), the brand, the key hints
- * and the news toasts, all floating over the 3D cube. Built from the pieces in theme.css.
+ * and the title menu, all floating over the 3D cube. Built from the pieces in theme.css.
  */
 
 #lobby-screen {
@@ -56,10 +56,12 @@
 
 #join {
   position: absolute;
-  top: var(--cw-gutter);
+  top: 50%;
   left: var(--cw-gutter);
-  bottom: var(--cw-gutter);
+  max-height: calc(100% - 2 * var(--cw-gutter));
   width: clamp(250px, 20vw, 310px);
+  transform: translate(0, -50%);
+  transition: transform var(--cw-slow) var(--cw-ease), opacity var(--cw-base);
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -67,6 +69,12 @@
   padding: var(--cw-s5) var(--cw-s4) var(--cw-s4);
   overflow: hidden auto;
   scrollbar-width: none;
+}
+/* The join panel only shows while a game is chosen. */
+#join.away {
+  transform: translate(calc(-100% - var(--cw-gutter) * 2), -50%);
+  opacity: 0;
+  pointer-events: none;
 }
 .join-head {
   display: flex;
@@ -140,134 +148,7 @@
   text-align: center;
   word-break: break-all;
 }
-.players-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-top: var(--cw-s2);
-}
-#player-count {
-  font-size: var(--cw-fs-small);
-  font-weight: 800;
-  color: var(--cw-text-3);
-}
-
-/* Four seats: filled ones show the player, empty ones wait. */
-#joined {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.seat {
-  display: flex;
-  align-items: center;
-  gap: var(--cw-s3);
-  min-height: 52px;
-  padding: 6px 10px 6px 6px;
-  box-sizing: border-box;
-  border-radius: var(--cw-r-md);
-  background: var(--cw-surface-raised);
-  border: 1px solid transparent;
-  transition: opacity var(--cw-base), background var(--cw-base), border-color var(--cw-base);
-}
-.seat.is-new {
-  animation: seat-in var(--cw-slow) var(--cw-spring);
-}
-.seat.is-empty {
-  background: none;
-  border: 1px dashed var(--cw-stroke-strong);
-  color: var(--cw-text-3);
-}
-.seat.is-empty .seat-name {
-  font-size: var(--cw-fs-body);
-  font-weight: 700;
-}
-.seat.is-empty .seat-slot {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 1px dashed var(--cw-stroke-strong);
-  font-size: var(--cw-fs-small);
-  font-weight: 800;
-}
-.seat.is-away {
-  opacity: 0.6;
-}
-.seat-text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  flex: 1;
-}
-.seat-name {
-  font-size: var(--cw-fs-title);
-  font-weight: 800;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.seat-detail {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--cw-fs-small);
-  font-weight: 700;
-  color: var(--cw-text-3);
-}
-.seat-state::before {
-  content: '';
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  margin-right: 5px;
-  border-radius: 50%;
-  background: currentColor;
-  vertical-align: 1px;
-}
-.seat-state.is-good {
-  color: var(--cw-good);
-}
-.seat-state.is-link {
-  color: var(--cw-link);
-}
-.seat-state.is-link::before {
-  animation: blink 0.9s ease-in-out infinite alternate;
-}
-.seat-state.is-warn {
-  color: var(--cw-warn);
-}
-.seat-badge {
-  font-size: var(--cw-fs-micro);
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  padding: 3px 7px;
-  border-radius: 6px;
-  color: var(--cw-text-2);
-  background: rgba(255, 255, 255, 0.08);
-}
-.seat-badge.is-leader {
-  color: #2b2100;
-  background: #ffd84d;
-}
-@keyframes seat-in {
-  from {
-    opacity: 0;
-    transform: translateX(-16px) scale(0.94);
-  }
-}
-@keyframes blink {
-  to {
-    opacity: 0.25;
-  }
-}
-
 #help {
-  margin-top: auto;
   font-size: var(--cw-fs-small);
   color: var(--cw-text-2);
 }
@@ -503,6 +384,152 @@
   pointer-events: none;
 }
 
+/* ---------- Title menu: the spinning cube behind frosted glass, Play and How to Play ---------- */
+
+#lobby-screen > #title-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  padding: var(--cw-gutter);
+  box-sizing: border-box;
+  background: radial-gradient(ellipse at 50% 45%, rgba(37, 21, 81, 0.25), rgba(6, 9, 32, 0.6));
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  transition: opacity var(--cw-slow) var(--cw-ease), backdrop-filter var(--cw-slow), visibility 0s;
+}
+#title-screen.away {
+  opacity: 0;
+  visibility: hidden;
+  backdrop-filter: blur(0);
+  -webkit-backdrop-filter: blur(0);
+  transition: opacity var(--cw-slow) var(--cw-ease), backdrop-filter var(--cw-slow), visibility 0s var(--cw-slow);
+}
+.title-menu {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(380px, 100%);
+  text-align: center;
+  animation: title-in 700ms var(--cw-ease);
+}
+.title-mark {
+  width: 64px;
+  height: 64px;
+  margin-bottom: var(--cw-s4);
+  border-radius: 28%;
+  background: linear-gradient(135deg, #c9bcff 0 50%, #9d89ff 50%);
+  box-shadow: 0 0 40px rgba(127, 243, 255, 0.55), inset 0 0 0 3px rgba(255, 255, 255, 0.35);
+  animation: mark-float 4s ease-in-out infinite;
+}
+.title-menu h1 {
+  margin: 0;
+  font-size: clamp(48px, 7vw, 96px);
+  font-weight: 900;
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  text-shadow: 0 6px 30px rgba(127, 243, 255, 0.35);
+}
+.title-tagline {
+  margin: var(--cw-s3) 0 var(--cw-s6);
+  font-size: var(--cw-fs-title);
+  font-weight: 700;
+  color: var(--cw-text-2);
+}
+.title-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cw-s3);
+  width: 100%;
+}
+#how-to {
+  width: min(560px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  box-sizing: border-box;
+  padding: var(--cw-s5);
+  animation: title-in var(--cw-slow) var(--cw-spring);
+}
+#how-to h2 {
+  margin: 0 0 var(--cw-s4);
+  font-size: var(--cw-fs-display);
+  font-weight: 900;
+}
+.how-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cw-s3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+.how-steps li {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  column-gap: var(--cw-s3);
+  counter-increment: step;
+}
+.how-steps li::before {
+  content: counter(step);
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-weight: 900;
+  color: var(--cw-play-ink);
+  background: var(--cw-play);
+}
+.how-steps b {
+  font-size: var(--cw-fs-title);
+  font-weight: 900;
+}
+.how-steps span {
+  font-size: var(--cw-fs-body);
+  line-height: 1.45;
+  color: var(--cw-text-2);
+}
+.how-steps .cw-key {
+  color: var(--cw-text);
+}
+.how-tip {
+  margin: var(--cw-s4) 0;
+  padding: var(--cw-s3);
+  border-radius: var(--cw-r-md);
+  font-size: var(--cw-fs-small);
+  line-height: 1.45;
+  color: var(--cw-text-2);
+  background: var(--cw-surface-raised);
+}
+.how-tip b {
+  color: var(--cw-text);
+}
+@keyframes title-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+}
+@keyframes mark-float {
+  50% {
+    transform: translateY(-6px) rotate(8deg);
+  }
+}
+/* While the title menu is open, the cube's own panels and hints stay hidden. */
+#lobby-screen.on-title .cw-brand,
+#lobby-screen.on-title #pick-hint,
+#lobby-screen.on-title #hub-keys {
+  opacity: 0;
+  pointer-events: none;
+}
+.cw-brand,
+#hub-keys {
+  transition: opacity var(--cw-slow);
+}
+
 /* ---------- Key hints (bottom) ---------- */
 
 #hub-keys {
@@ -514,7 +541,7 @@
   flex-wrap: wrap;
   justify-content: center;
   gap: 6px 18px;
-  max-width: calc(100% - 2 * clamp(250px, 20vw, 310px) - 4 * var(--cw-gutter));
+  max-width: calc(100% - 2 * clamp(290px, 23vw, 370px) - 4 * var(--cw-gutter));
   font-size: var(--cw-fs-small);
   font-weight: 700;
   color: var(--cw-text-3);
@@ -568,12 +595,13 @@
     display: none;
   }
   #join {
+    top: var(--cw-gutter);
     right: var(--cw-gutter);
-    bottom: auto;
     width: auto;
+    transform: none;
     display: grid;
     grid-template-columns: 96px 1fr;
-    grid-template-areas: 'qr head' 'qr room' 'qr players';
+    grid-template-areas: 'qr head' 'qr room';
     align-items: center;
     column-gap: var(--cw-s4);
     row-gap: var(--cw-s2);
@@ -595,33 +623,12 @@
     height: 30px;
     font-size: 18px;
   }
+  #join.away {
+    transform: translateY(calc(-100% - var(--cw-gutter)));
+  }
   .join-step,
   #join-url,
-  .players-head,
   #help {
-    display: none;
-  }
-  #joined {
-    grid-area: players;
-    flex-direction: row;
-    flex-wrap: wrap;
-  }
-  .seat {
-    min-height: 0;
-    padding: 3px 10px 3px 3px;
-    gap: 6px;
-  }
-  .seat.is-empty {
-    display: none;
-  }
-  .seat .cw-avatar {
-    width: 28px;
-    height: 28px;
-  }
-  .seat-name {
-    font-size: var(--cw-fs-small);
-  }
-  .seat .seat-badge {
     display: none;
   }
   #pick {
@@ -680,14 +687,6 @@
 @media (max-width: 560px) {
   #join {
     grid-template-columns: 76px 1fr;
-  }
-  /* Players as a row of faces only. */
-  .seat {
-    padding: 0;
-    background: none;
-  }
-  .seat .seat-text {
-    display: none;
   }
   .join-head h2 {
     font-size: var(--cw-fs-body);

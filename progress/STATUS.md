@@ -111,6 +111,14 @@ running log of where we are, what the user decided, and what comes next).
     frame in the game's colour, halo turns that colour, a small pop. Space: 3 twinkling star layers that turn with
     the cube at different depths, faint nebula clouds, glowing dust. Touch: drag + two-finger pinch zoom.
     Clear-coat cube material. Tuning in `TUNING.hub` (starParallax, dust, nebulaOpacity, frameOpacity, choosePop).
+  - **User feedback on K1/K2 (2026-10-31): "je to dobré, ale…" — done:**
+    - **Title menu** first: the cube spins behind frosted glass (`TUNING.hub.titleSpin`), big "Cube World", two
+      buttons **Play** (Enter) and **How to Play** (4 steps: choose a game first, then join with phones via QR /
+      address + room code on the same Wi-Fi, make your player, play; plus the security-warning tip). Esc on the
+      cube with no game chosen goes back to the title. After a match the title is skipped.
+    - **The join panel (QR, room code) only slides in once a playable game is chosen** (not for "coming soon").
+    - **Players are shown only as characters standing on the cube** — the player list and the join/leave toasts
+      are gone (a disconnected player's name tag still says "(away)").
   - **K3 sounds** (menu, turn, join, countdown; volume + mute) — next; needs downloaded sounds: propose CC0 files
     with names and sizes, ask first.
   - **K4** dive-in transition, match intro (players + 3-2-1), results screen with Play again / Back to the cube,

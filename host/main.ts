@@ -16,6 +16,36 @@ const gameScreen = document.getElementById('game-screen')!;
 const startButton = document.getElementById('start') as HTMLButtonElement;
 const lobbyUi = new LobbyUi();
 
+// The title menu: the spinning cube behind frosted glass, with Play and How to Play.
+const titleScreen = document.getElementById('title-screen')!;
+const titleMenu = document.getElementById('title-menu')!;
+const howTo = document.getElementById('how-to')!;
+let onTitle = true;
+
+function showTitle(on: boolean): void {
+  onTitle = on;
+  titleScreen.classList.toggle('away', !on);
+  lobbyScreen.classList.toggle('on-title', on);
+  if (hub) hub.showcase = on;
+  if (on) {
+    hub?.select(null);
+    showHowTo(false);
+  } else {
+    (document.activeElement as HTMLElement | null)?.blur();
+  }
+}
+
+function showHowTo(on: boolean): void {
+  howTo.hidden = !on;
+  titleMenu.hidden = on;
+  document.getElementById(on ? 'how-close' : 'title-play')!.focus();
+}
+
+document.getElementById('title-play')!.addEventListener('click', () => showTitle(false));
+document.getElementById('title-how')!.addEventListener('click', () => showHowTo(true));
+document.getElementById('how-close')!.addEventListener('click', () => showHowTo(false));
+lobbyScreen.classList.add('on-title');
+
 const scoresEl = document.getElementById('hud-scores')!;
 const scoreboardEl = document.getElementById('scoreboard')!;
 const scoreboardRows = document.getElementById('scoreboard-rows')!;
@@ -187,6 +217,7 @@ async function onGameState(state: GameState): Promise<void> {
       lobbyScreen.hidden = false;
       // Back to the cube, with the game we just played in front.
       hub?.start();
+      showTitle(false);
       hub?.select('minigolf');
     }
     return;
@@ -274,6 +305,12 @@ window.addEventListener('keydown', (e) => {
   // A focused button handles Enter and Space itself (keyboard users can Tab to it).
   if (e.target instanceof HTMLButtonElement && (e.key === 'Enter' || e.key === ' ')) return;
   const phase = lastState?.phase ?? 'lobby';
+  if (onTitle && !playing && !labOpen) {
+    if (!howTo.hidden) {
+      if (e.key === 'Escape' || e.key === 'Enter') showHowTo(false);
+    } else if (e.key === 'Enter') showTitle(false);
+    return;
+  }
   if (labOpen) {
     const inLab = badmintonScreen.hidden;
     if (e.key === 'Escape' || (inLab && (e.key === 'l' || e.key === 'L'))) send({ type: 'lab_mode', on: false });
@@ -286,8 +323,11 @@ window.addEventListener('keydown', (e) => {
     }
     if (e.key === 'ArrowLeft') hub?.cycle(-1);
     else if (e.key === 'ArrowRight') hub?.cycle(1);
-    else if (e.key === 'Escape') hub?.select(null);
-    else if (e.key === 'Enter') {
+    else if (e.key === 'Escape') {
+      // Esc lets go of the chosen game; with nothing chosen it goes back to the title menu.
+      if (hub?.selected) hub.select(null);
+      else showTitle(true);
+    } else if (e.key === 'Enter') {
       if (hub?.selected) startSelected();
       else hub?.select('minigolf');
     }
@@ -301,6 +341,7 @@ window.addEventListener('keydown', (e) => {
 void Hub.create(document.getElementById('hub-canvas')!).then((created) => {
   hub = created;
   hub.onSelect = (face) => lobbyUi.showGame(face);
+  hub.showcase = onTitle;
   hub.setPlayers(players);
   lobbyUi.showGame(hub.selected);
   if (!playing && !labOpen) hub.start();
