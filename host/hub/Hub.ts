@@ -9,6 +9,7 @@ import type { PlayerInfo } from '../../shared/protocol.ts';
 import { TUNING } from '../../shared/tuning.ts';
 import { Character } from '../game/character.ts';
 import { loadForest } from '../game/vegetation.ts';
+import { FaceSign } from './sign.ts';
 import { buildFace, canvasTexture, FACES, seededRandom, type FaceInfo, type FaceKit, type Tick } from './faces.ts';
 
 // Cube World: the lobby is a cute cube floating in starry space, one little world per side for each
@@ -38,6 +39,13 @@ export class Hub {
   private readonly faces: THREE.Group[] = [];
   /** A glowing frame around each side, lit while that side's game is chosen. */
   private readonly frames: THREE.Mesh[] = [];
+  /** A soft glow lying on each side, lit with its frame. */
+  private readonly glows: THREE.Mesh[] = [];
+  /** Every side's materials with their own colours, so the sides that are not chosen can be dimmed. */
+  private readonly palettes: { material: THREE.Material & { color: THREE.Color }; colour: THREE.Color; emissive: THREE.Color | null }[][] = [];
+  /** How bright each side is drawn now (1 = its own colours). */
+  private readonly brightness: number[] = [];
+  private readonly sign = new FaceSign();
   private readonly haloColour = new THREE.Color(TUNING.hub.glowColour);
   /** Seconds since a game was chosen (drives the little pop of the cube). */
   private chosenAge = 10;
@@ -133,6 +141,17 @@ export class Hub {
       world.position.copy(normal).multiplyScalar(size / 2 + 0.1);
       world.userData.face = i;
       this.faces.push(world);
+      this.palettes.push(collectPalette(world));
+      this.brightness.push(1);
+      const glow = new THREE.Mesh(
+        new THREE.PlaneGeometry(size * 1.04, size * 1.04),
+        new THREE.MeshBasicMaterial({ map: sideGlowTexture(), color: face.accent, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }),
+      );
+      glow.rotation.x = -Math.PI / 2;
+      glow.position.y = 0.2;
+      glow.renderOrder = 1;
+      world.add(glow);
+      this.glows.push(glow);
       const frame = new THREE.Mesh(
         frameGeometry(size - 0.25, size - 0.62, 0.55),
         new THREE.MeshBasicMaterial({ color: face.accent, transparent: true, opacity: 0, depthWrite: false, toneMapped: false }),
@@ -187,6 +206,7 @@ export class Hub {
     if (index === this.chosen) return;
     this.chosen = index;
     this.chosenAge = 0;
+    this.sign.show(this.selected, index < 0 ? null : this.faces[index]);
     this.spin.set(0, 0);
     this.clearGuests();
     this.addGuests();
@@ -249,6 +269,19 @@ export class Hub {
       const want = i === this.chosen ? c.frameOpacity * (0.8 + 0.2 * Math.sin(this.time * 3)) : 0;
       material.opacity += (want - material.opacity) * (1 - Math.exp(-6 * dt));
       frame.visible = material.opacity > 0.01;
+      const glow = this.glows[i].material as THREE.MeshBasicMaterial;
+      glow.opacity = material.opacity * c.sideGlow;
+      this.glows[i].visible = frame.visible;
+      // The sides that are not chosen fade back a little, so the chosen one stands out.
+      const bright = this.chosen < 0 || i === this.chosen ? 1 : c.dimOthers;
+      const before = this.brightness[i];
+      this.brightness[i] += (bright - before) * (1 - Math.exp(-5 * dt));
+      if (Math.abs(this.brightness[i] - before) > 0.0005) {
+        for (const p of this.palettes[i]) {
+          p.material.color.copy(p.colour).multiplyScalar(this.brightness[i]);
+          if (p.emissive) (p.material as THREE.MeshStandardMaterial).emissive.copy(p.emissive).multiplyScalar(this.brightness[i]);
+        }
+      }
     });
     this.haloColour.lerp(new THREE.Color(this.chosen >= 0 ? FACES[this.chosen].accent : c.glowColour), 1 - Math.exp(-3 * dt));
     this.halo.material.color.copy(this.haloColour);
@@ -270,6 +303,7 @@ export class Hub {
 
     // Characters wait until their side has (nearly) turned up, then pop up one after another.
     const settled = this.chosen >= 0 && this.spinner.quaternion.angleTo(this.poses[this.chosen]) < 0.2;
+    this.sign.update(dt, settled, this.time);
     [...this.guests.values()].forEach((guest, i) => {
       if (settled || guest.age > 0) guest.age += dt;
       const t = Math.max(0, guest.age - i * c.popInStagger) / c.popInSeconds;
@@ -533,6 +567,40 @@ function makeNebula(): THREE.Sprite[] {
     sprite.position.set(x, y, z);
     sprite.scale.setScalar(scale);
     return sprite;
+  });
+}
+
+/** All colour-carrying materials of a side, with their own colours (for dimming). */
+function collectPalette(world: THREE.Object3D): { material: THREE.Material & { color: THREE.Color }; colour: THREE.Color; emissive: THREE.Color | null }[] {
+  const seen = new Set<THREE.Material>();
+  const palette: { material: THREE.Material & { color: THREE.Color }; colour: THREE.Color; emissive: THREE.Color | null }[] = [];
+  world.traverse((o) => {
+    const materials = (o as THREE.Mesh).material;
+    for (const material of Array.isArray(materials) ? materials : materials ? [materials] : []) {
+      if (seen.has(material) || !('color' in material)) continue;
+      seen.add(material);
+      const m = material as THREE.Material & { color: THREE.Color; emissive?: THREE.Color };
+      palette.push({ material: m, colour: m.color.clone(), emissive: m.emissive ? m.emissive.clone() : null });
+    }
+  });
+  return palette;
+}
+
+/** A soft glow that is strongest along the edges of a side and fades towards its middle. */
+function sideGlowTexture(): THREE.Texture {
+  return canvasTexture(256, 256, (c) => {
+    c.filter = 'blur(14px)';
+    c.strokeStyle = '#ffffff';
+    c.lineWidth = 26;
+    c.beginPath();
+    c.roundRect(28, 28, 200, 200, 30);
+    c.stroke();
+    c.filter = 'none';
+    const fill = c.createRadialGradient(128, 128, 20, 128, 128, 130);
+    fill.addColorStop(0, 'rgba(255,255,255,0.18)');
+    fill.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = fill;
+    c.fillRect(0, 0, 256, 256);
   });
 }
 

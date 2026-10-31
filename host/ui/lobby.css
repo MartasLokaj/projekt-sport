@@ -32,8 +32,7 @@
 .cw-brand {
   position: absolute;
   top: var(--cw-gutter);
-  left: 50%;
-  transform: translateX(-50%);
+  left: var(--cw-gutter);
   display: flex;
   align-items: center;
   gap: 10px;

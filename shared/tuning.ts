@@ -297,6 +297,13 @@ export const TUNING = {
     nebulaOpacity: 0.28,
     /** The glowing frame round the chosen side (0..1), and how much the cube pops when a game is chosen. */
     frameOpacity: 0.85,
+    /** The soft glow lying on the chosen side (share of the frame's brightness). */
+    sideGlow: 0.55,
+    /** While a game is chosen, the other sides are drawn this bright (1 = not dimmed). */
+    dimOthers: 0.45,
+    /** The name sign at the back of the chosen side: how far in from the edge, and how long it takes to spring up (s). */
+    signInset: 0.45,
+    signPopSeconds: 0.6,
     choosePop: 0.025,
     /** Camera: distance from the cube, height and field of view (degrees). Closer = bigger cube. */
     cameraDistance: 16.5,

@@ -280,7 +280,7 @@ function constructionWorld(seed: number, size: number): THREE.Group {
     plank.castShadow = true;
     g.add(plank);
   }
-  const question = new THREE.Sprite(new THREE.SpriteMaterial({ map: textTexture('?', '#ffe36b'), transparent: true }));
+  const question = new THREE.Sprite(new THREE.SpriteMaterial({ map: textTexture('?', '#ffe36b'), transparent: true, depthWrite: false }));
   question.scale.setScalar(1.6);
   question.position.set(0, 1.25, 0);
   question.name = 'glow';
