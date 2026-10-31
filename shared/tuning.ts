@@ -118,19 +118,24 @@ export const TUNING = {
     /** How finely the lane curve is sampled and the lane surface divided (smaller = smoother, slower to build). */
     laneSpacing: 0.08,
     floorCell: 0.1,
-    /** The round bumpers: width and height. */
-    bumperWidth: 0.24,
-    bumperHeight: 0.3,
-    /** The bumpers' outer side slopes down into the island ground over this distance (bigger = more massive). */
-    bumperSlope: 0.8,
-    /** How far below the course floor that slope ends (hidden under the island ground). */
-    bumperSlopeDepth: 0.32,
-    /** One repeat of the grass texture covers this many units, on the lane and on the bumpers. */
+    /** The wooden border: thickness and height above the floor, how far its outer side reaches down into the ground, bevel on the top edges. */
+    bumperWidth: 0.2,
+    bumperHeight: 0.26,
+    bumperDepth: 0.4,
+    woodBevel: 0.035,
+    /** Wood colour, and how long one plank is (a dark joint between planks). */
+    woodColour: '#9a5f33',
+    woodPlankLength: 1.6,
+    /** One repeat of the grass bump texture on the lane (units), and how bumpy it looks. */
     turfTextureSize: 2.2,
-    bumperTextureSize: 0.9,
-    /** Colour boost on top of the photo texture (red, green, blue; 1 = as photographed). */
-    turfTint: [1.7, 3.3, 1.05],
-    bumperTint: [0.38, 0.95, 0.42],
+    turfBumpiness: 0.45,
+    /** The mowed checker pattern: its two greens, how long one square is along the lane, and how many squares across. */
+    turfLight: '#7fd34b',
+    turfDark: '#5cb83a',
+    checkerLength: 0.55,
+    checkerColumns: 4,
+    /** The white rim around the cup. */
+    cupRimWidth: 0.045,
   },
 
   physics: {

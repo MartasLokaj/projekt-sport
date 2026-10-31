@@ -5,9 +5,9 @@ import { TUNING } from '../../shared/tuning.ts';
 
 // Holes with smooth, rounded lanes, like a real outdoor minigolf course.
 // Each lane follows a curve through a few points; the lane is everything within its width of that
-// curve, so the ends come out round and there are no corners anywhere. Round "bumpers" covered in
-// dark green turf run all the way around the edge. The playing surface is bright artificial turf.
-// Both use a CC0 grass texture from ambientCG (host/assets/textures).
+// curve, so the ends come out round and there are no corners anywhere. A wooden border runs all the
+// way around the edge. The playing surface is freshly mowed turf in a two-green checker pattern that
+// bends along the lane (drawn in a shader; the fine grass bumps come from a CC0 ambientCG texture).
 // The windmill and the flag are Kenney Minigolf Kit models (CC0, host/assets/minigolf).
 //
 // Physics uses exactly the same shapes: the lane surface and the bumpers become two collision
@@ -140,7 +140,7 @@ export function buildHole(def: HoleDef, kit: Kit, world: RAPIER.World, R: typeof
     fixed,
   );
 
-  // Round bumpers all around the edge, covered in dark green turf.
+  // A wooden border all around the edge.
   const bumper = buildBumper(lane);
   const bumperMesh = new THREE.Mesh(bumper, bumperMaterial());
   bumperMesh.castShadow = true;
@@ -187,7 +187,7 @@ export function buildHole(def: HoleDef, kit: Kit, world: RAPIER.World, R: typeof
   );
 
   const teeSpot = lane.at(cfg.teeDistance);
-  const outerEdge = cfg.bumperWidth + cfg.bumperSlope;
+  const outerEdge = cfg.bumperWidth + 0.1;
   return {
     def,
     group,
@@ -246,7 +246,7 @@ class Lane {
   }
 
   /** The closest point of the centre curve to (x, z): how far it is, and the lane's width and floor height there. */
-  nearest(x: number, z: number): { distance: number; width: number; height: number; point: THREE.Vector3 } {
+  nearest(x: number, z: number): { distance: number; width: number; height: number; point: THREE.Vector3; along: number; side: number } {
     let best = 0;
     let bestDistance = Infinity;
     for (let i = 0; i < this.points.length; i++) {
@@ -259,6 +259,8 @@ class Lane {
     // Refine on the neighbouring segments, so the edge comes out smooth.
     let point = this.points[best];
     let width = this.widths[best];
+    let along = best * this.spacing;
+    let tangent = this.tangents[best];
     for (const j of [best - 1, best + 1]) {
       if (j < 0 || j >= this.points.length) continue;
       const i0 = Math.min(best, j);
@@ -274,9 +276,13 @@ class Lane {
         bestDistance = d;
         point = new THREE.Vector3(px, a.y + (b.y - a.y) * t, pz);
         width = this.widths[i0] + (this.widths[i0 + 1] - this.widths[i0]) * t;
+        along = (i0 + t) * this.spacing;
+        tangent = this.tangents[i0];
       }
     }
-    return { distance: Math.sqrt(bestDistance), width, height: point.y, point };
+    // Sideways from the centre line: positive to the left of the way the lane runs.
+    const side = (x - point.x) * tangent.z - (z - point.z) * tangent.x;
+    return { distance: Math.sqrt(bestDistance), width, height: point.y, point, along, side };
   }
 
   bounds(margin: number): THREE.Box3 {
@@ -296,7 +302,7 @@ function buildFloor(lane: Lane, cup: THREE.Vector3, cupRadius: number): THREE.Bu
   const box = lane.bounds(0.3);
   const nx = Math.ceil((box.max.x - box.min.x) / cell);
   const nz = Math.ceil((box.max.z - box.min.z) / cell);
-  type GridPoint = { inLane: boolean; inCup: boolean; position: THREE.Vector3 };
+  type GridPoint = { inLane: boolean; inCup: boolean; position: THREE.Vector3; along: number; across: number };
   const grid: GridPoint[] = [];
   for (let j = 0; j <= nz; j++) {
     for (let i = 0; i <= nx; i++) {
@@ -317,12 +323,16 @@ function buildFloor(lane: Lane, cup: THREE.Vector3, cupRadius: number): THREE.Bu
         const dz = (z - cup.z) / (toCup || 1);
         position.set(cup.x + dx * cupRadius, cup.y, cup.z + dz * cupRadius);
       }
-      grid.push({ inLane, inCup, position });
+      // Where the point is on the lane (distance along it, and -1..1 from one edge to the other), for the checker pattern.
+      const moved = !inLane || inCup;
+      const m = moved ? lane.nearest(position.x, position.z) : n;
+      grid.push({ inLane, inCup, position, along: m.along, across: m.side / m.width });
     }
   }
 
   const positions: number[] = [];
   const uvs: number[] = [];
+  const laneCoords: number[] = [];
   const indices: number[] = [];
   const used = new Map<number, number>();
   const size = TUNING.course.turfTextureSize;
@@ -333,6 +343,7 @@ function buildFloor(lane: Lane, cup: THREE.Vector3, cupRadius: number): THREE.Bu
       v = positions.length / 3;
       positions.push(p.x, p.y, p.z);
       uvs.push(p.x / size, p.z / size);
+      laneCoords.push(grid[index].along, grid[index].across);
       used.set(index, v);
     }
     return v;
@@ -351,14 +362,16 @@ function buildFloor(lane: Lane, cup: THREE.Vector3, cupRadius: number): THREE.Bu
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setAttribute('laneCoord', new THREE.Float32BufferAttribute(laneCoords, 2));
   geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(indices), 1));
   geometry.computeVertexNormals();
   return geometry;
 }
 
 /**
- * The bumper: a rounded cushion swept all the way around the lane's edge
- * (left side, round end around the cup, right side, round end behind the tee).
+ * The wooden border: a thick plank standing all the way around the lane's edge (left side, round end
+ * around the cup, right side, round end behind the tee). Its top edges are bevelled so they catch the
+ * light, the top is lighter than the sides, and the outer side reaches down into the island ground.
  */
 function buildBumper(lane: Lane): THREE.BufferGeometry {
   const cfg = TUNING.course;
@@ -381,53 +394,57 @@ function buildBumper(lane: Lane): THREE.BufferGeometry {
     loop.push({ point: lane.points[0].clone().addScaledVector(out, lane.widths[0]), out });
   }
 
-  // The cushion's cross-section: (distance outwards from the edge, height above the floor).
+  // The plank's cross-section, one flat face after another: (distance outwards from the edge, height
+  // above the floor) at both ends of the face, and how light that face is drawn.
   const w = cfg.bumperWidth;
   const h = cfg.bumperHeight;
-  const r = w / 2;
-  const profile: [number, number][] = [
-    [-0.02, -0.15],
-    [0, 0.02],
+  const b = cfg.woodBevel;
+  const faces: { from: [number, number]; to: [number, number]; light: number }[] = [
+    { from: [0, -0.15], to: [0, h - b], light: 0.92 }, // the side facing the lane
+    { from: [0, h - b], to: [b, h], light: 1.18 }, // bevel
+    { from: [b, h], to: [w - b, h], light: 1.12 }, // top
+    { from: [w - b, h], to: [w, h - b], light: 1.0 }, // bevel
+    { from: [w, h - b], to: [w, -cfg.bumperDepth], light: 0.78 }, // the outer side, down into the ground
   ];
-  // Round on the lane side up to the top...
-  const arcSteps = 6;
-  for (let k = 0; k <= arcSteps; k++) {
-    const a = Math.PI - (k / arcSteps) * (Math.PI / 2);
-    profile.push([r + r * Math.cos(a), h - r + r * Math.sin(a)]);
-  }
-  // ...then a wide, soft slope on the outer side that sinks into the island ground, so the bumper looks massive.
-  const reach = w - r + cfg.bumperSlope;
-  const depth = cfg.bumperSlopeDepth;
-  const slopeSteps = 14;
-  for (let k = 1; k <= slopeSteps; k++) {
-    const t = k / slopeSteps;
-    profile.push([r + reach * t, -depth + (h + depth) * (1 - THREE.MathUtils.smootherstep(t, 0, 1))]);
-  }
 
   const positions: number[] = [];
+  const normals: number[] = [];
   const uvs: number[] = [];
-  const size = cfg.bumperTextureSize;
-  let along = 0;
-  loop.forEach((spot, k) => {
-    if (k > 0) along += spot.point.distanceTo(loop[k - 1].point);
-    let around = 0;
-    profile.forEach(([o, y], j) => {
-      if (j > 0) around += Math.hypot(o - profile[j - 1][0], y - profile[j - 1][1]);
-      positions.push(spot.point.x + spot.out.x * o, spot.point.y + y, spot.point.z + spot.out.z * o);
-      uvs.push(along / size, around / size);
-    });
-  });
-  const m = profile.length;
+  const colours: number[] = [];
   const indices: number[] = [];
-  for (let k = 0; k < loop.length; k++) {
-    const next = (k + 1) % loop.length;
-    for (let j = 0; j < m - 1; j++) {
-      const a = k * m + j;
-      const b = next * m + j;
-      indices.push(a, a + 1, b, b, a + 1, b + 1);
+  const along: number[] = [0];
+  for (let k = 1; k <= loop.length; k++) along.push(along[k - 1] + loop[k % loop.length].point.distanceTo(loop[k - 1].point));
+  const plank = cfg.woodPlankLength;
+  let around = 0;
+  for (const face of faces) {
+    const [o0, y0] = face.from;
+    const [o1, y1] = face.to;
+    const length = Math.hypot(o1 - o0, y1 - y0);
+    // The face's normal in the cross-section (outwards, up). The faces go round the plank in order,
+    // so turning each face's direction a quarter turn the same way always points away from the plank.
+    const nx = -(y1 - y0);
+    const ny = o1 - o0;
+    const start = positions.length / 3;
+    for (let k = 0; k <= loop.length; k++) {
+      const spot = loop[k % loop.length];
+      for (const [o, y, v] of [
+        [o0, y0, around],
+        [o1, y1, around + length],
+      ]) {
+        positions.push(spot.point.x + spot.out.x * o, spot.point.y + y, spot.point.z + spot.out.z * o);
+        const normal = new THREE.Vector3(spot.out.x * nx, ny, spot.out.z * nx).normalize();
+        normals.push(normal.x, normal.y, normal.z);
+        uvs.push(along[k] / plank, v / plank);
+        colours.push(face.light, face.light, face.light);
+      }
     }
+    for (let k = 0; k < loop.length; k++) {
+      const a = start + k * 2;
+      indices.push(a, a + 1, a + 2, a + 2, a + 1, a + 3);
+    }
+    around += length;
   }
-  // The inner face (the first quad of the profile) must point back into the lane, against "out".
+  // The side facing the lane must point back into the lane, against "out" (the physics needs this way round).
   const p = (i: number): THREE.Vector3 => new THREE.Vector3(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
   const normal = new THREE.Vector3().subVectors(p(indices[1]), p(indices[0])).cross(new THREE.Vector3().subVectors(p(indices[2]), p(indices[0])));
   if (normal.dot(loop[0].out) > 0) {
@@ -435,9 +452,10 @@ function buildBumper(lane: Lane): THREE.BufferGeometry {
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
   geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colours, 3));
   geometry.setIndex(indices);
-  geometry.computeVertexNormals();
   return geometry;
 }
 
@@ -462,7 +480,12 @@ function addCupPit(group: THREE.Group, cup: THREE.Vector3, radius: number, world
   const bottom = new THREE.Mesh(new THREE.CircleGeometry(radius, 32), new THREE.MeshBasicMaterial({ color: '#16211a' }));
   bottom.rotation.x = -Math.PI / 2;
   bottom.position.set(cup.x, cup.y - depth, cup.z);
-  group.add(inside, bottom);
+  // A white rim around the cup, like a real green.
+  const rim = new THREE.Mesh(new THREE.RingGeometry(radius, radius + TUNING.course.cupRimWidth, 40), new THREE.MeshStandardMaterial({ color: '#f4f4ee', roughness: 0.6 }));
+  rim.rotation.x = -Math.PI / 2;
+  rim.position.set(cup.x, cup.y + 0.004, cup.z);
+  rim.receiveShadow = true;
+  group.add(inside, bottom, rim);
 }
 
 /**
@@ -544,35 +567,105 @@ const UP = new THREE.Vector3(0, 1, 0);
 let turfCache: THREE.MeshStandardMaterial | null = null;
 let bumperCache: THREE.MeshStandardMaterial | null = null;
 
-/** Bright, fresh artificial turf for the lanes. */
+/**
+ * Mowed turf: squares in two greens that follow the lane (from the floor's "laneCoord": distance along
+ * the lane and -1..1 across it), with the fine grass bumps of the CC0 texture on top.
+ */
 function turfMaterial(): THREE.MeshStandardMaterial {
-  turfCache ??= grassMaterial(TUNING.course.turfTint, 0.6);
-  return turfCache;
+  if (turfCache) return turfCache;
+  const cfg = TUNING.course;
+  const material = new THREE.MeshStandardMaterial({
+    normalMap: grassTexture('normalgl', false),
+    normalScale: new THREE.Vector2(cfg.turfBumpiness, cfg.turfBumpiness),
+    roughness: 1,
+  });
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.turfLight = { value: new THREE.Color(cfg.turfLight) };
+    shader.uniforms.turfDark = { value: new THREE.Color(cfg.turfDark) };
+    shader.uniforms.checker = { value: new THREE.Vector2(cfg.checkerLength, cfg.checkerColumns / 2) };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute vec2 laneCoord;\nvarying vec2 vLane;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLane = laneCoord;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 turfLight;\nuniform vec3 turfDark;\nuniform vec2 checker;\nvarying vec2 vLane;')
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+        // Which square we are in, with soft edges (no flicker in the distance).
+        vec2 cell = vec2(vLane.x / checker.x, vLane.y * checker.y);
+        vec2 edge = fwidth(cell);
+        vec2 wave = clamp(sin(cell * PI) / max(edge * PI, 0.001), -1.0, 1.0);
+        float square = 0.5 + 0.5 * wave.x * wave.y;
+        diffuseColor.rgb = mix(turfDark, turfLight, square);`,
+      );
+  };
+  turfCache = material;
+  return material;
 }
 
-/** Deep green, fuzzy turf on the bumpers. */
+/** Wood for the borders: planks with grain and joints, lighter on the top (from the geometry's colours). */
 function bumperMaterial(): THREE.MeshStandardMaterial {
-  bumperCache ??= grassMaterial(TUNING.course.bumperTint, 1.8);
+  bumperCache ??= new THREE.MeshStandardMaterial({ map: woodTexture(), vertexColors: true, roughness: 0.85 });
   return bumperCache;
+}
+
+/** One plank's worth of wood (it repeats along the border): warm brown, long grain lines, a dark joint at the end. */
+function woodTexture(): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 128;
+  const c = canvas.getContext('2d')!;
+  c.fillStyle = TUNING.course.woodColour;
+  c.fillRect(0, 0, 512, 128);
+  let seed = 7;
+  const random = (): number => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  // Grain: thin wavy lines running along the plank, some lighter, some darker.
+  for (let k = 0; k < 46; k++) {
+    const y = random() * 128;
+    c.strokeStyle = random() < 0.5 ? 'rgba(60,30,10,0.22)' : 'rgba(255,220,170,0.12)';
+    c.lineWidth = 1 + random() * 2.5;
+    c.beginPath();
+    c.moveTo(0, y);
+    for (let x = 0; x <= 512; x += 32) c.lineTo(x, y + Math.sin(x * 0.02 + k) * (1 + random() * 2));
+    c.stroke();
+  }
+  // A knot or two.
+  for (let k = 0; k < 2; k++) {
+    const x = 80 + random() * 350;
+    const y = 30 + random() * 70;
+    c.fillStyle = 'rgba(70,35,12,0.35)';
+    c.beginPath();
+    c.ellipse(x, y, 10 + random() * 8, 4 + random() * 3, 0, 0, Math.PI * 2);
+    c.fill();
+  }
+  // The joint between this plank and the next.
+  c.fillStyle = 'rgba(40,20,8,0.7)';
+  c.fillRect(0, 0, 4, 128);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 8;
+  return texture;
 }
 
 /** The CC0 grass texture (colour and bumps), tinted and matte (shiny specks sparkle too much in the sun). Exported for the islands. */
 export function grassMaterial(tint: readonly number[], bumpiness: number): THREE.MeshStandardMaterial {
-  const loader = new THREE.TextureLoader();
-  const load = (map: string, colour: boolean): THREE.Texture => {
-    const texture = loader.load(`/host/assets/textures/grass_${map}.jpg`);
-    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-    texture.anisotropy = 8;
-    if (colour) texture.colorSpace = THREE.SRGBColorSpace;
-    return texture;
-  };
   return new THREE.MeshStandardMaterial({
-    map: load('color', true),
-    normalMap: load('normalgl', false),
+    map: grassTexture('color', true),
+    normalMap: grassTexture('normalgl', false),
     normalScale: new THREE.Vector2(bumpiness, bumpiness),
     roughness: 1,
     color: new THREE.Color(tint[0], tint[1], tint[2]),
   });
+}
+
+/** One of the CC0 grass texture's maps (colour or bumps), repeating. */
+function grassTexture(map: string, colour: boolean): THREE.Texture {
+  const texture = new THREE.TextureLoader().load(`/host/assets/textures/grass_${map}.jpg`);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.anisotropy = 8;
+  if (colour) texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
 }
 
 /** Triangles with shared corners merged, so a surface is seamless for the physics. */
