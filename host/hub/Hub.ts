@@ -60,6 +60,8 @@ export class Hub {
   private readonly leaving: { guest: Guest; t: number }[] = [];
   /** Players who joined since the last update: they jump down onto the cube instead of popping up. */
   private readonly arrivals = new Set<string>();
+  /** Players already there when the page opens just appear; anyone joining after this moment jumps down. */
+  private readonly quietUntil = performance.now() + 1500;
   /** True when the last selection chose a game (the cube hops), false when it let go. */
   private hop = false;
   /** Little moons going round the cube: a golf ball, a shuttlecock and a tiny cube. */
@@ -255,7 +257,8 @@ export class Hub {
 
   /** The players who joined. While a game is chosen, new ones pop up on its side and players who left disappear. */
   setPlayers(players: PlayerInfo[]): void {
-    for (const p of players) if (this.players.length > 0 && !this.players.some((q) => q.id === p.id)) this.arrivals.add(p.id);
+    const greet = performance.now() > this.quietUntil;
+    for (const p of players) if (greet && !this.players.some((q) => q.id === p.id)) this.arrivals.add(p.id);
     this.players = players;
     for (const [id, guest] of this.guests) {
       if (players.some((p) => p.id === id)) continue;

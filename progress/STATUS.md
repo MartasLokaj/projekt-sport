@@ -277,6 +277,9 @@ running log of where we are, what the user decided, and what comes next).
   leaves now animates like that). Note: the dialog needs `#lobby-screen > #kick-confirm` to beat the
   `#lobby-screen > *:not(#hub-canvas)` z-index rule.
 - Touches the cloud's hub files (`host/hub/`, `host/ui/`): tell the cloud session if it is still working there.
+- User: "kick works, but the arrival and confetti don't". Cause: the hub only let a joiner drop in when somebody
+  was already on the cube, so the first player (or a lone player re-joining after a kick) just appeared. Now
+  everyone who joins after the first 1.5 s of the page (`Hub.quietUntil`) drops in with confetti.
 
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.
