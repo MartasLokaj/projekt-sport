@@ -1065,19 +1065,19 @@ export class Badminton {
     }
   }
 
-  /** Behind the athlete's own baseline, looking down the court over the net. */
+  /** Rides along behind the athlete's team, looking down the court over the net; keeps the players and the shuttle in view. */
   private updateCamera(a: Athlete, dt: number): void {
     const cfg = TUNING.badminton;
     const split = this.split();
     // Behind the team: one player, or the middle between two teammates.
     const team = this.team(a.side);
     const x = team.reduce((sum, t) => sum + t.wrapper.position.x, 0) / Math.max(1, team.length);
-    const back = split ? cfg.splitCameraBack : cfg.cameraBack;
-    // Forwards / backwards a little with the team (its deepest player), so the player stays big in the picture.
+    const behind = split ? cfg.splitCameraBehind : cfg.cameraBehind;
+    // Forwards / backwards with the team (its deepest player), so the player stays in the same spot in the picture.
     const depth = Math.max(...team.map((t) => Math.abs(t.wrapper.position.z)));
-    const follow = (depth - cfg.homeDepth) * cfg.cameraFollowZ;
-    const want = new THREE.Vector3(x * cfg.cameraFollowX, cfg.cameraHeight, a.side * (cfg.courtHalfLength + back + follow));
-    a.camera.position.lerp(want, Math.min(1, dt * 3));
+    const along = cfg.homeDepth + (depth - cfg.homeDepth) * cfg.cameraFollowZ;
+    const want = new THREE.Vector3(x * cfg.cameraFollowX, cfg.cameraHeight, a.side * (along + behind));
+    a.camera.position.lerp(want, Math.min(1, dt * cfg.cameraFollowSpeed));
     // A high clear climbs out of the top of the picture: tip up a little to follow it, then back down.
     const high = this.phase === 'rally' ? Math.max(0, this.shuttle.position.y - cfg.cameraTiltFrom) * cfg.cameraTiltFollow : 0;
     a.lookY += (cfg.cameraLookY + high - a.lookY) * Math.min(1, dt * cfg.cameraTiltSpeed);
@@ -1088,12 +1088,49 @@ export class Badminton {
       const left = intro ** 3;
       a.camera.position.copy(want).add(new THREE.Vector3(0, s.swoopHeight * left, a.side * s.swoopBack * left));
     }
-    a.camera.lookAt(x * cfg.cameraFollowX * 0.5, a.lookY, a.side * cfg.cameraLookAt);
+    // Look ahead of the camera down the court (the same way from wherever it is, so the picture does not swing).
+    const p = a.camera.position;
+    a.camera.lookAt(p.x * 0.5, a.lookY, p.z - a.side * (behind + cfg.cameraLookAhead));
+    this.keepInView(a, team, split ? cfg.splitCameraFov : cfg.cameraFov, intro > 0 ? 0 : dt);
     const shake = (this.shakeUntil - Date.now()) / cfg.shakeMs;
     if (shake > 0) {
       const s = cfg.shakeStrength * shake;
       a.camera.position.add(new THREE.Vector3((Math.random() - 0.5) * s, (Math.random() - 0.5) * s, 0));
     }
+  }
+
+  /**
+   * Widens the camera's view (from baseFov up to cameraFovMax) just enough to keep the team's players, feet to head,
+   * and the shuttle inside the picture, then narrows back slowly. dt 0 = no change (the camera is gliding in).
+   */
+  private keepInView(a: Athlete, team: Athlete[], baseFov: number, dt: number): void {
+    const cfg = TUNING.badminton;
+    const camera = a.camera;
+    if (dt === 0) {
+      camera.fov = baseFov;
+      camera.updateProjectionMatrix();
+      return;
+    }
+    camera.updateMatrixWorld();
+    const points: THREE.Vector3[] = [];
+    for (const t of team) {
+      points.push(t.wrapper.position.clone(), t.wrapper.position.clone().setY(t.wrapper.position.y + 1.5));
+    }
+    if (this.shuttle.visible && (this.phase === 'rally' || this.phase === 'serve')) points.push(this.shuttle.position.clone());
+    // How far out each point is, as the tangent of its angle from the middle of the picture (up / down and sideways).
+    let need = Math.tan(THREE.MathUtils.degToRad(baseFov / 2));
+    for (const point of points) {
+      const v = point.applyMatrix4(camera.matrixWorldInverse);
+      if (v.z > -0.5) continue; // behind the camera
+      const out = Math.max(Math.abs(v.y) / -v.z, Math.abs(v.x) / -v.z / camera.aspect) / (1 - cfg.cameraFrameMargin);
+      need = Math.max(need, out);
+    }
+    const fov = THREE.MathUtils.clamp(THREE.MathUtils.radToDeg(2 * Math.atan(need)), baseFov, cfg.cameraFovMax);
+    const speed = fov > camera.fov ? cfg.cameraWidenSpeed : cfg.cameraNarrowSpeed;
+    const next = camera.fov + (fov - camera.fov) * Math.min(1, dt * speed);
+    if (Math.abs(next - camera.fov) < 0.01) return;
+    camera.fov = next;
+    camera.updateProjectionMatrix();
   }
 
   // ---------- Helpers ----------
@@ -1121,7 +1158,7 @@ export class Badminton {
     this.scene.add(wrapper);
     wrapper.traverse((o) => (o.castShadow = true));
     const camera = new THREE.PerspectiveCamera(cfg.cameraFov, 1, 0.1, 200);
-    camera.position.set(0, cfg.cameraHeight, side * (cfg.courtHalfLength + cfg.cameraBack));
+    camera.position.set(0, cfg.cameraHeight, side * (cfg.homeDepth + cfg.cameraBehind));
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(0.55, 0.75, 32),
       new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: cfg.doubles.ringOpacity, depthWrite: false }),

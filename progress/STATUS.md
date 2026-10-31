@@ -450,6 +450,15 @@ up to date too.
   `cameraLookAt` -2.5 / `cameraLookY` -0.5), follows the team sideways (`cameraFollowX` 0.6) and a little
   forwards/backwards (`cameraFollowZ` 0.35, from the deepest teammate), tips up for high shots (`cameraTiltFrom` 3,
   `cameraTiltFollow` 0.4): measured, a clear never leaves the top of the picture. Split screen: fov 56, back 2.4.
+- **Camera redo (user, 2026-10-31: "you can't see the shuttle and sometimes not even the character; the camera must
+  move with him and the shuttle must be visible").** Measured CPU vs CPU: before, the shuttle was out of the picture
+  17 % of the rally (high arcs over mid-court, camera too low) and the player's feet 16 % (running back under the
+  camera). Now the camera rides along behind the team (`cameraBehind` 5.5, `cameraHeight` 4.2, follows sideways
+  `cameraFollowX` 0.8 and forwards/backwards `cameraFollowZ` 0.9 at `cameraFollowSpeed` 5) and looks
+  `cameraLookAhead` 6 m ahead of itself at `cameraLookY` 0.5, base fov 50 (split 60, `splitCameraBehind` 5.2).
+  `keepInView`: if the team's feet/heads or the shuttle would leave the picture (margin `cameraFrameMargin`), the
+  view widens up to `cameraFovMax` 72, then narrows back slowly. Measured after: 0 of 537 frames with the shuttle or
+  feet out (full screen), split screen 2 of 459 shuttle frames. Waiting for the user's look.
 - Lower arcs (same flight times): serve apex 3.8, clear 4.0, lift 4.2, wobble 3.6. Overhead contacts still at
   ~3 m high, 6–6.7 m from the net.
 - Shuttle trail is now a glowing streak (two crossed ribbons, widest at the shuttle, fading to the tail; additive),

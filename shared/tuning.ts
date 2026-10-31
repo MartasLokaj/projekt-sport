@@ -792,25 +792,36 @@ export const TUNING = {
     pointPauseMs: 1600,
 
     /**
-     * Camera behind the player, framed like a console sports game: low and close behind the baseline, so the
-     * court fills the picture. Height, distance behind the baseline, the point it looks at (z down the court,
-     * cameraLookY high) and how much it follows the player sideways (cameraFollowX, 1 = fully) and forwards /
-     * backwards from homeDepth (cameraFollowZ), so the player stays big in the lower middle of the picture.
+     * Camera behind the player, framed like a console sports game: it rides along behind the player (sideways
+     * cameraFollowX, forwards / backwards cameraFollowZ, 1 = fully), cameraBehind metres behind and cameraHeight
+     * high, looking cameraLookAhead metres in front of the player at cameraLookY high. So the player stays in the
+     * same spot in the lower middle of the picture wherever they run, with the court in front of them.
      */
-    cameraHeight: 3.6,
-    cameraBack: 1.8,
-    cameraLookAt: -2.5,
-    cameraLookY: -0.5,
-    cameraFollowX: 0.6,
-    cameraFollowZ: 0.35,
+    cameraHeight: 4.2,
+    cameraBehind: 5.5,
+    cameraLookAhead: 6,
+    cameraLookY: 0.5,
+    cameraFollowX: 0.8,
+    cameraFollowZ: 0.9,
+    /** How quickly the camera catches up with the player (higher = tighter). */
+    cameraFollowSpeed: 5,
     /** When the shuttle flies higher than cameraTiltFrom (m), the camera looks up this share of the extra height, at this speed. */
     cameraTiltFrom: 3.0,
     cameraTiltFollow: 0.4,
     cameraTiltSpeed: 3,
-    cameraFov: 42,
+    cameraFov: 50,
+    /**
+     * Keeping things in the picture: the player (feet and head), a teammate and the shuttle must stay inside, with
+     * this margin (share of half the picture). If one would leave, the view widens (up to cameraFovMax), quickly
+     * (cameraWidenSpeed), and narrows back slowly (cameraNarrowSpeed).
+     */
+    cameraFrameMargin: 0.12,
+    cameraFovMax: 72,
+    cameraWidenSpeed: 8,
+    cameraNarrowSpeed: 1.5,
     /** Split screen (two players): each half is narrow, so the camera sees wider and sits a little further back. */
-    splitCameraFov: 56,
-    splitCameraBack: 2.4,
+    splitCameraFov: 60,
+    splitCameraBehind: 5.2,
     /** The shuttle is drawn this much bigger than real, so it is easy to follow from the sofa. */
     shuttleScale: 2.4,
     /**
