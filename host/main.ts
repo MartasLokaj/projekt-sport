@@ -191,7 +191,7 @@ function connect(): void {
     else if (msg.type === 'player_badminton_swing') {
       if (!badmintonScreen.hidden) {
         const side = msg.playerId === badmintonIds[0] ? 1 : msg.playerId === badmintonIds[1] ? -1 : null;
-        if (side !== null && !msg.ignored) badminton?.onSwing(side, msg.at, msg.power, msg.aim);
+        if (side !== null && !msg.ignored) badminton?.onSwing(side, msg.at, msg.power, msg.aim, msg.short);
       } else lab.onSwing(msg);
     }
   });

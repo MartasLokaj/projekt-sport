@@ -297,6 +297,7 @@ function connect(): void {
         saveProfile(profile);
         play.setSensitivity(profile.sensitivity);
         lab.setSensitivity(profile.sensitivity);
+        lab.setHandedness(profile.handedness);
         showJoined(msg.player);
         break;
       case 'lobby_state':

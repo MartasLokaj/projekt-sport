@@ -66,12 +66,14 @@ export type SwingProgress = {
  * speed: fastest turn of the phone (degrees per second). power: 0..100 from the speed and sensitivity.
  * tilt: angle of the top of the phone above the horizon at the fastest moment (degrees, -90..90), only logged.
  * aim: -1 = swung fully to the left, 0 = straight, 1 = fully to the right.
+ * short: the SHORT button was held at the hit (a drop shot, or a short serve).
  * ignored: too slow to be a hit (reaching for the shuttle, getting ready); sent only for the lab and the log.
  * at: when the fastest moment happened, in the server's clock (milliseconds since 1970), so timing
  * can be judged without the Wi-Fi delay. trace: the last moments of motion, for the graph and the log.
  */
 export type BadmintonSwing = {
   ignored: boolean;
+  short: boolean;
   speed: number;
   power: number;
   aim: number;

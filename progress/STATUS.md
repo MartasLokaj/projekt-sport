@@ -175,7 +175,18 @@ running log of where we are, what the user decided, and what comes next).
     their half; the computer still jumps by itself; `shuttleScale` 2.4. Scripted: no jump before the swing,
     early swing → 1.2 m jump, late → 0.16 m hop, chest-height on time → no jump.
   - User: "okay, this is divine" — approved.
-  - Next: B4 2v2 (plan first, wait for OK).
+  - The user then added **`BADMINTON_MECHANICS.md`** (linked from SPEC §13): 9 mechanics to add before 2v2, in order
+    (1 SHORT button, 2 wobble + dive/fall, 3 Super Smash, 4 feedback/movement/CPU levels, 5 rally escalation, trails,
+    match options, 6 then B4 2v2). Each step: plan → OK → build → test on phones → commit, push, STATUS.
+  - **Mechanics step 1 (SHORT button + short serve) — built, waiting for the user's phone test.** Phone: big
+    SHORT button at the bottom (left for right-handers, right for left-handers), held = blue "SHORT ✓", light
+    vibration on Android; `short` is sent with each swing (held at the peak or let go ≤ `shortGraceMs` before).
+    Game: new shots `drop` (any height, lands 0.8–2.4 m past the net, crosses the net low: `dropNetClearance`) and
+    `shortServe` (just past the short service line); a drop from the back is less precise (`shortShotScatterBack`,
+    `shortShotNetChanceBack` → `Flight.intoNet`, point to the receiver); CPU plays drops (`cpu.dropChance`) and
+    short serves (`cpu.shortServeChance`); nobody hits closer than `minContactDepth` to the net. Mac: Shift+Space.
+    Lab card shows SHORT. Scripted test: drops land 1.1–1.9 m from the net, short serves at 3.2–3.4 m.
+  - Next: user tests step 1 on the phone → step 2 (wobble shots + dive, fall, recovery).
 
 ### GitHub and the cloud (2026-10-31)
 - Project is on GitHub: **private** repo `MartasLokaj/projekt-sport` (remote `origin`, branch `main`). `gh` CLI is in
@@ -240,7 +251,7 @@ running log of where we are, what the user decided, and what comes next).
 - Turf brightness/tint can still be tuned (`turfTint`, `bumperTint`, `islandGrassTint`).
 
 ## Next action
-**Badminton B4:** propose the 2v2 plan, wait for OK, build it. (Cloud session redesigns the hub — leave `host/hub/` alone.)
+**Badminton mechanics (BADMINTON_MECHANICS.md):** step 1 built → user's phone test → step 2. B4 (2v2) comes after step 5. (Cloud session redesigns the hub — leave `host/hub/` alone.)
 Older (paused):
 Cube World: 2a (host hub) is built — get the user's test on the TV with real phones, then 2b (registry + phone control), then 2c.
 After that 4c (juice, incl. **wind**: trees and grass swaying), then ask the user to approve Phase 4.

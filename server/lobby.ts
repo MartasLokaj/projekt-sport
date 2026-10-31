@@ -316,6 +316,7 @@ function cleanBadmintonSwing(msg: BadmintonSwing): BadmintonSwing | null {
     : [];
   return {
     ignored: msg.ignored === true,
+    short: msg.short === true,
     speed: clamp(msg.speed, 0, 5000),
     power: clamp(msg.power, 0, 100),
     aim: clamp(msg.aim, -1, 1),

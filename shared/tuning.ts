@@ -371,6 +371,8 @@ export const TUNING = {
     aimWindowMs: 120,
     aimDeadzone: 0.15,
     aimSign: 1,
+    /** The SHORT button counts if it was held this close to the hit (milliseconds), in case it was let go a little early. */
+    shortGraceMs: 150,
     /** Graph and log: how much motion before the fastest moment is kept (milliseconds). */
     traceBeforeMs: 600,
     /** Clock sync with the server: how often the phone asks the time (milliseconds). */
@@ -418,6 +420,8 @@ export const TUNING = {
      */
     swingJumpRiseMs: 180,
     lowestContact: 0.3,
+    /** Nobody can hit the shuttle closer to the net than this (m), e.g. a drop that has just crossed it. */
+    minContactDepth: 0.6,
     reactionMs: 150,
     /** Contact height decides the stroke: from overheadFrom up = overhead, from driveFrom up = flat drive, lower = lift (m). */
     overheadFrom: 1.7,
@@ -458,13 +462,26 @@ export const TUNING = {
     lift: { depth: [6.0, 7.75], apex: 3.6, seconds: [2.45, 1.95], drag: 1.0 },
     drive: { depth: [5.75, 7.5], apex: 0.4, seconds: [1.45, 1.1], drag: 0.6 },
     smash: { depth: [3.25, 5.25], apex: 0, seconds: [1.15, 0.8], drag: 0.3 },
+    /** Drop shot (SHORT button held): soft, just over the net, lands close behind it. Slower swing = shorter. */
+    drop: { depth: [0.8, 2.4], apex: 0.5, seconds: [1.8, 1.5], drag: 1.2 },
+    /** Short serve (SHORT held while serving): low, lands just past the short service line (depth from the net). */
+    shortServe: { depth: [2.7, 3.8], apex: 0.4, seconds: [1.6, 1.35], drag: 0.8 },
+    /** Drops and short serves only need to clear the net by this much (m), so they stay low. */
+    dropNetClearance: 0.12,
+    /**
+     * A drop from the back of the court (at least smashFromDepth from the net) lands up to this far from
+     * where it was aimed (m) and has this chance to end in the net. From mid-court or the front it is precise.
+     */
+    shortShotScatterBack: 1.2,
+    shortShotNetChanceBack: 0.15,
+    shortShotScatterMid: 0.35,
     /** Every shot clears the net by at least this much (m). */
     netClearance: 0.35,
     /** A Perfect hit flies this much faster. */
     perfectSpeedup: 0.9,
 
     /** The computer: chance to return a normal shot and a smash, its power range (percent), and serve delay (ms). */
-    cpu: { hitChance: 0.85, smashReturnChance: 0.55, power: [30, 85], smashChance: 0.35, serveDelayMs: 1300, aimRange: 1 },
+    cpu: { hitChance: 0.85, smashReturnChance: 0.55, power: [30, 85], smashChance: 0.35, dropChance: 0.15, shortServeChance: 0.25, serveDelayMs: 1300, aimRange: 1 },
 
     /** Rally scoring: first to pointsToWin, but you must lead by winBy (4 : 4 → 5 : 4 → 6 : 4 wins). Pause after a point (ms). */
     pointsToWin: 4,

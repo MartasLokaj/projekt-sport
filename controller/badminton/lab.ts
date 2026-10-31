@@ -10,6 +10,8 @@ type MotionPermissionApi = { requestPermission?: () => Promise<'granted' | 'deni
 
 export type LabScreen = {
   setOpen: (open: boolean) => void;
+  /** Puts the SHORT button under the left- or right-handed player's thumb. */
+  setHandedness: (hand: 'left' | 'right') => void;
   /** The player's swing sensitivity in percent (100 = normal). */
   setSensitivity: (percent: number) => void;
   onClockPong: (t: number, server: number) => void;
@@ -40,6 +42,8 @@ export function initLabScreen(send: (msg: ClientMessage) => void): LabScreen {
   const clockEl = document.getElementById('lab-clock')!;
   const motionPanel = document.getElementById('lab-motion')!;
   const motionButton = document.getElementById('lab-motion-enable') as HTMLButtonElement;
+  const shortButton = document.getElementById('lab-short')!;
+  const shortLabel = document.getElementById('lab-short-label')!;
   const cfg = TUNING.badmintonSwing;
 
   const detector = new BadmintonSwingDetector();
@@ -91,6 +95,44 @@ export function initLabScreen(send: (msg: ClientMessage) => void): LabScreen {
     return [(sign * v[0]) / len, (sign * v[1]) / len, (sign * v[2]) / len];
   }
 
+  // ---------- SHORT button ----------
+  // Held with the thumb while swinging: the hit becomes a drop shot (or a short serve).
+  // It counts if it was held at the hit, or let go at most shortGraceMs before it.
+
+  const shortPointers = new Set<number>();
+  let shortReleasedAt = -Infinity;
+
+  function renderShort(): void {
+    const held = shortPointers.size > 0;
+    shortButton.classList.toggle('held', held);
+    shortLabel.textContent = held ? 'SHORT ✓' : 'SHORT';
+  }
+
+  shortButton.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    try {
+      shortButton.setPointerCapture(e.pointerId); // keeps it held even if the thumb slides off the button
+    } catch {
+      // Not a real pointer (or already gone): still count the press.
+    }
+    if (shortPointers.size === 0 && 'vibrate' in navigator) navigator.vibrate(12); // not supported on iPhone
+    shortPointers.add(e.pointerId);
+    renderShort();
+  });
+  const releaseShort = (e: PointerEvent): void => {
+    if (!shortPointers.delete(e.pointerId)) return;
+    if (shortPointers.size === 0) shortReleasedAt = phoneNow();
+    renderShort();
+  };
+  shortButton.addEventListener('pointerup', releaseShort);
+  shortButton.addEventListener('pointercancel', releaseShort);
+  shortButton.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  /** Was SHORT held at this moment of the phone clock (or let go just before)? */
+  function shortHeldAt(t: number): boolean {
+    return shortPointers.size > 0 || t - shortReleasedAt <= cfg.shortGraceMs;
+  }
+
   // ---------- Motion ----------
 
   window.addEventListener('devicemotion', (e) => {
@@ -107,14 +149,15 @@ export function initLabScreen(send: (msg: ClientMessage) => void): LabScreen {
     if (!swing) return;
 
     const { at, ...rest } = swing;
-    send({ type: 'badminton_swing', ...rest, at: Math.round(at + (offset ?? 0)), fused });
+    const short = shortHeldAt(at);
+    send({ type: 'badminton_swing', ...rest, short, at: Math.round(at + (offset ?? 0)), fused });
     if (swing.ignored) {
       detailEl.textContent = `Ignored: too slow for a hit (${swing.speed}°/s)`;
       return;
     }
     swings++;
     if ('vibrate' in navigator) navigator.vibrate(30); // not supported on iPhone
-    kindEl.textContent = 'HIT!';
+    kindEl.textContent = short ? 'SHORT!' : 'HIT!';
     powerEl.textContent = `${Math.round(swing.power)} %`;
     detailEl.textContent = `Swing ${swings} · ${swing.speed}°/s · aim ${aimText(swing.aim)}`;
   });
@@ -156,7 +199,12 @@ export function initLabScreen(send: (msg: ClientMessage) => void): LabScreen {
         void checkSensor();
       } else {
         clearInterval(syncTimer);
+        shortPointers.clear();
+        renderShort();
       }
+    },
+    setHandedness(hand) {
+      shortButton.classList.toggle('left-handed', hand === 'left');
     },
     setSensitivity(percent) {
       detector.playerSensitivity = percent / 100;
