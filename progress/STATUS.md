@@ -313,6 +313,9 @@ running log of where we are, what the user decided, and what comes next).
 - **2026-10-31: merged the cloud's hub branch `claude/adoring-keller-x93qqh` (Cube World 2.0 K1–K2: title menu,
   new lobby UI `host/ui/`, living cube, confetti, fonts) into `main` on the user's request.** Merge was clean;
   checked in the dev browser: title → cube → Badminton → Play → game → Esc back to the cube, no errors.
+- **2026-10-31: merged the cloud branch again (Minigolf G1–G3: checker turf, wooden borders, wider lanes, closer
+  camera, meadows/hills/boulders; Badminton beach venue step 1: `host/badminton/venue/` beach, props, sea).**
+  Clean merge; checked: badminton on the beach runs (~2.7 ms per frame), minigolf hole 1 loads, no errors.
 
 ### Kick players from the lobby (2026-10-31, user request)
 - **Built, waiting for the user's test.** Hover a player's face under Play → red × (`.face-kick` in
