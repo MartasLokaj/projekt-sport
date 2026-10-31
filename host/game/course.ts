@@ -17,8 +17,18 @@ import { TUNING } from '../../shared/tuning.ts';
 const KIT_FLOOR = 0.063;
 const KIT_BLADE_LENGTH = 0.6;
 
-/** A point the lane passes through (local coordinates, z = forward from the tee), its floor height and half-width. */
-export type PathPoint = { x: number; z: number; y?: number; w?: number };
+/**
+ * A point the lane passes through (local coordinates, z = forward from the tee), its floor height and half-width.
+ * The flags say what the stretch of lane from the previous point up to this one is like:
+ * - ramp: the height changes in a straight line (so a ramp still rises at its top edge and the ball takes off),
+ *   instead of easing in and out softly;
+ * - gap: there is no floor at all (a jump over water; a ball that falls in is out of bounds);
+ * - tube: the lane runs through a pipe.
+ */
+export type PathPoint = { x: number; z: number; y?: number; w?: number; ramp?: boolean; gap?: boolean; tube?: boolean };
+
+/** A stretch of the lane, in units along it from the tee end. */
+export type Stretch = { from: number; to: number };
 
 export type HoleDef = {
   number: number;
@@ -74,12 +84,45 @@ export const HOLES: HoleDef[] = [
       { x: 1.6, z: 11.6, w: 1.45 },
     ],
   },
+  {
+    // Hole 4: the tee is on top of a grassy hill; the ball dives down a winding blue pipe and shoots out onto the green.
+    number: 4,
+    par: 3,
+    place: { x: 40, z: 4, yaw: 0 },
+    path: [
+      { x: 0, z: 0, y: 1.8, w: 1.05 },
+      { x: 0, z: 2.2, y: 1.8, w: 1.0 },
+      { x: 0.1, z: 3.4, y: 1.8, w: 0.85 },
+      { x: 0.7, z: 5.6, y: 1.2, w: 0.8, tube: true, ramp: true },
+      { x: 0.6, z: 8, y: 0.6, w: 0.8, tube: true, ramp: true },
+      { x: -0.2, z: 10.4, y: 0, w: 0.85, tube: true, ramp: true },
+      { x: -0.6, z: 12.8, w: 1.3 },
+      { x: 0.2, z: 15, w: 1.35 },
+      { x: 1.9, z: 16.2, w: 1.45 },
+    ],
+  },
+  {
+    // Hole 5: a ski jump. Up the ramp and fly over the pond; too soft and the ball splashes into the water.
+    number: 5,
+    par: 3,
+    place: { x: -30, z: -22, yaw: 0 },
+    path: [
+      { x: 0, z: 0, w: 1.05 },
+      { x: 0, z: 2.6, w: 1.0 },
+      { x: 0, z: 3.4, w: 0.95 },
+      { x: 0, z: 4.9, y: 0.36, w: 0.95, ramp: true },
+      { x: 0, z: 6.0, w: 1.25, gap: true },
+      { x: 0.2, z: 8.2, w: 1.35 },
+      { x: -1.2, z: 10.6, w: 1.2 },
+      { x: -3.4, z: 11.6, w: 1.45 },
+    ],
+  },
 ];
 
 export type Kit = Map<string, GLTF>;
 
 /** Where a point is relative to the lane. */
-export type LaneSpot = { distance: number; width: number; height: number };
+export type LaneSpot = { distance: number; width: number; height: number; along: number };
 
 export type BuiltHole = {
   def: HoleDef;
@@ -97,7 +140,17 @@ export type BuiltHole = {
   /** Big pieces that may hide the ball from the camera; the game fades them out when they do. */
   occluders: THREE.Object3D[];
   /** The lane's outline including the bumpers, so the island can be shaped around it. */
-  lane: { bounds: THREE.Box3; nearest: (x: number, z: number) => LaneSpot; outerEdge: number };
+  lane: {
+    bounds: THREE.Box3;
+    nearest: (x: number, z: number) => LaneSpot;
+    outerEdge: number;
+    /** Stretches with no floor (jumps over water), so the island can have a pond there. */
+    gaps: Stretch[];
+    /** Height of the lane's lowest point (the island's flat top lies just below it). */
+    lowest: number;
+    /** True when (x, z) is over one of the gaps. */
+    overGap: (x: number, z: number) => boolean;
+  };
 };
 
 export async function loadKit(): Promise<Kit> {
@@ -148,6 +201,8 @@ export function buildHole(def: HoleDef, kit: Kit, world: RAPIER.World, R: typeof
   group.add(bumperMesh);
   const walls = new TriangleSoup();
   addMeshTriangles(bumper, walls);
+  // Under both edges of every gap a wooden board goes down into the water (a ball that falls short hits it).
+  for (const gap of lane.gaps) addGapBoards(group, lane, gap, world, R, fixed);
 
   addCupPit(group, cup, cupRadius, world, R);
   const flag = kit.get('flag-red')!.scene.clone(true);
@@ -178,6 +233,18 @@ export function buildHole(def: HoleDef, kit: Kit, world: RAPIER.World, R: typeof
     occluders.push(model);
   }
 
+  // Pipes over the lane: they hold the ball in, and fade out like the windmill when they hide it.
+  for (const stretch of lane.tubes) {
+    const tube = buildTube(lane, stretch);
+    group.add(tube.mesh);
+    occluders.push(tube.mesh);
+    const inside = tube.inside.build();
+    world.createCollider(
+      R.ColliderDesc.trimesh(inside.vertices, inside.indices, R.TriMeshFlags.FIX_INTERNAL_EDGES).setFriction(cfg.wallFriction).setRestitution(0.3),
+      fixed,
+    );
+  }
+
   const wallMesh = walls.build();
   world.createCollider(
     R.ColliderDesc.trimesh(wallMesh.vertices, wallMesh.indices, R.TriMeshFlags.FIX_INTERNAL_EDGES)
@@ -202,9 +269,15 @@ export function buildHole(def: HoleDef, kit: Kit, world: RAPIER.World, R: typeof
       bounds: lane.bounds(outerEdge),
       nearest: (x, z) => {
         const n = lane.nearest(x, z);
-        return { distance: n.distance, width: n.width, height: n.height };
+        return { distance: n.distance, width: n.width, height: n.height, along: n.along };
       },
       outerEdge,
+      gaps: lane.gaps,
+      lowest: Math.min(...lane.points.map((q) => q.y)),
+      overGap: (x, z) => {
+        const n = lane.nearest(x, z);
+        return n.distance < n.width + outerEdge && lane.gapAt(n.along) !== null;
+      },
     },
   };
 }
@@ -215,6 +288,9 @@ class Lane {
   readonly widths: number[] = [];
   readonly tangents: THREE.Vector3[] = [];
   readonly spacing: number;
+  /** Stretches with no floor, and stretches inside a pipe (units along the lane). */
+  readonly gaps: Stretch[];
+  readonly tubes: Stretch[];
 
   constructor(def: HoleDef) {
     const yaw = THREE.MathUtils.degToRad(def.place.yaw);
@@ -224,25 +300,61 @@ class Lane {
     const widen = TUNING.course.laneWidthScale;
     const widthCurve = new THREE.CatmullRomCurve3(def.path.map((p) => new THREE.Vector3((p.w ?? 1.1) * widen, 0, 0)));
     // Heights ease smoothly from point to point without overshooting (a curve would dip below the ground).
+    // On a ramp they change in a straight line instead.
+    /** Which stretch of the path (from point k to point k + 1) the curve is in at t. */
+    const stretchAt = (t: number): number => Math.min(def.path.length - 2, Math.floor(t * (def.path.length - 1)));
     const heightAt = (t: number): number => {
-      const f = t * (def.path.length - 1);
-      const k = Math.min(def.path.length - 2, Math.floor(f));
-      const ease = THREE.MathUtils.smoothstep(f - k, 0, 1);
+      const k = stretchAt(t);
+      const f = t * (def.path.length - 1) - k;
+      const ease = def.path[k + 1].ramp ? THREE.MathUtils.clamp(f, 0, 1) : THREE.MathUtils.smoothstep(f, 0, 1);
       return THREE.MathUtils.lerp(def.path[k].y ?? 0, def.path[k + 1].y ?? 0, ease);
     };
     const count = Math.ceil(curve.getLength() / TUNING.course.laneSpacing);
     this.spacing = curve.getLength() / count;
+    const stretches: number[] = [];
     for (let i = 0; i <= count; i++) {
       const t = curve.getUtoTmapping(i / count, 0);
       this.points.push(curve.getPoint(t).setY(heightAt(t)));
       this.widths.push(widthCurve.getPoint(t).x);
       this.tangents.push(curve.getTangent(t).setY(0).normalize());
+      stretches.push(stretchAt(t));
     }
+    /** The parts of the lane where the path's flag is set, as stretches along the lane. */
+    const flagged = (flag: 'gap' | 'tube'): Stretch[] => {
+      const result: Stretch[] = [];
+      let start = -1;
+      for (let i = 0; i <= count + 1; i++) {
+        const on = i <= count && def.path[stretches[i] + 1][flag] === true;
+        if (on && start < 0) start = i;
+        if (!on && start >= 0) {
+          result.push({ from: Math.max(0, start - 1) * this.spacing, to: (i - 1) * this.spacing });
+          start = -1;
+        }
+      }
+      return result;
+    };
+    this.gaps = flagged('gap');
+    this.tubes = flagged('tube');
+  }
+
+  /** The gap at `along` units along the lane, or null. */
+  gapAt(along: number): Stretch | null {
+    return this.gaps.find((g) => along > g.from && along < g.to) ?? null;
+  }
+
+  /** Index of the sample closest to `distance` units along the lane. */
+  index(distance: number): number {
+    return Math.min(this.points.length - 1, Math.max(0, Math.round(distance / this.spacing)));
+  }
+
+  /** The direction to the left of the way the lane runs, at sample i. */
+  left(i: number): THREE.Vector3 {
+    return new THREE.Vector3(this.tangents[i].z, 0, -this.tangents[i].x);
   }
 
   /** The sample `distance` units along the lane from the start. */
   at(distance: number): { point: THREE.Vector3; tangent: THREE.Vector3; width: number } {
-    const i = Math.min(this.points.length - 1, Math.max(0, Math.round(distance / this.spacing)));
+    const i = this.index(distance);
     return { point: this.points[i], tangent: this.tangents[i], width: this.widths[i] };
   }
 
@@ -313,9 +425,16 @@ function buildFloor(lane: Lane, cup: THREE.Vector3, cupRadius: number): THREE.Bu
       const z = box.min.z + j * cell;
       const n = lane.nearest(x, z);
       const edge = n.width + overlap;
-      const inLane = n.distance <= edge;
+      const gap = lane.gapAt(n.along);
+      let inLane = n.distance <= edge;
       const position = new THREE.Vector3(x, n.height, z);
-      if (!inLane) {
+      if (gap) {
+        // Over a gap: pulled back onto the nearer edge of the gap, so the turf ends in a straight line there.
+        inLane = false;
+        const k = lane.index(n.along - gap.from < gap.to - n.along ? gap.from : gap.to);
+        const reach = lane.widths[k] + overlap;
+        position.copy(lane.points[k]).addScaledVector(lane.left(k), THREE.MathUtils.clamp(n.side, -reach, reach));
+      } else if (!inLane) {
         const out = new THREE.Vector3(x - n.point.x, 0, z - n.point.z).normalize();
         position.set(n.point.x + out.x * edge, n.height, n.point.z + out.z * edge);
       }
@@ -375,26 +494,59 @@ function buildFloor(lane: Lane, cup: THREE.Vector3, cupRadius: number): THREE.Bu
  * The wooden border: a thick plank standing all the way around the lane's edge (left side, round end
  * around the cup, right side, round end behind the tee). Its top edges are bevelled so they catch the
  * light, the top is lighter than the sides, and the outer side reaches down into the island ground.
+ * Where the lane has a gap the border stops on both sides of it, with the plank's end closed off.
  */
 function buildBumper(lane: Lane): THREE.BufferGeometry {
   const cfg = TUNING.course;
   const n = lane.points.length - 1;
-  const left = (i: number): THREE.Vector3 => new THREE.Vector3(lane.tangents[i].z, 0, -lane.tangents[i].x);
-
-  // The edge loop: points on the lane's edge with the outward direction there.
-  const loop: { point: THREE.Vector3; out: THREE.Vector3 }[] = [];
+  type EdgeSpot = { point: THREE.Vector3; out: THREE.Vector3 };
   const capSteps = 24;
-  for (let i = 0; i <= n; i++) loop.push({ point: lane.points[i].clone().addScaledVector(left(i), lane.widths[i]), out: left(i) });
-  for (let k = 1; k < capSteps; k++) {
-    const a = (k / capSteps) * Math.PI;
-    const out = left(n).multiplyScalar(Math.cos(a)).addScaledVector(lane.tangents[n], Math.sin(a));
-    loop.push({ point: lane.points[n].clone().addScaledVector(out, lane.widths[n]), out });
+  const leftSide = (from: number, to: number): EdgeSpot[] => {
+    const spots: EdgeSpot[] = [];
+    for (let i = from; i <= to; i++) spots.push({ point: lane.points[i].clone().addScaledVector(lane.left(i), lane.widths[i]), out: lane.left(i) });
+    return spots;
+  };
+  const rightSide = (from: number, to: number): EdgeSpot[] => {
+    const spots: EdgeSpot[] = [];
+    for (let i = from; i >= to; i--) spots.push({ point: lane.points[i].clone().addScaledVector(lane.left(i), -lane.widths[i]), out: lane.left(i).negate() });
+    return spots;
+  };
+  const cupEnd = (): EdgeSpot[] => {
+    const spots: EdgeSpot[] = [];
+    for (let k = 1; k < capSteps; k++) {
+      const a = (k / capSteps) * Math.PI;
+      const out = lane.left(n).multiplyScalar(Math.cos(a)).addScaledVector(lane.tangents[n], Math.sin(a));
+      spots.push({ point: lane.points[n].clone().addScaledVector(out, lane.widths[n]), out });
+    }
+    return spots;
+  };
+  const teeEnd = (): EdgeSpot[] => {
+    const spots: EdgeSpot[] = [];
+    for (let k = 1; k < capSteps; k++) {
+      const a = (k / capSteps) * Math.PI;
+      const out = lane.left(0).multiplyScalar(-Math.cos(a)).addScaledVector(lane.tangents[0], -Math.sin(a));
+      spots.push({ point: lane.points[0].clone().addScaledVector(out, lane.widths[0]), out });
+    }
+    return spots;
+  };
+
+  // The pieces of lane between the gaps (sample indices), and the border runs around them.
+  const pieces: [number, number][] = [];
+  let pieceStart = 0;
+  for (const gap of lane.gaps) {
+    pieces.push([pieceStart, lane.index(gap.from)]);
+    pieceStart = lane.index(gap.to);
   }
-  for (let i = n; i >= 0; i--) loop.push({ point: lane.points[i].clone().addScaledVector(left(i), -lane.widths[i]), out: left(i).negate() });
-  for (let k = 1; k < capSteps; k++) {
-    const a = (k / capSteps) * Math.PI;
-    const out = left(0).multiplyScalar(-Math.cos(a)).addScaledVector(lane.tangents[0], -Math.sin(a));
-    loop.push({ point: lane.points[0].clone().addScaledVector(out, lane.widths[0]), out });
+  pieces.push([pieceStart, n]);
+  const runs: { spots: EdgeSpot[]; closed: boolean }[] = [];
+  if (pieces.length === 1) {
+    runs.push({ spots: [...leftSide(0, n), ...cupEnd(), ...rightSide(n, 0), ...teeEnd()], closed: true });
+  } else {
+    for (const [a, b] of pieces) {
+      if (b === n) runs.push({ spots: [...leftSide(a, n), ...cupEnd(), ...rightSide(n, a)], closed: false });
+      else if (a === 0) runs.push({ spots: [...rightSide(b, 0), ...teeEnd(), ...leftSide(0, b)], closed: false });
+      else runs.push({ spots: leftSide(a, b), closed: false }, { spots: rightSide(b, a), closed: false });
+    }
   }
 
   // The plank's cross-section, one flat face after another: (distance outwards from the edge, height
@@ -409,49 +561,80 @@ function buildBumper(lane: Lane): THREE.BufferGeometry {
     { from: [w - b, h], to: [w, h - b], light: 1.0 }, // bevel
     { from: [w, h - b], to: [w, -cfg.bumperDepth], light: 0.78 }, // the outer side, down into the ground
   ];
+  const outline: [number, number][] = [...faces.map((f) => f.from), faces[faces.length - 1].to];
 
   const positions: number[] = [];
   const normals: number[] = [];
   const uvs: number[] = [];
   const colours: number[] = [];
   const indices: number[] = [];
-  const along: number[] = [0];
-  for (let k = 1; k <= loop.length; k++) along.push(along[k - 1] + loop[k % loop.length].point.distanceTo(loop[k - 1].point));
   const plank = cfg.woodPlankLength;
-  let around = 0;
-  for (const face of faces) {
-    const [o0, y0] = face.from;
-    const [o1, y1] = face.to;
-    const length = Math.hypot(o1 - o0, y1 - y0);
-    // The face's normal in the cross-section (outwards, up). The faces go round the plank in order,
-    // so turning each face's direction a quarter turn the same way always points away from the plank.
-    const nx = -(y1 - y0);
-    const ny = o1 - o0;
-    const start = positions.length / 3;
-    for (let k = 0; k <= loop.length; k++) {
-      const spot = loop[k % loop.length];
-      for (const [o, y, v] of [
-        [o0, y0, around],
-        [o1, y1, around + length],
-      ]) {
-        positions.push(spot.point.x + spot.out.x * o, spot.point.y + y, spot.point.z + spot.out.z * o);
-        const normal = new THREE.Vector3(spot.out.x * nx, ny, spot.out.z * nx).normalize();
-        normals.push(normal.x, normal.y, normal.z);
-        uvs.push(along[k] / plank, v / plank);
-        colours.push(face.light, face.light, face.light);
-      }
-    }
-    for (let k = 0; k < loop.length; k++) {
-      const a = start + k * 2;
-      indices.push(a, a + 1, a + 2, a + 2, a + 1, a + 3);
-    }
-    around += length;
-  }
-  // The side facing the lane must point back into the lane, against "out" (the physics needs this way round).
   const p = (i: number): THREE.Vector3 => new THREE.Vector3(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
-  const normal = new THREE.Vector3().subVectors(p(indices[1]), p(indices[0])).cross(new THREE.Vector3().subVectors(p(indices[2]), p(indices[0])));
-  if (normal.dot(loop[0].out) > 0) {
-    for (let i = 0; i < indices.length; i += 3) [indices[i + 1], indices[i + 2]] = [indices[i + 2], indices[i + 1]];
+  const triangleNormal = (i: number): THREE.Vector3 =>
+    new THREE.Vector3().subVectors(p(indices[i + 1]), p(indices[i])).cross(new THREE.Vector3().subVectors(p(indices[i + 2]), p(indices[i])));
+  /** Turns the triangles from index `first` on round if the first one faces against `want`. */
+  const orient = (first: number, want: THREE.Vector3): void => {
+    if (triangleNormal(first).dot(want) >= 0) return;
+    for (let i = first; i < indices.length; i += 3) [indices[i + 1], indices[i + 2]] = [indices[i + 2], indices[i + 1]];
+  };
+
+  for (const run of runs) {
+    const loop = run.spots;
+    const count = run.closed ? loop.length + 1 : loop.length;
+    const along: number[] = [0];
+    for (let k = 1; k < count; k++) along.push(along[k - 1] + loop[k % loop.length].point.distanceTo(loop[k - 1].point));
+    const runFirstIndex = indices.length;
+    let around = 0;
+    for (const face of faces) {
+      const [o0, y0] = face.from;
+      const [o1, y1] = face.to;
+      const length = Math.hypot(o1 - o0, y1 - y0);
+      // The face's normal in the cross-section (outwards, up). The faces go round the plank in order,
+      // so turning each face's direction a quarter turn the same way always points away from the plank.
+      const nx = -(y1 - y0);
+      const ny = o1 - o0;
+      const start = positions.length / 3;
+      for (let k = 0; k < count; k++) {
+        const spot = loop[k % loop.length];
+        for (const [o, y, v] of [
+          [o0, y0, around],
+          [o1, y1, around + length],
+        ]) {
+          positions.push(spot.point.x + spot.out.x * o, spot.point.y + y, spot.point.z + spot.out.z * o);
+          const normal = new THREE.Vector3(spot.out.x * nx, ny, spot.out.z * nx).normalize();
+          normals.push(normal.x, normal.y, normal.z);
+          uvs.push(along[k] / plank, v / plank);
+          colours.push(face.light, face.light, face.light);
+        }
+      }
+      for (let k = 0; k < count - 1; k++) {
+        const a = start + k * 2;
+        indices.push(a, a + 1, a + 2, a + 2, a + 1, a + 3);
+      }
+      around += length;
+    }
+    // The side facing the lane must point back into the lane, against "out" (the physics needs this way round).
+    orient(runFirstIndex, loop[0].out.clone().negate());
+
+    // An open run ends in a flat cut through the plank, at both ends.
+    if (run.closed) continue;
+    for (const [k, away] of [
+      [0, loop[0].point.clone().sub(loop[1].point)],
+      [loop.length - 1, loop[loop.length - 1].point.clone().sub(loop[loop.length - 2].point)],
+    ] as const) {
+      const spot = loop[k];
+      const start = positions.length / 3;
+      const normal = away.clone().setY(0).normalize();
+      for (const [o, y] of outline) {
+        positions.push(spot.point.x + spot.out.x * o, spot.point.y + y, spot.point.z + spot.out.z * o);
+        normals.push(normal.x, normal.y, normal.z);
+        uvs.push(o / plank, y / plank);
+        colours.push(0.85, 0.85, 0.85);
+      }
+      const first = indices.length;
+      for (let j = 1; j < outline.length - 1; j++) indices.push(start, start + j, start + j + 1);
+      orient(first, normal);
+    }
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
@@ -460,6 +643,145 @@ function buildBumper(lane: Lane): THREE.BufferGeometry {
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(colours, 3));
   geometry.setIndex(indices);
   return geometry;
+}
+
+/**
+ * The wooden boards under the two edges of a gap: from the turf's edge straight down into the water,
+ * as wide as the lane and its borders. They are solid, so a ball that falls short bounces off them.
+ */
+function addGapBoards(group: THREE.Group, lane: Lane, gap: Stretch, world: RAPIER.World, R: typeof RAPIER, body: RAPIER.RigidBody): void {
+  const cfg = TUNING.course;
+  const bottom = TUNING.scenery.seaLevel - 0.5;
+  // Each board stands just inside the gap (under the turf it would poke up through a sloping take-off).
+  for (const [distance, back] of [
+    [gap.from, 1],
+    [gap.to, -1],
+  ]) {
+    const k = lane.index(distance);
+    const top = lane.points[k].y - 0.006;
+    const width = (lane.widths[k] + cfg.bumperWidth) * 2;
+    const height = top - bottom;
+    const thickness = cfg.gapBoardThickness;
+    const centre = lane.points[k]
+      .clone()
+      .addScaledVector(lane.tangents[k], (back * thickness) / 2)
+      .setY(top - height / 2);
+    const yaw = Math.atan2(lane.tangents[k].x, lane.tangents[k].z);
+    const board = new THREE.Mesh(new THREE.BoxGeometry(width, height, thickness), plainWoodMaterial());
+    board.position.copy(centre);
+    board.rotation.y = yaw;
+    board.castShadow = true;
+    board.receiveShadow = true;
+    group.add(board);
+    const q = new THREE.Quaternion().setFromAxisAngle(UP, yaw);
+    world.createCollider(
+      R.ColliderDesc.cuboid(width / 2, height / 2, thickness / 2)
+        .setTranslation(centre.x, centre.y, centre.z)
+        .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
+        .setFriction(cfg.wallFriction)
+        .setRestitution(cfg.wallBounce),
+      body,
+    );
+  }
+}
+
+/**
+ * A pipe over a stretch of the lane: a half-round shell resting on the wooden borders, painted in a
+ * bright colour with white rims at both ends. Returns the mesh and its inner surface for the physics.
+ */
+function buildTube(lane: Lane, stretch: Stretch): { mesh: THREE.Mesh; inside: TriangleSoup } {
+  const cfg = TUNING.course;
+  const first = lane.index(stretch.from);
+  const last = lane.index(stretch.to);
+  const steps = 22;
+  const thickness = cfg.tubeThickness;
+  const colour = new THREE.Color(cfg.tubeColour);
+  const rim = new THREE.Color('#ffffff');
+  const positions: number[] = [];
+  const colours: number[] = [];
+  const indices: number[] = [];
+  const inside = new TriangleSoup();
+  /** A point on the arch at sample i, angle a (0 = left foot, PI = right foot), `extra` outside the inner surface. */
+  const archPoint = (i: number, a: number, extra: number): THREE.Vector3 => {
+    const radius = lane.widths[i] + cfg.bumperWidth * 0.5;
+    return lane.points[i]
+      .clone()
+      .addScaledVector(lane.left(i), Math.cos(a) * (radius + extra))
+      .setY(lane.points[i].y + cfg.bumperHeight + Math.sin(a) * (radius * cfg.tubeFlatten + extra));
+  };
+  const rimLength = cfg.tubeRimLength;
+  const colourAt = (i: number, shade: number): THREE.Color => {
+    const s = Math.min(i - first, last - i) * lane.spacing;
+    return (s < rimLength ? rim.clone() : colour.clone()).multiplyScalar(shade);
+  };
+  /** One surface: a grid over (sample, angle). `extra` = how far outside the inner surface. */
+  const surface = (extra: number, shade: number): number => {
+    const start = positions.length / 3;
+    for (let i = first; i <= last; i++) {
+      const c = colourAt(i, shade);
+      for (let j = 0; j <= steps; j++) {
+        const p = archPoint(i, (j / steps) * Math.PI, extra);
+        positions.push(p.x, p.y, p.z);
+        colours.push(c.r, c.g, c.b);
+      }
+    }
+    const firstIndex = indices.length;
+    for (let i = 0; i < last - first; i++) {
+      for (let j = 0; j < steps; j++) {
+        const a = start + i * (steps + 1) + j;
+        const b = a + steps + 1;
+        indices.push(a, b, a + 1, a + 1, b, b + 1);
+      }
+    }
+    return firstIndex;
+  };
+  const vertex = (k: number): THREE.Vector3 => new THREE.Vector3(positions[k * 3], positions[k * 3 + 1], positions[k * 3 + 2]);
+  /** Turns triangles [from, to) round if the first one does not face along `want`. */
+  const orient = (from: number, to: number, want: THREE.Vector3): void => {
+    const n = new THREE.Vector3()
+      .subVectors(vertex(indices[from + 1]), vertex(indices[from]))
+      .cross(new THREE.Vector3().subVectors(vertex(indices[from + 2]), vertex(indices[from])));
+    if (n.dot(want) >= 0) return;
+    for (let i = from; i < to; i += 3) [indices[i + 1], indices[i + 2]] = [indices[i + 2], indices[i + 1]];
+  };
+  // Inner surface faces down towards the lane, the outer one faces up and out.
+  const innerStart = surface(0, 0.62);
+  orient(innerStart, indices.length, lane.left(first).negate()); // the first triangle sits at the left foot
+  const innerEnd = indices.length;
+  const outerStart = surface(thickness, 1);
+  orient(outerStart, indices.length, lane.left(first));
+  // Rings closing the shell at both ends.
+  for (const [i, back] of [
+    [first, -1],
+    [last, 1],
+  ]) {
+    const start = positions.length / 3;
+    for (let j = 0; j <= steps; j++) {
+      for (const extra of [0, thickness]) {
+        const p = archPoint(i, (j / steps) * Math.PI, extra);
+        positions.push(p.x, p.y, p.z);
+        colours.push(rim.r, rim.g, rim.b);
+      }
+    }
+    const from = indices.length;
+    for (let j = 0; j < steps; j++) {
+      const a = start + j * 2;
+      indices.push(a, a + 1, a + 2, a + 2, a + 1, a + 3);
+    }
+    orient(from, indices.length, lane.tangents[i].clone().multiplyScalar(back));
+  }
+  for (let t = innerStart; t < innerEnd; t += 3) inside.add(vertex(indices[t]), vertex(indices[t + 1]), vertex(indices[t + 2]));
+
+  // Flat-shaded rims and smooth shell: separate vertices per surface, so normals can be computed per surface.
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colours, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0 }));
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return { mesh, inside };
 }
 
 /** A square pit under the cup, deep enough for the ball to drop in, with a dark inside so it looks deep. */
@@ -610,6 +932,14 @@ function turfMaterial(): THREE.MeshStandardMaterial {
 function bumperMaterial(): THREE.MeshStandardMaterial {
   bumperCache ??= new THREE.MeshStandardMaterial({ map: woodTexture(), vertexColors: true, roughness: 0.85 });
   return bumperCache;
+}
+
+let plainWoodCache: THREE.MeshStandardMaterial | null = null;
+
+/** The same wood without the per-face shading (for simple boxes like the boards under a gap). */
+function plainWoodMaterial(): THREE.MeshStandardMaterial {
+  plainWoodCache ??= new THREE.MeshStandardMaterial({ map: woodTexture(), roughness: 0.85, color: '#d8d0c8' });
+  return plainWoodCache;
 }
 
 /** One plank's worth of wood (it repeats along the border): warm brown, long grain lines, a dark joint at the end. */

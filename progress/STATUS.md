@@ -58,6 +58,22 @@ running log of where we are, what the user decided, and what comes next).
     soft **hills** away from the lane (`hillsPerIsland`, `hillSize`, `hillHeight`, `hillClearance`), groups of
     grey low-poly **boulders** (`boulderGroups`, `boulderSize`, `boulderClearance`). All in `TUNING.course` /
     `TUNING.scenery`.
+- **More holes (user, 2026-10-31): 6 new holes (4–9), same look, "pipes, ramps, jumps". Agreed plan:** the whole Kenney
+  Minigolf Kit is already in `host/assets/minigolf/` (nothing to download); the new pieces are built in code in our
+  style. Steps: **J1** lane pieces (gap/jump, pipe) + holes 4 (Pipe) and 5 (Ski jump); **J2** holes 6 (Castle, Kenney
+  castle with a narrow gate + a safe detour) and 7 (Banked U-turn, then downhill); **J3** holes 8 (narrow Bridge on
+  posts to a small island) and 9 (Finale: ramp, pipe, jump, funnel round the cup). Always play all holes for now
+  (a 3/9 choice in the lobby maybe later — needs a server change).
+  - **J1 — done, waiting for the user's test.** Path point flags in `course.ts`: `ramp` (straight-line height change,
+    so a ramp's top edge launches the ball), `gap` (no floor; wooden boards under both edges; the island dips into a
+    pond there — `pondWidth/pondSlope/pondDepth/pondSpread` in `TUNING.scenery`; falling in = "Splash! +1"), `tube`
+    (blue pipe resting on the borders, solid inside, fades like the windmill; `tube*` in `TUNING.course`).
+    The island's flat top now follows the lane's lowest point (so a tee can sit on a hill). Sea shader knows up to 12
+    islands; no foam inside ponds. On slopes the grass brakes less (`slopeFrom/slopeFull/slopeResistance` in
+    `TUNING.ball`), so a ball that stops on a ramp rolls back (this also affects the hill on hole 2, slightly).
+    Hole 4: tee on a hill, the ball dives down the pipe onto the green (any shot over ~20 % gets through; power
+    decides how far it shoots out). Hole 5: ramp + 1 unit gap, needs ~65 % power; weaker = splash. `HOLE_COUNT` = 5
+    for now. Testing shortcut: host page `?hole=N` starts at hole N (server: `start_game.firstHole`).
 - **4c Juice — not started:** hole intro fly-over with "Hole N · Par P", confetti on hole-in (+ special hole-in-one
   celebration), ball trail, impact particles, small camera nudge on hit, sounds (Kenney CC0 audio — ask before
   download), phone vibration on hole-in (host → server → phone `vibrate` message), podium with winner celebration,

@@ -64,7 +64,7 @@ export class Scenery {
     const centre = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
     const radius = new THREE.Vector2(size.x / 2, size.z / 2).multiplyScalar(1.12);
-    const top = hole.tee.y - c.groundDepth;
+    const top = hole.lane.lowest - c.groundDepth;
     const wobble = [random() * 6, random() * 6, random() * 6];
     /** 0 at the centre, 1 at the edge of the grassy top (with a wobbly, natural outline). */
     const reach = (x: number, z: number): number => {
@@ -111,7 +111,17 @@ export class Scenery {
         if (d2 < 4) y += h.height * Math.exp(-d2 * 1.6) * away;
       }
       const blend = THREE.MathUtils.smoothstep(-fromEdge, -(bumpers + 1.6), -bumpers * 0.6);
-      return THREE.MathUtils.lerp(y, Math.max(y, spot.height - c.groundDepth), blend);
+      y = THREE.MathUtils.lerp(y, Math.max(y, spot.height - c.groundDepth), blend);
+      // Under a jump the ground dips into a pond (the sea shows there), widening away from the lane.
+      for (const gap of hole.lane.gaps) {
+        const half = (gap.to - gap.from) / 2;
+        const sideways = Math.max(0, fromEdge);
+        const reachAlong = half + c.pondSpread * Math.sqrt(sideways);
+        const along = Math.abs(spot.along - (gap.from + gap.to) / 2);
+        const pond = (1 - THREE.MathUtils.smoothstep(along, reachAlong - c.pondSlope, reachAlong)) * (1 - THREE.MathUtils.smoothstep(fromEdge, c.pondWidth - 1, c.pondWidth));
+        y = THREE.MathUtils.lerp(y, c.seaLevel - c.pondDepth, pond);
+      }
+      return y;
     };
     for (let j = 0; j <= nz; j++) {
       for (let i = 0; i <= nx; i++) {
@@ -343,10 +353,13 @@ function makeSky(): THREE.Mesh {
  * near the islands to deep blue; the sun sparkles on the waves; white foam rings the beaches
  * and tops the highest waves.
  */
+/** The sea shader knows where this many islands are (for the turquoise shallows and the foam). */
+const MAX_ISLANDS = 12;
+
 function makeSeaMaterial(islands: IslandShape[]): THREE.ShaderMaterial {
   const c = TUNING.scenery;
-  const islandData = islands.slice(0, 4).map((i) => new THREE.Vector4(i.centre.x, i.centre.y, i.radius.x, i.radius.y));
-  while (islandData.length < 4) islandData.push(new THREE.Vector4(1e5, 1e5, 1, 1));
+  const islandData = islands.slice(0, MAX_ISLANDS).map((i) => new THREE.Vector4(i.centre.x, i.centre.y, i.radius.x, i.radius.y));
+  while (islandData.length < MAX_ISLANDS) islandData.push(new THREE.Vector4(1e5, 1e5, 1, 1));
   return new THREE.ShaderMaterial({
     uniforms: {
       time: { value: 0 },
@@ -402,7 +415,7 @@ function makeSeaMaterial(islands: IslandShape[]): THREE.ShaderMaterial {
       uniform vec3 sky;
       uniform vec3 sunDirection;
       uniform vec3 sunColour;
-      uniform vec4 islands[4];
+      uniform vec4 islands[${MAX_ISLANDS}];
       uniform vec3 fogColour;
       uniform float fogNear;
       uniform float fogFar;
@@ -414,7 +427,7 @@ function makeSeaMaterial(islands: IslandShape[]): THREE.ShaderMaterial {
         // How close we are to an island's shore (1 = at the beach edge), and the angle around it.
         float shore = 10.0;
         float around = 0.0;
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < ${MAX_ISLANDS}; i++) {
           vec2 d = (vWorld.xz - islands[i].xy) / islands[i].zw;
           float distanceToShore = length(d);
           if (distanceToShore < shore) { shore = distanceToShore; around = atan(d.y, d.x); }
@@ -433,7 +446,8 @@ function makeSeaMaterial(islands: IslandShape[]): THREE.ShaderMaterial {
 
         // Foam: a wobbly ring hugging each beach, and little white caps on the highest waves.
         float ring = 1.17 + 0.035 * sin(around * 7.0 + time * 1.3) + 0.02 * sin(time * 2.1 + around * 3.0);
-        float beachFoam = smoothstep(0.06, 0.0, abs(shore - ring)) + smoothstep(1.24, 1.12, shore) * 0.6;
+        // (no foam well inside an island: that is a calm pond under a jump)
+        float beachFoam = (smoothstep(0.06, 0.0, abs(shore - ring)) + smoothstep(1.24, 1.12, shore) * 0.6) * smoothstep(0.9, 1.05, shore);
         float caps = smoothstep(0.78, 0.95, vCrest) * 0.7;
         colour = mix(colour, foam, clamp(beachFoam + caps, 0.0, 1.0) * 0.9);
 
