@@ -8,7 +8,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import type { PlayerInfo } from '../../shared/protocol.ts';
 import { TUNING } from '../../shared/tuning.ts';
 import { buildRacket } from '../badminton/court.ts';
-import { Character } from '../game/character.ts';
+import { Character, lookOf } from '../game/character.ts';
 import { loadForest } from '../game/vegetation.ts';
 import { FaceSign } from './sign.ts';
 import { Confetti } from './confetti.ts';
@@ -513,7 +513,7 @@ export class Hub {
     this.players.forEach((player, i) => {
       let guest = this.guests.get(player.id);
       if (!guest) {
-        const character = new Character({ shirt: player.colour, skin: player.skinTone, handedness: player.handedness });
+        const character = new Character(lookOf(player));
         // On the Badminton side everyone holds a racket instead of the putter.
         if (FACES[this.chosen].id === 'badminton') character.setGear(heldRacket(player.colour));
         // Someone who just joined jumps down onto the cube (if its side is already turned up).
@@ -526,7 +526,7 @@ export class Hub {
         this.tagLayer.append(guest.tag);
       }
       guest.player = player;
-      guest.character.setLook({ shirt: player.colour, skin: player.skinTone, handedness: player.handedness });
+      guest.character.setLook(lookOf(player));
       const x = (i - (this.players.length - 1) / 2) * c.characterSpacing;
       const spot = new THREE.Vector3(x, 0.12, c.characterForward - Math.abs(x) * 0.12);
       guest.spot.copy(spot);

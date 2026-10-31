@@ -17,6 +17,7 @@ import {
   type ServerMessage,
   type Stroke,
 } from '../shared/protocol.ts';
+import { DEFAULT_LOOK, sanitizeLook, type AvatarLook } from '../shared/avatar.ts';
 import { TUNING } from '../shared/tuning.ts';
 import { Match } from './match.ts';
 
@@ -33,6 +34,7 @@ type Seat = {
   skinTone: string;
   handedness: Handedness;
   sensitivity: number;
+  look: AvatarLook;
   socket: WebSocket | null;
   lastStrokeAt: number;
 };
@@ -272,6 +274,7 @@ export class Lobby {
         skinTone: SKIN_TONES[0],
         handedness: 'right',
         sensitivity: SENSITIVITY_DEFAULT,
+        look: DEFAULT_LOOK,
         socket: null,
         lastStrokeAt: 0,
       };
@@ -284,6 +287,7 @@ export class Lobby {
     seat.sensitivity = Number.isFinite(msg.sensitivity)
       ? Math.round(clamp(msg.sensitivity, SENSITIVITY_MIN, SENSITIVITY_MAX))
       : SENSITIVITY_DEFAULT;
+    seat.look = sanitizeLook(msg.look);
     this.attach(ws, seat);
   }
 
@@ -367,6 +371,7 @@ function toInfo(seat: Seat): PlayerInfo {
     connected: seat.socket !== null,
     handedness: seat.handedness,
     sensitivity: seat.sensitivity,
+    look: seat.look,
   };
 }
 

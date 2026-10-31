@@ -20,10 +20,11 @@ const vite = await createViteServer({
   server: { middlewareMode: true, hmr: { server } },
 });
 
-// Friendly URLs: "/" is the big screen, "/play" is the phone controller.
+// Friendly URLs: "/" is the big screen, "/play" is the phone controller, "/avatars" the character test page.
 const PAGES: Record<string, string> = {
   '/': '/host/index.html',
   '/play': '/controller/index.html',
+  '/avatars': '/host/avatars.html',
 };
 
 server.on('request', (req, res) => {

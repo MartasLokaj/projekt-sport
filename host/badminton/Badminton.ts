@@ -1035,7 +1035,7 @@ export class Badminton {
     const handedness = human ? (player?.handedness ?? 'right') : 'right';
     const shirt = human ? (player?.colour ?? (a.side === 1 ? '#ff5a5f' : '#00a6ed')) : '#9b5cff';
     const skin = human ? (player?.skinTone ?? SKIN_TONES[1]) : SKIN_TONES[3];
-    a.character.setLook({ shirt, skin, handedness: 'right' });
+    a.character.setLook({ shirt, skin, handedness: 'right', look: human ? player?.look : undefined });
     // The beach look: tank top in the player's colour, darker shorts, bare feet, a headband; racket in their colour.
     const outfit = TUNING.badminton.outfit;
     const shorts = new THREE.Color(shirt).lerp(new THREE.Color(outfit.shortsBase), outfit.shortsShade);

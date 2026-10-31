@@ -13,7 +13,7 @@ running log of where we are, what the user decided, and what comes next).
 | 2b Handedness + per-player sensitivity | Done, approved |
 | 3 Chibi characters | Done, approved |
 | 4 Art and juice | **In progress** — see below |
-| 5 Character editor on the phone | Not started |
+| 5 Character editor on the phone (AVATAR.md) | **In progress** — step 1 built, waiting for the user's test |
 | 6 Polish | Not started |
 
 ### Phase 4 in detail
@@ -421,6 +421,25 @@ running log of where we are, what the user decided, and what comes next).
 - The camera tips up a little to follow a high shuttle (`cameraTiltFrom`, `cameraTiltFollow`, `cameraTiltSpeed`),
   so it never climbs out of the picture. Waiting for the user's test.
 
+### Phase 5 — avatar system (AVATAR.md) — started 2026-10-31 on the user's request
+Brief: `AVATAR.md`; screen design (approved): design canvas "Avatar editor – phone" linked there.
+The user said: leave Phase 4's state as it is in this file; make the body like the design (arms more out from the
+body, round mitten hands, sturdier legs, chunky shoes).
+- **Step 1 — built (waiting for the user's test):** `shared/avatar.ts` = all options (ids + English labels as on the
+  canvas), `AvatarLook` (eyes, mouth, blush, hair style/colour, hat, glasses, grip/putter colour), `AvatarProfile`
+  (v1, + name, colour, skin, handedness), `sanitizeLook`/`sanitizeProfile` (unknown/missing → defaults; old phone
+  profiles keep working), 6 `PRESETS`, `randomAvatar` (glasses ~30 %). Join message has an optional `look`; the
+  server checks it (`server/lobby.ts`) and sends it in `PlayerInfo.look`. `host/game/character.ts` builds hair (6),
+  eyes (5), mouth (4, grin with teeth), blush, hats (cap/visor/beanie in the player's colour; under a cap or beanie
+  spikes, top curls, bun and fringe are left out), glasses (round/sun), putter grip+head in the putter colour;
+  parts rebuild only when the look changes. `lookOf(player)` used by the hub, minigolf and badminton (CPU =
+  default look). Body: legs/shoes sturdier, mitten hands with a thumb, arms out at `TUNING.character.armRest`.
+  Test page **`/avatars`** (`host/avatars.html`, `host/avatars/gallery.ts`): every option, every hat on every hair,
+  Random, Turn, Face close-up, Racket, Swing, Cheer/Jump/Clap/Scratch.
+  Not yet: racket grip colour in badminton (step 4), phones still send no look (step 2), same colour still refused.
+- Step 2: phone editor (4 tabs, Random, Save & play) with live TV sync. Step 3: Quick start + Saved screen.
+  Step 4: outfits per game + same-colour name tags (then drop the `colour_taken` refusal).
+
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.
 - Plan first for bigger changes, list files, wait for OK. Phase by phase; the user tests on real phones before approval.
@@ -483,5 +502,7 @@ Summary of what is left, given to the user on 2026-10-31 (waiting for them to pi
 - **Minigolf:** J2 (holes 6 Castle, 7 Banked U-turn) and J3 (8 Bridge, 9 Finale), then `HOLE_COUNT` 9 and maybe a
   3/9 holes choice; 4c juice (hole intro, confetti, trails, camera nudge, sounds, vibration, podium, wind);
   60 fps check; small open points (windmill tile's orange side walls, trees blocking the camera at bends).
-- **Shared:** Cube World K3 sounds, K4 dive-in/intro/results, K5 phone lobby screen; Phase 5 avatar editor
-  (AVATAR.md); Phase 6 polish (settings, playtest with friends).
+- **Shared:** Cube World K3 sounds, K4 dive-in/intro/results, K5 phone lobby screen; Phase 6 polish (settings,
+  playtest with friends).
+- **Phase 5 avatar (AVATAR.md):** step 1 built (merged from the cloud on 2026-10-31) → user checks `/avatars` on
+  the Mac and the existing games (also the badminton beach outfit with every hair and hat) → step 2.

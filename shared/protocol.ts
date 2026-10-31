@@ -1,5 +1,7 @@
 // JSON messages sent over the WebSocket between server, host and phones.
 
+import type { AvatarLook } from './avatar.ts';
+
 export const WS_PATH = '/ws';
 
 export const MAX_PLAYERS = 4;
@@ -28,6 +30,8 @@ export type PlayerInfo = {
   handedness: Handedness;
   /** Swing sensitivity in percent (applied on the phone). */
   sensitivity: number;
+  /** Face, hair, hat, glasses and gear colours (shared/avatar.ts). Always valid: the server checks it. */
+  look: AvatarLook;
 };
 
 /** How the phone hits: swinging the phone, or pulling back a finger like a slingshot. */
@@ -141,6 +145,8 @@ export type ClientMessage =
       skinTone: string;
       handedness: Handedness;
       sensitivity: number;
+      /** The rest of the character (shared/avatar.ts). Optional: older phones do not send it. */
+      look?: AvatarLook;
     }
   /** Live aim while dragging, about 20 per second. */
   | { type: 'aim'; angle: number }
