@@ -954,3 +954,10 @@
     font-size: 26px;
   }
 }
+
+/* While the camera dives into a side, the panels and hints fade away. */
+#lobby-screen.diving > *:not(#hub-canvas) {
+  opacity: 0 !important;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}

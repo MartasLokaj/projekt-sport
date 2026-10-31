@@ -61,6 +61,8 @@ obrazovky, dotažení editoru postavičky a **testování na skutečných telefo
 
 ## 3. Co čeká na tvůj test (postaveno, ale nevyzkoušeno)
 
+0. **Přechod z kostky do hry** (ponoření do strany kostky, bílý záblesk, kamera se snese ke hře) a zpět.
+
 Tohle je teď **největší riziko**: hodně věcí je hotových jen „na Macu“, ne na skutečných telefonech.
 
 1. Minigolf jamky 8 (Most) a 9 (Finále).

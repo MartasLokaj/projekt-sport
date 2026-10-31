@@ -182,7 +182,17 @@ up to date too.
     Waiting for the user's test on the Mac (60 fps not measured on the real MacBook Air yet).
   - **K3 sounds** (menu, turn, join, countdown; volume + mute) — next; needs downloaded sounds: propose CC0 files
     with names and sizes, ask first.
-  - **K4** dive-in transition, match intro (players + 3-2-1), results screen with Play again / Back to the cube,
+  - **K4 dive-in transition — built 2026-10-31 (user: "ponoření do strany kostky, top nápad"; only the dive, no
+    players intro / 3-2-1 yet), waiting for the user's look.** Play → the lobby panels fade, the camera flies into the
+    chosen side (`Hub.diveIn`, ease-in, ends `diveEndDistance` from the side's middle and stays there), a soft white
+    flash (`host/ui/transition.ts` `Flash`, `#scene-flash` in `theme.css`) starts `flashInMs` before the dive ends,
+    the game is swapped in behind it (minigolf waits for the course to load), then the game's camera glides down from
+    high above/behind (`Game.swoopIn`, `Badminton.swoopIn`; badminton ignores swings and delays the computer's serve
+    until it lands). Back to the cube: flash → `Hub.pullOut(id)` (camera starts at the side and pulls out). Steps
+    run in a queue in `host/main.ts` (`enterGame` / `leaveGame`), host keys wait meanwhile. The Swing Lab (L) opens
+    without a dive. Tuning `TUNING.transition`. Checked in the dev browser (fake server): minigolf and badminton in
+    and out, camera paths, no serve during the swoop, no console errors.
+  - **K4 rest:** match intro (players + 3-2-1), results screen with Play again / Back to the cube,
     for minigolf and badminton. **K5** phone lobby screen (avatar, status, selected game, Ready — needs a server
     change, do last). Then the rest of the brief (game polish) phase by phase.
 

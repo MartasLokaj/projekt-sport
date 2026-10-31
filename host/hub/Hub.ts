@@ -105,6 +105,8 @@ export class Hub {
   private targetDistance: number = TUNING.hub.cameraDistance;
   /** Extra camera distance on narrow screens, so the whole cube fits across. */
   private fit = 1;
+  /** The camera flying into the chosen side (Play) or back out of it (after a match); see diveIn / pullOut. */
+  private dive: { t: number; seconds: number; out: boolean; done: () => void } | null = null;
 
   static async create(container: HTMLElement): Promise<Hub> {
     const loader = new GLTFLoader();
@@ -237,6 +239,8 @@ export class Hub {
   start(): void {
     if (this.running) return;
     this.running = true;
+    this.dive = null;
+    this.tagLayer.style.opacity = '';
     this.clock.getDelta();
     this.resize();
     this.renderer.setAnimationLoop(() => this.frame());
@@ -260,6 +264,23 @@ export class Hub {
     this.clearGuests();
     this.addGuests();
     this.onSelect(this.selected);
+  }
+
+  /** Play: the camera flies into the chosen side's little world. Resolves when it is there. */
+  diveIn(): Promise<void> {
+    if (this.chosen < 0 || !this.running) return Promise.resolve();
+    this.dive?.done();
+    this.tagLayer.style.opacity = '0';
+    return new Promise((done) => (this.dive = { t: 0, seconds: TUNING.transition.diveSeconds, out: false, done }));
+  }
+
+  /** Back from a game: the camera starts close to that game's side and pulls back out to the whole cube. */
+  pullOut(id: string): void {
+    this.select(id);
+    if (this.chosen < 0) return;
+    this.spinner.quaternion.copy(this.poses[this.chosen]);
+    this.dive?.done();
+    this.dive = { t: 0, seconds: TUNING.transition.pullOutSeconds, out: true, done: () => {} };
   }
 
   /** The arrows: choose the next or previous game going round the list. */
@@ -339,6 +360,7 @@ export class Hub {
     this.distance += (this.targetDistance - this.distance) * (1 - Math.exp(-8 * dt));
     this.camera.position.set(0, c.cameraHeight, c.cameraDistance).multiplyScalar((this.distance / c.cameraDistance) * this.fit);
     this.camera.lookAt(0, 0, 0);
+    if (this.dive) this.flyCamera(dt);
     // The gentle float, plus a bouncy little hop when a game is chosen.
     const hop = this.hop && this.chosenAge < 1.2 ? c.switchHop * Math.exp(-5 * this.chosenAge) * Math.abs(Math.sin(this.chosenAge * 9)) : 0;
     this.planet.position.y = Math.sin(this.time * c.bobSpeed) * c.bobHeight + hop;
@@ -414,6 +436,26 @@ export class Hub {
     this.confetti.update(dt, GRAVITY);
     this.composer.render();
     this.placeTags();
+  }
+
+  /** Moves the camera from its usual spot towards the chosen side's middle (diving in) or away from it (pulling out). */
+  private flyCamera(dt: number): void {
+    const dive = this.dive!;
+    dive.t = Math.min(1, dive.t + dt / dive.seconds);
+    // In: slow start, fast finish, like a dive. Out: fast start, gentle stop.
+    const near = dive.out ? (1 - dive.t) ** 3 : dive.t ** 3;
+    if (this.chosen >= 0) {
+      const side = this.faces[this.chosen].getWorldPosition(new THREE.Vector3());
+      const from = this.camera.position.clone();
+      const end = side.clone().addScaledVector(from.clone().sub(side).normalize(), TUNING.transition.diveEndDistance);
+      this.camera.position.lerpVectors(from, end, near);
+      this.camera.lookAt(side.multiplyScalar(near));
+    }
+    if (dive.t < 1) return;
+    // Pulled out: back to normal. Dived in: stay at the side until the game takes over (start() lets go).
+    if (dive.out) this.dive = null;
+    dive.done();
+    dive.done = () => {};
   }
 
   /** A newly joined player falls from above onto the chosen side, lands with a squash and a burst of confetti. */

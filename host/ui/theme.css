@@ -305,3 +305,14 @@
   transform: translateX(-50%);
   box-shadow: -4px 0 0 #2a2140, 4px 0 0 #2a2140;
 }
+
+/* ---------- Scene flash (host/ui/transition.ts) ---------- */
+
+/* Covers the whole page for a moment while the cube switches to a game and back. */
+#scene-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  opacity: 0;
+  pointer-events: none;
+}

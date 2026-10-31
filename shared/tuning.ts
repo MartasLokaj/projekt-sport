@@ -448,6 +448,23 @@ export const TUNING = {
   // Overhead or underhand is not read from the phone (test 2 showed it is unreliable): the game picks it
   // from where the character stands (back of the court = overhead, front = underhand unless a smash is possible).
   // Speeds in degrees per second, times in milliseconds. Every swing is saved to logs/badminton-swings.jsonl.
+  /** The way from the cube into a game and back (host/hub/Hub.ts diveIn/pullOut, host/ui/transition.ts). */
+  transition: {
+    /** Play: the camera flies into the chosen side (seconds) and ends this far from the side's middle. */
+    diveSeconds: 1.2,
+    diveEndDistance: 1.5,
+    /** The soft flash that hides the switch: colour, fading in and fading out (milliseconds). */
+    flashColour: '#ffffff',
+    flashInMs: 250,
+    flashOutMs: 500,
+    /** In the game the camera starts this high above and this far behind its spot, and glides down (seconds). */
+    swoopSeconds: 1.6,
+    swoopHeight: 9,
+    swoopBack: 6,
+    /** Back to the cube: the camera starts close to the side and pulls back out (seconds). */
+    pullOutSeconds: 1.1,
+  },
+
   badmintonSwing: {
     /** Turns faster than this are looked at (and logged); slower ones are just moving around. */
     triggerSpeed: 350,

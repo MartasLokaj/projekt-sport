@@ -5,6 +5,7 @@ import { Hub } from './hub/Hub.ts';
 import { LobbyUi } from './hub/lobbyUi.ts';
 import { Badminton } from './badminton/Badminton.ts';
 import { Lab } from './lab/Lab.ts';
+import { Flash } from './ui/transition.ts';
 
 // The big screen. The lobby is Cube World: a cube floating in space with one game on each side,
 // the QR code to join, and the players' characters standing on top. "Play" asks the server to start
@@ -60,6 +61,52 @@ let lastState: GameState | null = null;
 
 let hub: Hub | null = null;
 
+// Cube <-> game: the camera dives into the game's side, a soft flash hides the switch, and the game's camera
+// glides down; after the match the flash comes back and the cube's camera pulls out of the side.
+// The steps run one after another (a quick Esc during the dive waits for it), and keys wait meanwhile.
+const flash = new Flash();
+let transitions = Promise.resolve();
+let transitioning = 0;
+
+function transition(steps: () => Promise<void>): void {
+  transitioning++;
+  transitions = transitions
+    .then(steps)
+    .catch((error: unknown) => console.error(error))
+    .finally(() => transitioning--);
+}
+
+/** Flies into the side of `id`, then `show` swaps the screens behind the flash. */
+function enterGame(id: string, show: () => void | Promise<void>): void {
+  transition(async () => {
+    hub?.select(id);
+    lobbyScreen.classList.add('diving');
+    const dive = hub?.diveIn();
+    // The flash starts while the camera is still flying, so the dive ends in white without stopping.
+    const t = TUNING.transition;
+    await new Promise((done) => setTimeout(done, Math.max(0, t.diveSeconds * 1000 - t.flashInMs)));
+    await flash.cover();
+    await dive;
+    hub?.stop();
+    lobbyScreen.classList.remove('diving');
+    await show();
+    flash.reveal();
+  });
+}
+
+/** Behind the flash `hide` closes the game, then the cube's camera pulls back out of the side of `id`. */
+function leaveGame(id: string, hide: () => void): void {
+  transition(async () => {
+    await flash.cover();
+    hide();
+    lobbyScreen.hidden = false;
+    hub?.start();
+    showTitle(false);
+    hub?.pullOut(id);
+    flash.reveal();
+  });
+}
+
 // Badminton: the prototype game (Badminton side of the cube → Enter) and the Swing Lab (L).
 // Both put the phones into the badminton swing screen (the server's lab mode); Esc goes back to the cube.
 const labScreen = document.getElementById('lab-screen')!;
@@ -89,12 +136,16 @@ function showLab(on: boolean): void {
   if (on === labOpen) return;
   labOpen = on;
   const game = on && badmintonWanted === 'game';
-  labScreen.hidden = !on || game;
-  badmintonScreen.hidden = !game;
-  lobbyScreen.hidden = on;
-  if (on) {
+  if (on && !game) {
+    // The Swing Lab opens straight away, without the dive.
+    labScreen.hidden = false;
+    lobbyScreen.hidden = true;
     hub?.stop();
-    if (game) {
+    lab.start();
+  } else if (game) {
+    enterGame('badminton', () => {
+      lobbyScreen.hidden = true;
+      badmintonScreen.hidden = false;
       const connected = players.filter((p) => p.connected);
       const doubles = connected.length >= 3;
       badmintonIds = [0, 1, 2, 3].slice(0, doubles ? 4 : 2).map((seat) => connected[seat]?.id ?? null);
@@ -118,11 +169,19 @@ function showLab(on: boolean): void {
       badminton.onOutcome = (outcome) => send({ type: 'badminton_outcome', outcome });
       if (import.meta.env.DEV) Object.assign(window, { badminton }); // for debugging in the browser console
       badminton.start(badmintonPlayers(), lobbyUi.cpuLevel, lobbyUi.matchLength, doubles);
-    } else lab.start();
+      badminton.swoopIn();
+    });
+  } else if (!badmintonScreen.hidden || badmintonWanted === 'game') {
+    // Back from a badminton match: through the flash, out of the Badminton side.
+    badmintonWanted = 'lab';
+    leaveGame('badminton', () => {
+      badminton?.stop();
+      badmintonScreen.hidden = true;
+    });
   } else {
     lab.stop();
-    badminton?.stop();
-    badmintonWanted = 'lab';
+    labScreen.hidden = true;
+    lobbyScreen.hidden = false;
     hub?.start();
   }
 }
@@ -233,26 +292,28 @@ async function onGameState(state: GameState): Promise<void> {
     game?.syncState(state); // so the next match starts from the tee
     if (playing) {
       playing = false;
-      game?.stop();
-      gameScreen.hidden = true;
-      lobbyScreen.hidden = false;
-      // Back to the cube, with the game we just played in front.
-      hub?.start();
-      showTitle(false);
-      hub?.select('minigolf');
+      // Back to the cube, out of the side of the game we just played.
+      leaveGame('minigolf', () => {
+        game?.stop();
+        gameScreen.hidden = true;
+      });
     }
     return;
+  }
+  // Starting: the dive into the Minigolf side begins while the course loads.
+  if (!playing) {
+    playing = true;
+    enterGame('minigolf', async () => {
+      const g = await loadGame(); // the flash stays up if the course is still loading
+      lobbyScreen.hidden = true;
+      gameScreen.hidden = false;
+      g.start();
+      g.swoopIn();
+    });
   }
   const g = await loadGame();
   if (lastState !== state) return; // a newer state arrived while loading
   g.setPlayers(players);
-  if (!playing) {
-    playing = true;
-    hub?.stop();
-    lobbyScreen.hidden = true;
-    gameScreen.hidden = false;
-    g.start();
-  }
   // Tell everyone when a ball was picked up after too many strokes.
   for (const entry of state.players) {
     const before = previous?.players.find((p) => p.id === entry.id);
@@ -326,6 +387,7 @@ lobbyUi.onKick = (playerId) => send({ type: 'kick_player', playerId });
 window.addEventListener('keydown', (e) => {
   // A focused button handles Enter and Space itself (keyboard users can Tab to it).
   if (e.target instanceof HTMLButtonElement && (e.key === 'Enter' || e.key === ' ')) return;
+  if (transitioning) return; // keys wait while the camera dives in or pulls out
   if (lobbyUi.kickOpen) {
     lobbyUi.handleKickKey(e);
     return;

@@ -114,6 +114,8 @@ export class Game {
   onLocalStroke: (() => void) | null = null;
 
   private readonly cameraTarget = new THREE.Vector3();
+  /** The way in from the cube: 0 = camera high above, 1 = landed at its usual spot (see swoopIn). */
+  private swoop = 1;
   private readonly followDir = new THREE.Vector3(0, 0, 1);
 
   static async create(container: HTMLElement, hud: GameHud): Promise<Game> {
@@ -232,6 +234,11 @@ export class Game {
     window.addEventListener('keyup', this.onKeyUp);
     this.clock.getDelta();
     this.renderer.setAnimationLoop(() => this.frame());
+  }
+
+  /** The way in from the cube: the camera starts high above and behind its spot and glides down. */
+  swoopIn(): void {
+    this.swoop = 0;
   }
 
   stop(): void {
@@ -738,6 +745,16 @@ export class Game {
 
   private updateCamera(dt: number): void {
     const { position, look } = this.desiredCamera();
+    if (this.swoop < 1) {
+      const s = TUNING.transition;
+      this.swoop = Math.min(1, this.swoop + dt / s.swoopSeconds);
+      const left = (1 - this.swoop) ** 3; // fast at first, a gentle landing
+      const back = position.clone().sub(look).setY(0).normalize();
+      this.camera.position.copy(position).addScaledVector(back, s.swoopBack * left).addScaledVector(UP, s.swoopHeight * left);
+      this.cameraTarget.copy(look);
+      this.camera.lookAt(look);
+      return;
+    }
     const k = 1 - Math.exp(-TUNING.camera.smoothing * dt);
     this.camera.position.lerp(position, k);
     this.cameraTarget.lerp(look, k);

@@ -177,6 +177,8 @@ export class Badminton {
   } | null = null;
   private pointEndsAt = 0;
   private cpuServeAt = 0;
+  /** The way in from the cube: until then the cameras glide down and nobody serves (see swoopIn). */
+  private introEndsAt = 0;
   private readonly keys = new Set<string>();
   /** Scratch vectors for the racket head (swoosh). */
   private readonly headTip = new THREE.Vector3();
@@ -260,6 +262,12 @@ export class Badminton {
     this.renderer.setAnimationLoop(() => this.frame());
   }
 
+  /** The way in from the cube: the cameras start high above and glide down; the first serve waits until they land. */
+  swoopIn(): void {
+    this.introEndsAt = Date.now() + TUNING.transition.swoopSeconds * 1000;
+    this.cpuServeAt = Math.max(this.cpuServeAt, this.introEndsAt + TUNING.badminton.cpu.serveDelayMs);
+  }
+
   stop(): void {
     this.running = false;
     this.renderer.setAnimationLoop(null);
@@ -294,6 +302,7 @@ export class Badminton {
     const a = this.seats[seat];
     if (!a || !a.human || !this.athletes.includes(a)) return;
     const now = Date.now();
+    if (now < this.introEndsAt) return;
     // The coach adapts the swing to this player (see coach.ts); the raw values go to the outcome log.
     if (receivedAt !== undefined) this.coach.noteDelay(a.name, receivedAt - at);
     const advice = this.coach.advice(a.name);
@@ -1072,6 +1081,13 @@ export class Badminton {
     // A high clear climbs out of the top of the picture: tip up a little to follow it, then back down.
     const high = this.phase === 'rally' ? Math.max(0, this.shuttle.position.y - cfg.cameraTiltFrom) * cfg.cameraTiltFollow : 0;
     a.lookY += (cfg.cameraLookY + high - a.lookY) * Math.min(1, dt * cfg.cameraTiltSpeed);
+    const intro = (this.introEndsAt - Date.now()) / (TUNING.transition.swoopSeconds * 1000);
+    if (intro > 0) {
+      // Coming in from the cube: high above and behind, gliding down (fast at first, a gentle landing).
+      const s = TUNING.transition;
+      const left = intro ** 3;
+      a.camera.position.copy(want).add(new THREE.Vector3(0, s.swoopHeight * left, a.side * s.swoopBack * left));
+    }
     a.camera.lookAt(x * cfg.cameraFollowX * 0.5, a.lookY, a.side * cfg.cameraLookAt);
     const shake = (this.shakeUntil - Date.now()) / cfg.shakeMs;
     if (shake > 0) {
