@@ -1,10 +1,13 @@
 import * as THREE from 'three';
 import { TUNING } from '../../shared/tuning.ts';
 import { Character, type CharacterLook, type Mood } from '../../host/game/character.ts';
+import { chibiSvg } from './chibi2d.ts';
 
 // The live 3D preview of the player's character on the phone: the same character code as the big screen.
 // One small WebGL canvas, moved between the join screen and the editor. It only draws while it is on
 // screen, at a capped frame rate and pixel ratio to save battery. Drag sideways to turn the character.
+// If 3D cannot run on the phone (no WebGL 2, an error, or no frames drawn), a flat 2D drawing of the same
+// character is shown instead, with a small note saying why (to help us find the cause).
 
 export type AvatarPreview = {
   /** Shows the preview inside `holder` (it fills it). */
@@ -17,17 +20,39 @@ export type AvatarPreview = {
 
 export function createAvatarPreview(look: CharacterLook): AvatarPreview {
   const cfg = TUNING.avatarEditor;
+  const view = document.createElement('div');
+  view.className = 'avatar-view';
   const canvas = document.createElement('canvas');
   canvas.className = 'avatar-canvas';
+  const flat = document.createElement('div');
+  flat.className = 'avatar-flat';
+  flat.hidden = true;
+  const note = document.createElement('div');
+  note.className = 'avatar-note';
+  note.hidden = true;
+  view.append(canvas, flat, note);
+
+  let current = look;
   let renderer: THREE.WebGLRenderer | null = null;
+  /** Switches to the 2D drawing for good. */
+  function fallBack(reason: string): void {
+    if (flat.hidden === false) return;
+    console.warn('3D preview off:', reason);
+    renderer = null;
+    canvas.hidden = true;
+    flat.hidden = false;
+    flat.innerHTML = chibiSvg(current);
+    note.hidden = false;
+    note.textContent = `2D preview (3D: ${reason})`;
+  }
   try {
     renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'low-power' });
     renderer.setPixelRatio(Math.min(devicePixelRatio, cfg.previewPixelRatio));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  } catch {
-    // No WebGL on this phone: the editor still works, just without the 3D preview.
-    canvas.hidden = true;
+  } catch (err) {
+    fallBack(err instanceof Error ? err.message : String(err));
   }
+  canvas.addEventListener('webglcontextlost', () => fallBack('context lost'));
 
   const scene = new THREE.Scene();
   scene.add(new THREE.HemisphereLight('#dfe8ff', '#4b4f7a', 1.4));
@@ -65,12 +90,24 @@ export function createAvatarPreview(look: CharacterLook): AvatarPreview {
   canvas.addEventListener('pointerup', release);
   canvas.addEventListener('pointercancel', release);
 
-  let last = performance.now();
-  function frame(now: number): void {
+  let last = 0;
+  let frames = 0;
+  /** How long the preview has been on screen without a single frame drawn (seconds). */
+  let waited = 0;
+  let lastTick = performance.now();
+  function frame(): void {
     requestAnimationFrame(frame);
-    if (!renderer || !canvas.isConnected || canvas.clientWidth === 0) return;
+    const now = performance.now();
+    const tick = Math.min((now - lastTick) / 1000, 0.5);
+    lastTick = now;
+    if (!renderer || !view.isConnected || view.offsetParent === null) return;
+    if (canvas.clientWidth === 0 || canvas.clientHeight === 0) {
+      waited += tick;
+      if (waited > 2 && frames === 0) fallBack(`no size ${canvas.clientWidth}x${canvas.clientHeight}`);
+      return;
+    }
     if (now - last < 1000 / cfg.previewFps - 2) return;
-    const dt = Math.min((now - last) / 1000, 0.1);
+    const dt = last === 0 ? 0 : Math.min((now - last) / 1000, 0.1);
     last = now;
     if (dragX === null) yaw *= Math.exp(-2.5 * dt);
     turntable.rotation.y = baseYaw + yaw;
@@ -83,16 +120,23 @@ export function createAvatarPreview(look: CharacterLook): AvatarPreview {
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
     }
-    renderer.render(scene, camera);
+    try {
+      renderer.render(scene, camera);
+      frames++;
+    } catch (err) {
+      fallBack(err instanceof Error ? err.message : String(err));
+    }
   }
   requestAnimationFrame(frame);
 
   return {
     mount(holder) {
-      if (canvas.parentElement !== holder) holder.append(canvas);
+      if (view.parentElement !== holder) holder.append(view);
     },
     setLook(next) {
+      current = next;
       character.setLook(next);
+      if (!flat.hidden) flat.innerHTML = chibiSvg(next);
       baseYaw = next.handedness === 'left' ? Math.PI : 0;
     },
     play(mood) {

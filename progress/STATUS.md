@@ -490,6 +490,10 @@ body, round mitten hands, sturdier legs, chunky shoes).
   The look is saved in the phone's profile (`minigolf.profile`, field `look`). "Edit character" in the lobby opens
   the editor directly. Note: the hub sets its own character scale, so left-handers are not mirrored on the cube
   (unchanged); the phone preview turns a left-hander round to face the camera.
+- **Step 2 phone test 1 (user):** "editor works, but I can't see the character I'm editing" (3D preview empty on
+  the real phone; fine in the desktop phone simulation). Added a fallback: if 3D cannot run (WebGL 2 missing, an
+  error, context lost, no size), `controller/avatar/chibi2d.ts` draws the character in 2D (SVG from the design
+  canvas) and a small note under it says why — waiting for the user's report of that note / phone model.
 - Step 3: Quick start + Saved screen (+ the other phone screens in the dark look).
   Step 4: outfits per game + same-colour name tags (then drop the `colour_taken` refusal).
 
