@@ -28,11 +28,12 @@ const KIT_GATE_WIDTH = 0.92;
  * - ramp: the height changes in a straight line (so a ramp still rises at its top edge and the ball takes off),
  *   instead of easing in and out softly;
  * - gap: there is no floor at all (a jump over water; a ball that falls in is out of bounds);
- * - tube: the lane runs through a pipe.
+ * - tube: the lane runs through a pipe;
+ * - bridge: a narrow wooden bridge on posts over water, with no borders (a ball that falls off is out of bounds).
  * bank tilts the lane sideways at this point (degrees, positive = the left side of the way the lane runs is higher),
  * like a banked curve in a velodrome; it eases from point to point like the height.
  */
-export type PathPoint = { x: number; z: number; y?: number; w?: number; bank?: number; ramp?: boolean; gap?: boolean; tube?: boolean };
+export type PathPoint = { x: number; z: number; y?: number; w?: number; bank?: number; ramp?: boolean; gap?: boolean; tube?: boolean; bridge?: boolean };
 
 /** A stretch of the lane, in units along it from the tee end. */
 export type Stretch = { from: number; to: number };
@@ -48,6 +49,8 @@ export type HoleDef = {
   windmill?: number;
   /** A castle gate over the lane, this far from the tee: the ball must go through its arch. */
   castle?: number;
+  /** The green round the cup sinks into a bowl that draws the ball in: its radius and how deep the cup sits. */
+  funnel?: { radius: number; depth: number };
 };
 
 export const HOLES: HoleDef[] = [
@@ -161,6 +164,39 @@ export const HOLES: HoleDef[] = [
       { x: -6.2, z: -2, w: 1.45 },
     ],
   },
+  {
+    // Hole 8: a narrow wooden bridge with no borders over the water to the cup's own little island. Aim well!
+    number: 8,
+    par: 3,
+    place: { x: -64, z: -4, yaw: 0 },
+    path: [
+      { x: 0, z: 0, w: 1.05 },
+      { x: 0, z: 2.4, w: 1.0 },
+      { x: 0, z: 4, w: 0.6 },
+      { x: 0.4, z: 6.2, y: 0.15, w: 0.55, bridge: true },
+      { x: 0, z: 8.4, w: 0.6, bridge: true },
+      { x: -0.2, z: 9.8, w: 1.15 },
+      { x: 0.8, z: 12, w: 1.45 },
+    ],
+  },
+  {
+    // Hole 9, the finale: up a ramp and over a jump, through the pipe and into a bowl that draws the ball to the cup.
+    number: 9,
+    par: 3,
+    place: { x: 40, z: -32, yaw: 0 },
+    funnel: { radius: 1.5, depth: 0.28 },
+    path: [
+      { x: 0, z: 0, w: 1.05 },
+      { x: 0, z: 2.2, w: 1.0 },
+      { x: 0, z: 4.8, y: 0.5, w: 0.95, ramp: true },
+      { x: 0, z: 5.9, y: 0.35, w: 1.2, gap: true },
+      { x: 0, z: 7.4, y: 0.35, w: 0.9 },
+      { x: 0.8, z: 9.6, y: 0.18, w: 0.8, tube: true, ramp: true },
+      { x: 0.6, z: 11.8, y: 0, w: 0.85, tube: true, ramp: true },
+      { x: 0, z: 13.4, w: 1.4 },
+      { x: 0, z: 14.6, w: 1.5 },
+    ],
+  },
 ];
 
 export type Kit = Map<string, GLTF>;
@@ -190,10 +226,12 @@ export type BuiltHole = {
     outerEdge: number;
     /** Stretches with no floor (jumps over water), so the island can have a pond there. */
     gaps: Stretch[];
+    /** Stretches on a bridge: the island is cut by water under them. */
+    bridges: Stretch[];
     /** Height of the lane's lowest point (the island's flat top lies just below it). */
     lowest: number;
-    /** True when (x, z) is over one of the gaps. */
-    overGap: (x: number, z: number) => boolean;
+    /** True when (x, z) is over the water of a gap or beside a bridge (a ball that falls there splashes). */
+    overWater: (x: number, z: number) => boolean;
   };
 };
 
@@ -218,10 +256,11 @@ export function buildHole(def: HoleDef, kit: Kit, world: RAPIER.World, R: typeof
   const group = new THREE.Group();
   const lane = new Lane(def);
   const cup = lane.points[lane.points.length - 1].clone();
+  if (def.funnel) cup.y -= def.funnel.depth;
   const cupRadius = cfg.cupRadius;
 
   // Lane surface: bright turf. One connected mesh, used for drawing and for physics.
-  const floor = buildFloor(lane, cup, cupRadius);
+  const floor = buildFloor(lane, cup, cupRadius, def.funnel);
   const turf = new THREE.Mesh(floor, turfMaterial());
   turf.receiveShadow = true;
   group.add(turf);
@@ -247,6 +286,7 @@ export function buildHole(def: HoleDef, kit: Kit, world: RAPIER.World, R: typeof
   addMeshTriangles(bumper, walls);
   // Under both edges of every gap a wooden board goes down into the water (a ball that falls short hits it).
   for (const gap of lane.gaps) addGapBoards(group, lane, gap, world, R, fixed);
+  for (const bridge of lane.bridges) group.add(buildBridge(lane, bridge));
 
   addCupPit(group, cup, cupRadius, world, R);
   const flag = kit.get('flag-red')!.scene.clone(true);
@@ -324,10 +364,12 @@ export function buildHole(def: HoleDef, kit: Kit, world: RAPIER.World, R: typeof
       },
       outerEdge,
       gaps: lane.gaps,
-      lowest: Math.min(...lane.points.map((q) => q.y)),
-      overGap: (x, z) => {
+      bridges: lane.bridges,
+      lowest: Math.min(...lane.points.map((q) => q.y)) - (def.funnel?.depth ?? 0),
+      overWater: (x, z) => {
         const n = lane.nearest(x, z);
-        return n.distance < n.width + outerEdge && lane.gapAt(n.along) !== null;
+        const overBridge = lane.bridges.some((b) => n.along > b.from && n.along < b.to);
+        return (n.distance < n.width + outerEdge && lane.gapAt(n.along) !== null) || (overBridge && n.distance < n.width + 3);
       },
     },
   };
@@ -344,6 +386,7 @@ class Lane {
   /** Stretches with no floor, and stretches inside a pipe (units along the lane). */
   readonly gaps: Stretch[];
   readonly tubes: Stretch[];
+  readonly bridges: Stretch[];
 
   constructor(def: HoleDef) {
     const yaw = THREE.MathUtils.degToRad(def.place.yaw);
@@ -379,7 +422,7 @@ class Lane {
       stretches.push(stretchAt(t));
     }
     /** The parts of the lane where the path's flag is set, as stretches along the lane. */
-    const flagged = (flag: 'gap' | 'tube'): Stretch[] => {
+    const flagged = (flag: 'gap' | 'tube' | 'bridge'): Stretch[] => {
       const result: Stretch[] = [];
       let start = -1;
       for (let i = 0; i <= count + 1; i++) {
@@ -394,6 +437,7 @@ class Lane {
     };
     this.gaps = flagged('gap');
     this.tubes = flagged('tube');
+    this.bridges = flagged('bridge');
   }
 
   /** The gap at `along` units along the lane, or null. */
@@ -483,7 +527,7 @@ class Lane {
  * at the floor height there. Grid points just outside are pulled onto the edge (and points inside
  * the cup onto the cup's rim), so the edge and the cup come out round instead of jagged.
  */
-function buildFloor(lane: Lane, cup: THREE.Vector3, cupRadius: number): THREE.BufferGeometry {
+function buildFloor(lane: Lane, cup: THREE.Vector3, cupRadius: number, funnel?: { radius: number; depth: number }): THREE.BufferGeometry {
   const cell = TUNING.course.floorCell;
   const overlap = 0.05; // the turf reaches a little under the bumpers
   const box = lane.bounds(0.3);
@@ -517,6 +561,10 @@ function buildFloor(lane: Lane, cup: THREE.Vector3, cupRadius: number): THREE.Bu
         const dx = (x - cup.x) / (toCup || 1);
         const dz = (z - cup.z) / (toCup || 1);
         position.set(cup.x + dx * cupRadius, cup.y, cup.z + dz * cupRadius);
+      } else if (funnel) {
+        // A round bowl: flat at its rim, steeper towards the cup (cup.y is already at the bottom).
+        const d = Math.hypot(position.x - cup.x, position.z - cup.z);
+        if (d < funnel.radius) position.y -= funnel.depth * (1 - d / funnel.radius) ** 2;
       }
       // Where the point is on the lane (distance along it, and -1..1 from one edge to the other), for the checker pattern.
       const moved = !inLane || inCup;
@@ -610,7 +658,8 @@ function buildBumper(lane: Lane): THREE.BufferGeometry {
   // The pieces of lane between the gaps (sample indices), and the border runs around them.
   const pieces: [number, number][] = [];
   let pieceStart = 0;
-  for (const gap of lane.gaps) {
+  const breaks = [...lane.gaps, ...lane.bridges].sort((a, b) => a.from - b.from);
+  for (const gap of breaks) {
     pieces.push([pieceStart, lane.index(gap.from)]);
     pieceStart = lane.index(gap.to);
   }
@@ -760,6 +809,113 @@ function addGapBoards(group: THREE.Group, lane: Lane, gap: Stretch, world: RAPIE
       body,
     );
   }
+}
+
+/**
+ * A wooden bridge: a plank deck laid over the lane's floor (the floor underneath stays the collision surface),
+ * a beam along each edge and posts down into the water.
+ */
+function buildBridge(lane: Lane, stretch: Stretch): THREE.Group {
+  const cfg = TUNING.course;
+  const group = new THREE.Group();
+  const first = Math.max(0, lane.index(stretch.from) - 2);
+  const last = Math.min(lane.points.length - 1, lane.index(stretch.to) + 2);
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+  const beam: number[] = [];
+  const beamIndices: number[] = [];
+  for (let i = first; i <= last; i++) {
+    const w = lane.widths[i] + 0.07; // a little wider than the turf under it (which reaches 0.05 past the edge)
+    const along = i * lane.spacing;
+    for (const side of [-1, 1]) {
+      const p = lane.points[i].clone().addScaledVector(lane.left(i), side * w);
+      p.y = lane.floorAt(i, side * w) + 0.012;
+      positions.push(p.x, p.y, p.z);
+      uvs.push(side < 0 ? 0 : 1, along / cfg.bridgePlankRepeat);
+      // The beam's outer side: from the deck's edge down.
+      beam.push(p.x, p.y, p.z, p.x, p.y - cfg.bridgeBeamHeight, p.z);
+    }
+  }
+  for (let k = 0; k < last - first; k++) {
+    const a = k * 2;
+    indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+    // Beams: vertices per sample are [left top, left bottom, right top, right bottom].
+    const b = k * 4;
+    beamIndices.push(b, b + 1, b + 4, b + 4, b + 1, b + 5); // one side
+    beamIndices.push(b + 2, b + 6, b + 3, b + 3, b + 6, b + 7); // the other side
+  }
+  const deckGeometry = new THREE.BufferGeometry();
+  deckGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  deckGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  deckGeometry.setIndex(indices);
+  deckGeometry.computeVertexNormals();
+  if (deckGeometry.getAttribute('normal').getY(0) < 0) {
+    for (let i = 0; i < indices.length; i += 3) [indices[i + 1], indices[i + 2]] = [indices[i + 2], indices[i + 1]];
+    deckGeometry.setIndex(indices);
+    deckGeometry.computeVertexNormals();
+  }
+  const deck = new THREE.Mesh(deckGeometry, deckMaterial());
+  deck.receiveShadow = true;
+  const beamGeometry = new THREE.BufferGeometry();
+  beamGeometry.setAttribute('position', new THREE.Float32BufferAttribute(beam, 3));
+  beamGeometry.setIndex(beamIndices);
+  beamGeometry.computeVertexNormals();
+  const beams = new THREE.Mesh(beamGeometry, new THREE.MeshStandardMaterial({ color: cfg.woodColour, roughness: 0.85, side: THREE.DoubleSide }));
+  beams.castShadow = true;
+  group.add(deck, beams);
+
+  // Posts in pairs along the bridge, standing in the water.
+  const bottom = TUNING.scenery.seaLevel - 0.6;
+  const postGeometry = new THREE.CylinderGeometry(cfg.bridgePostRadius, cfg.bridgePostRadius * 1.1, 1, 8);
+  const posts: THREE.Matrix4[] = [];
+  const count = Math.max(1, Math.round((stretch.to - stretch.from) / cfg.bridgePostSpacing));
+  for (let k = 0; k <= count; k++) {
+    const i = lane.index(stretch.from + ((stretch.to - stretch.from) * k) / count);
+    for (const side of [-1, 1]) {
+      const w = lane.widths[i] + cfg.bridgePostRadius;
+      const p = lane.points[i].clone().addScaledVector(lane.left(i), side * w);
+      const top = lane.floorAt(i, side * lane.widths[i]) + cfg.bridgePostAbove;
+      posts.push(new THREE.Matrix4().compose(new THREE.Vector3(p.x, (top + bottom) / 2, p.z), new THREE.Quaternion(), new THREE.Vector3(1, top - bottom, 1)));
+    }
+  }
+  const postMesh = new THREE.InstancedMesh(postGeometry, plainWoodMaterial(), posts.length);
+  posts.forEach((m, k) => postMesh.setMatrixAt(k, m));
+  postMesh.castShadow = true;
+  group.add(postMesh);
+  return group;
+}
+
+let deckCache: THREE.MeshStandardMaterial | null = null;
+
+/** Planks running across the bridge, with dark gaps between them. */
+function deckMaterial(): THREE.MeshStandardMaterial {
+  if (deckCache) return deckCache;
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const c = canvas.getContext('2d')!;
+  const planks = 4;
+  let seed = 11;
+  const random = (): number => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let k = 0; k < planks; k++) {
+    const shade = 0.88 + random() * 0.2;
+    const base = new THREE.Color(TUNING.course.woodColour).multiplyScalar(shade * 1.15);
+    c.fillStyle = `#${base.getHexString()}`;
+    c.fillRect(0, (k * 128) / planks, 128, 128 / planks);
+    for (let g = 0; g < 5; g++) {
+      c.fillStyle = 'rgba(60,30,10,0.18)';
+      c.fillRect(0, (k * 128) / planks + 3 + random() * 24, 128, 1 + random());
+    }
+    c.fillStyle = 'rgba(35,18,6,0.85)';
+    c.fillRect(0, (k * 128) / planks, 128, 3);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 8;
+  deckCache = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.85 });
+  return deckCache;
 }
 
 /**

@@ -516,7 +516,7 @@ export class Game {
       return;
     }
     if (p.y < TUNING.physics.outOfBoundsY) {
-      this.showMessage(this.hole.lane.overGap(p.x, p.z) ? 'Splash! +1' : 'Out of bounds! +1', 1800);
+      this.showMessage(this.hole.lane.overWater(p.x, p.z) ? 'Splash! +1' : 'Out of bounds! +1', 1800);
       this.resetBall(this.lastRest);
       this.finishTurn('out');
       return;

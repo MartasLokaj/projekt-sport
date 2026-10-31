@@ -167,6 +167,12 @@ export const TUNING = {
     tubeRimLength: 0.2,
     /** The castle gate is this much wider than the lane with its borders (it stands over them). */
     castleOverhang: 0.3,
+    /** Bridges: how long one repeat of 4 deck planks is, how deep the edge beams are, post size, spacing and how far posts stick up above the deck. */
+    bridgePlankRepeat: 0.9,
+    bridgeBeamHeight: 0.16,
+    bridgePostRadius: 0.06,
+    bridgePostSpacing: 1.3,
+    bridgePostAbove: 0.12,
     /** Thickness of the wooden boards under the edges of a gap (jump). */
     gapBoardThickness: 0.1,
   },
@@ -234,6 +240,8 @@ export const TUNING = {
     pondSpread: 1.1,
     pondSlope: 0.45,
     pondDepth: 0.5,
+    /** The water under a bridge reaches this far back from where the bridge meets land. */
+    bridgeShore: 0.35,
     islandTextureSize: 2.5,
     rocksPerIsland: 9,
     /** Meadow patches on the island grass: how big one patch is (units), and the colour boost of the darkest and lightest grass. */
