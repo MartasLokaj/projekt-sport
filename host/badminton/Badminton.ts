@@ -18,9 +18,9 @@ import { findContact, makeShot, type Contact, type Flight, type ShotKind } from 
 // - Shot type comes from where the character meets the shuttle (see findContact).
 // - Rally scoring: every rally gives a point, the winner serves, first to pointsToWin.
 // - SHORT button on the phone (Shift on the Mac): a drop shot just over the net, or a short serve.
-// - A bad hit (too weak, timing outside the Good part, or a dive) becomes a slow, wobbly "wobble" shot with
-//   a wavy trail: the other side's chance. A swing far too early, a shuttle out of reach or a complete miss
-//   makes the character dive and fall in the sand; it needs recoveryMs to get up.
+// - A bad hit (too weak, timing outside the Good part, or a stretch) becomes a slow, wobbly "wobble" shot with
+//   a wavy trail: the other side's chance. Only a swing far too late makes the character dive and fall in the
+//   sand; it needs recoveryMs to get up. (The computer falls when it misses.)
 // Mac keyboard for testing: Space swings for the near player (hold ← or → to aim), ↑ swings for the
 // far player, Enter plays again after a match.
 
@@ -95,6 +95,8 @@ export class Badminton {
   private contact: Contact | null = null;
   /** The receiver's hit has been decided (hit, or missed). */
   private decided = false;
+  /** The last missed contact (who and when), so a very late swing arriving after the miss can still dive. */
+  private missedContact: { side: Side; time: number } | null = null;
   /** A hit waiting for the top of the character's jump. */
   private pendingHit: {
     when: number;
@@ -196,30 +198,37 @@ export class Badminton {
       this.serve(a, now, power, aim, short);
       return;
     }
-    if (this.phase !== 'rally' || this.receiver !== side || this.decided || !this.contact || !this.flight) return;
     if (now < a.busyUntil) return; // still lying in the sand
+    // A swing that arrives after the miss was already called: if it was really late, the character still dives.
+    const missed = this.missedContact;
+    if (missed && missed.side === side && at - missed.time > cfg.veryLateMs && at - missed.time < 1200) {
+      this.missedContact = null;
+      this.lateMiss(a, now, at - missed.time);
+      return;
+    }
+    if (this.phase !== 'rally' || this.receiver !== side || this.decided || !this.contact || !this.flight) return;
     const contact = this.contact;
     const off = at - contact.time;
-    // Out of reach, far too early or too late: a dive into the sand, and a miss.
-    const missedBy =
-      contact.reach === 'none'
-        ? 'Out of reach!'
-        : off < -(cfg.hitWindowEarlyMs + cfg.diveExtraMs)
-          ? `Way too early! (${Math.round(-off)} ms)`
-          : off > cfg.hitWindowMs
-            ? `Too late! (${Math.round(off)} ms)`
-            : null;
-    if (missedBy) {
-      this.showFeedback(a, missedBy);
-      this.dive(a, now, contact.position);
+    if (off < -(cfg.hitWindowEarlyMs + cfg.earlyWobbleMs)) {
+      // Far too early: a swing at the air, then swing again.
+      a.swing = { stroke: contact.stroke, start: now };
+      this.showFeedback(a, `Too early! (${Math.round(-off)} ms)`);
+      return;
+    }
+    if (contact.reach === 'none') {
+      this.showFeedback(a, 'Out of reach!');
       this.miss();
       return;
     }
-    // Only just reachable, or a little too early: a dive that just catches it, as a wobble shot.
+    if (off > cfg.hitWindowMs) {
+      this.lateMiss(a, now, off);
+      return;
+    }
+    // Only just reachable, or a little too early: a stretch that just catches it, as a wobble shot.
     if (contact.reach === 'dive' || off < -cfg.hitWindowEarlyMs) {
-      this.dive(a, now, contact.position);
+      a.swing = { stroke: contact.stroke, start: now };
       this.hit(a, power, aim, 0.3, contact.stroke, now, false, true);
-      this.showFeedback(a, 'Dive! · Wobble');
+      this.showFeedback(a, contact.reach === 'dive' ? 'Stretch! · Wobble' : `Wobble · ${Math.round(-off)} ms early`);
       return;
     }
     // The character only jumps with the player's own swing, as high as the shuttle is at that moment:
@@ -417,8 +426,21 @@ export class Badminton {
 
   /** Nobody hits it: the shuttle just flies on and lands. */
   private miss(): void {
+    if (this.contact) this.missedContact = { side: this.receiver, time: this.contact.time };
     this.decided = true;
     this.contact = null;
+  }
+
+  /** A swing after the hit window: a miss; really late, the character also dives into the sand. */
+  private lateMiss(a: Athlete, now: number, off: number): void {
+    const cfg = TUNING.badminton;
+    if (off > cfg.veryLateMs) {
+      this.showFeedback(a, `Way too late! (${Math.round(off)} ms)`);
+      this.dive(a, now, this.shuttle.position);
+    } else {
+      this.showFeedback(a, `Too late! (${Math.round(off)} ms)`);
+    }
+    if (!this.decided) this.miss();
   }
 
   private cpuTurn(cpu: Athlete, now: number): void {
@@ -428,8 +450,8 @@ export class Badminton {
     if (now < cpu.busyUntil) return; // still getting up: the shuttle will just fall
     cpu.swing = { stroke: contact.stroke, start: now };
     const hits = contact.reach !== 'none' && Math.random() <= (incomingSmash ? cfg.smashReturnChance : cfg.hitChance);
-    if (!hits || contact.reach === 'dive') this.dive(cpu, now, contact.position);
     if (!hits) {
+      this.dive(cpu, now, contact.position);
       this.miss();
       return;
     }
@@ -489,7 +511,6 @@ export class Badminton {
         }
         else if (receiver.human && now > this.contact.time + cfg.hitWindowMs + cfg.lateGraceMs) {
           this.showFeedback(receiver, 'Missed!');
-          if (now >= receiver.busyUntil) this.dive(receiver, now, this.shuttle.position);
           this.miss();
         }
       }

@@ -413,13 +413,14 @@ export const TUNING = {
     /** How high the racket reaches with the arm up, standing (our chibis are small: about 1.8 m). */
     standingReach: 1.8,
     /**
-     * Dive: when a shuttle is out of running reach by at most diveReach (m), the character can still dive for it
-     * (and returns a wobble). A swing up to diveExtraMs earlier than the hit window also dives (and catches it
-     * as a wobble); earlier than that, the dive misses. A dive takes diveMs; afterwards, and after a complete
-     * miss, the character lies in the sand for recoveryMs (counted from the landing) and can't move or hit.
+     * A shuttle out of running reach by at most diveReach (m) can still be caught with a stretch, as a wobble.
+     * A swing up to earlyWobbleMs earlier than the hit window still catches it, as a wobble; earlier than that
+     * is "Too early!" and the player may swing again. Only a swing more than veryLateMs after the right moment
+     * makes the character dive into the sand (diveMs) and lie there for recoveryMs (counted from the landing).
      */
     diveReach: 1.6,
-    diveExtraMs: 150,
+    earlyWobbleMs: 150,
+    veryLateMs: 400,
     diveMs: 350,
     recoveryMs: 900,
     /** A jump takes this long to go up (and the same to come down, milliseconds). */

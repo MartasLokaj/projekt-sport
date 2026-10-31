@@ -199,7 +199,12 @@ running log of where we are, what the user decided, and what comes next).
     wobble. Dive = belly-flop along the dive direction + sand puff (`SandPuffs`), lying `recoveryMs` 900, can't
     move/hit. CPU follows the same rules and plays wobbles (`cpu.wobbleChance`). Mac: W+Space = weak swing.
     The old "Too early → swing again" is gone (now a dive).
-  - Next: user tests step 2 on the phone → step 3 (Super Smash) — plan first.
+  - **User test: "now I just keep falling into the sand"** → falls only when the swing is **really late**
+    (> `veryLateMs` 400 after the right moment, also when its message arrives after the miss was called:
+    `missedContact`), or (step 3) a badly timed Super Smash attempt. Far too early = "Too early!" and swing again
+    (no fall); a little too early (`earlyWobbleMs`) or a stretch (`diveReach`) = wobble without falling; out of
+    reach or no swing = miss without falling. The computer still falls when it misses.
+  - Next: user tests again → step 3 (Super Smash; a mistimed Super Smash attempt should make the character fall).
 
 ### GitHub and the cloud (2026-10-31)
 - Project is on GitHub: **private** repo `MartasLokaj/projekt-sport` (remote `origin`, branch `main`). `gh` CLI is in
