@@ -212,6 +212,11 @@ export function initLabScreen(send: (msg: ClientMessage) => void): LabScreen {
       detector.playerSensitivity = percent / 100;
     },
     onCue(cue) {
+      if (cue === 'perfect') {
+        kindEl.textContent = 'PERFECT!';
+        if ('vibrate' in navigator) navigator.vibrate(25); // not supported on iPhone
+        return;
+      }
       if (cue === 'super_smash') {
         kindEl.textContent = 'SUPER SMASH!';
         powerEl.textContent = '💥';

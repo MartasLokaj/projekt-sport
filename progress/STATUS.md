@@ -267,7 +267,15 @@ running log of where we are, what the user decided, and what comes next).
     wobbles (`cpu.superSmashChance` 0.5) and returns one with `cpu.superSmashReturnChance` 0.3.
     Scripted: perfect try → Super Smash 504 ms; third in a chain 402 ms; −250 ms → "failed" + fall.
   - **User test step 3: "plays well" — approved.**
-  - Next: step 4 (timing feedback upgrade, more generous movement, CPU levels) — plan first.
+  - **Mechanics step 4 — built (user: "Ano, postav krok 4"), waiting for the phone test.** Timing text pops up
+    above the player's own character (`showPop`, `.badminton-pop` coloured perfect/good/wobble/miss, `popMs` 900,
+    placed by projecting the head with that half's camera); Perfect → racket glows gold (`perfectGlowMs`) + phone
+    cue `perfect` (short buzz); tips "wait for it!" / "swing sooner!" after early/late misses at most once per
+    `hintEveryRallies` 3 (`tip`); running `reachAssist` 0.2 (in `findContact` and the run speed); computer levels
+    `cpuLevels` easy/normal/pro (reaction, return chances, smash/drop/wobble/Super Smash chances, aim, power,
+    quality), keys 1 2 3 in a match against it, "CPU: Normal" label next to the score. Scripted: Perfect → gold pop +
+    glow + cue; tips every 3 rallies; Pro selectable.
+  - Next: user tests step 4 → step 5 (rally escalation, shot trails by type, match options) — plan first.
 
 ### GitHub and the cloud (2026-10-31)
 - Project is on GitHub: **private** repo `MartasLokaj/projekt-sport` (remote `origin`, branch `main`). `gh` CLI is in

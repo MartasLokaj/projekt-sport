@@ -162,8 +162,15 @@ export type Contact = {
  * at a normal run (so it does not dash at the net to block a smash). Failing that, the first point it can
  * reach at full sprint; failing that, the first one a dive can reach; failing that, out of reach.
  */
-export function findContact(flight: Flight, side: number, at: THREE.Vector3, availableAt: number): Contact {
+export function findContact(
+  flight: Flight,
+  side: number,
+  at: THREE.Vector3,
+  availableAt: number,
+  reactionMs: number = TUNING.badminton.reactionMs,
+): Contact {
   const cfg = TUNING.badminton;
+  const assist = 1 + cfg.reachAssist;
   const p = new THREE.Vector3();
   const earliest = (speed: number, extraReach: number): number | null => {
     for (let i = 0; i <= 200; i++) {
@@ -173,14 +180,14 @@ export function findContact(flight: Flight, side: number, at: THREE.Vector3, ava
       if (p.y > cfg.reachHeight || p.y < cfg.lowestContact) continue;
       if (Math.abs(p.z) > cfg.courtHalfLength + 0.6 || Math.abs(p.x) > cfg.courtHalfWidth + 0.7) continue;
       const runSeconds = Math.max(0, Math.hypot(p.x - at.x, p.z - at.z) - extraReach) / speed;
-      if (flight.timeAt(u) - availableAt >= cfg.reactionMs + runSeconds * 1000) return u;
+      if (flight.timeAt(u) - availableAt >= reactionMs + runSeconds * 1000) return u;
     }
     return null;
   };
   let reach: Contact['reach'] = 'run';
-  let chosen = earliest(cfg.runSpeed, 0) ?? earliest(cfg.maxRunSpeed, 0);
+  let chosen = earliest(cfg.runSpeed * assist, 0) ?? earliest(cfg.maxRunSpeed * assist, 0);
   if (chosen === null) {
-    chosen = earliest(cfg.maxRunSpeed, cfg.diveReach);
+    chosen = earliest(cfg.maxRunSpeed * assist, cfg.diveReach);
     reach = chosen === null ? 'none' : 'dive';
   }
   chosen ??= 0.98;

@@ -486,6 +486,11 @@ export const TUNING = {
     /** Nobody can hit the shuttle closer to the net than this (m), e.g. a drop that has just crossed it. */
     minContactDepth: 0.6,
     reactionMs: 150,
+    /**
+     * Running help: characters run this much faster than runSpeed / maxRunSpeed (0.2 = 20 %), so they reach the
+     * shuttle more often. Stretches still exist for really far shots.
+     */
+    reachAssist: 0.2,
     /** Contact height decides the stroke: from overheadFrom up = overhead, from driveFrom up = flat drive, lower = lift (m). */
     overheadFrom: 1.7,
     driveFrom: 1.0,
@@ -515,6 +520,11 @@ export const TUNING = {
     scatter: 1.0,
     /** Mac keyboard (testing without a phone): Space swings with this power, arrows held = aim. */
     keyPower: 60,
+    /** Timing text above the player's character: how long it shows (ms); Perfect makes the racket glow (ms). */
+    popMs: 900,
+    perfectGlowMs: 350,
+    /** After a miss, a tip ("Wait for it!" / "Swing sooner!") shows at most once every this many rallies. */
+    hintEveryRallies: 3,
     /** Mac keyboard: Space with W held swings this weakly (a wobble). */
     keyWeakPower: 15,
 
@@ -587,7 +597,19 @@ export const TUNING = {
     perfectSpeedup: 0.9,
 
     /** The computer: chance to return a normal shot and a smash, its power range (percent), and serve delay (ms). */
-    cpu: { hitChance: 0.85, smashReturnChance: 0.55, power: [30, 85], smashChance: 0.35, dropChance: 0.15, shortServeChance: 0.25, wobbleChance: 0.12, superSmashChance: 0.5, superSmashReturnChance: 0.3, serveDelayMs: 1300, aimRange: 1 },
+    cpu: { serveDelayMs: 1300, shortServeChance: 0.25 },
+    /**
+     * Computer difficulty (keys 1 / 2 / 3 during a match against it). reactionMs = how fast it starts running;
+     * hitChance / smashReturnChance / superSmashReturnChance = how often it returns a normal shot / a smash /
+     * a Super Smash; smashChance, dropChance, wobbleChance, superSmashChance = how often it plays those;
+     * aimRange = how close to the lines it aims (1 = the sidelines); power and quality = how hard and clean it hits.
+     */
+    cpuLevels: {
+      easy: { reactionMs: 230, hitChance: 0.7, smashReturnChance: 0.35, superSmashReturnChance: 0.15, smashChance: 0.15, dropChance: 0.08, wobbleChance: 0.22, superSmashChance: 0.25, aimRange: 0.5, power: [25, 70], quality: [0.3, 0.8] },
+      normal: { reactionMs: 150, hitChance: 0.85, smashReturnChance: 0.55, superSmashReturnChance: 0.3, smashChance: 0.35, dropChance: 0.15, wobbleChance: 0.12, superSmashChance: 0.5, aimRange: 1, power: [30, 85], quality: [0.5, 1] },
+      pro: { reactionMs: 100, hitChance: 0.95, smashReturnChance: 0.75, superSmashReturnChance: 0.5, smashChance: 0.5, dropChance: 0.25, wobbleChance: 0.05, superSmashChance: 0.8, aimRange: 1.1, power: [45, 95], quality: [0.7, 1] },
+    },
+    cpuLevel: 'normal' as 'easy' | 'normal' | 'pro',
 
     /** Rally scoring: first to pointsToWin, but you must lead by winBy (4 : 4 → 5 : 4 → 6 : 4 wins). Pause after a point (ms). */
     pointsToWin: 4,

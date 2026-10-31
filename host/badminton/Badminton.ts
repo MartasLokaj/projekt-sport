@@ -58,6 +58,14 @@ type Athlete = {
   /** Diving and lying in the sand: when it started and which way (world, flat). Can't move or hit until busyUntil. */
   down: { start: number; dir: THREE.Vector3; landed: boolean } | null;
   busyUntil: number;
+  /** Timing text above the head, and until when it shows. */
+  pop: HTMLElement;
+  popUntil: number;
+  /** The racket's materials (they glow gold after a Perfect hit) and until when it glows. */
+  racketMaterials: THREE.MeshStandardMaterial[];
+  glowUntil: number;
+  /** The rally in which this player last got a tip, so tips stay rare. */
+  lastTipRally: number;
 };
 
 export type BadmintonHud = {
@@ -70,6 +78,11 @@ export type BadmintonHud = {
   feedbackFar: HTMLElement;
   /** A white flash over the whole screen (class "on" plays it), for a Super Smash. */
   flash: HTMLElement;
+  /** Timing text that pops up above each player's own character (near, far). */
+  popNear: HTMLElement;
+  popFar: HTMLElement;
+  /** "CPU: Normal" next to the score, in a match against the computer. */
+  level: HTMLElement;
 };
 
 type Phase = 'serve' | 'rally' | 'point' | 'over';
@@ -102,6 +115,10 @@ export class Badminton {
   private decided = false;
   /** Super Smashes so far in this rally (each next one is faster), and whether the last one's landing burst played. */
   private superChain = 0;
+  /** Rallies played so far (for spacing out the tips). */
+  private rallies = 0;
+  /** The computer's difficulty (keys 1 / 2 / 3). */
+  private level: keyof typeof TUNING.badminton.cpuLevels = TUNING.badminton.cpuLevel;
   private landedFx = false;
   private shakeUntil = 0;
   /** The last missed contact (who and when), so a very late swing arriving after the miss can still dive. */
@@ -158,8 +175,8 @@ export class Badminton {
     this.shadow.scale.setScalar(cfg.shuttleScale);
     this.scene.add(this.shuttle, this.shadow, this.trail.mesh, this.puffs.group);
 
-    this.near = this.makeAthlete(1, hud.feedbackNear);
-    this.far = this.makeAthlete(-1, hud.feedbackFar);
+    this.near = this.makeAthlete(1, hud.feedbackNear, hud.popNear);
+    this.far = this.makeAthlete(-1, hud.feedbackFar, hud.popFar);
   }
 
   // ---------- Public ----------
@@ -225,7 +242,8 @@ export class Badminton {
     const there = this.flight.positionAt(this.flight.progressAt(at));
     const superTry = this.flight.kind === 'wobble' && !short && power >= cfg.superSmashPower && strokeAt(there.y) === 'overhead';
     if (superTry && contact.reach !== 'dive' && (off < -early || off > late)) {
-      this.showFeedback(a, `Super Smash missed! (${Math.round(Math.abs(off))} ms ${off < 0 ? 'early' : 'late'})`);
+      this.showPop(a, `Super Smash missed! (${Math.round(Math.abs(off))} ms ${off < 0 ? 'early' : 'late'})`);
+      this.tip(a, off < 0 ? 'early' : 'late');
       this.dive(a, now, contact.position);
       this.miss();
       return;
@@ -233,11 +251,12 @@ export class Badminton {
     if (off < -(early + cfg.earlyWobbleMs)) {
       // Far too early: a swing at the air, then swing again.
       a.swing = { stroke: contact.stroke, start: now };
-      this.showFeedback(a, `Too early! (${Math.round(-off)} ms)`);
+      this.showPop(a, `Too early! (${Math.round(-off)} ms)`);
+      this.tip(a, 'early');
       return;
     }
     if (contact.reach === 'none') {
-      this.showFeedback(a, 'Out of reach!');
+      this.showPop(a, 'Out of reach!');
       this.miss();
       return;
     }
@@ -249,7 +268,7 @@ export class Badminton {
     if (contact.reach === 'dive' || off < -early) {
       a.swing = { stroke: contact.stroke, start: now };
       this.hit(a, power, aim, 0.3, contact.stroke, now, false, true);
-      this.showFeedback(a, contact.reach === 'dive' ? 'Stretch! · Wobble' : `Wobble · ${Math.round(-off)} ms early`);
+      this.showPop(a, contact.reach === 'dive' ? 'Stretch! · Wobble' : `Wobble · ${Math.round(-off)} ms early`);
       return;
     }
     // The character only jumps with the player's own swing, as high as the shuttle is at that moment:
@@ -270,17 +289,20 @@ export class Badminton {
       // A strong but badly timed Super Smash try: a weak wobble back, and a fall into the sand.
       this.hit(a, 30, aim, 0.3, stroke, when, false, true);
       this.dive(a, when, contact.position);
-      this.showFeedback(a, `Super Smash failed! (${Math.round(size)} ms ${off < 0 ? 'early' : 'late'})`);
+      this.showPop(a, `Super Smash failed! (${Math.round(size)} ms ${off < 0 ? 'early' : 'late'})`);
+      this.tip(a, off < 0 ? 'early' : 'late');
       return;
     }
     if (superTry && there.y >= cfg.superSmashMinHeight) {
       this.hit(a, power, aim, quality, stroke, when, false, false, true);
+      this.perfect(a);
       return;
     }
     const kind = this.hit(a, power, aim, quality, stroke, when, short, offGood || weak);
     const timing = quality >= 1 ? 'Perfect!' : `${Math.round(size)} ms ${off < 0 ? 'early' : 'late'}`;
     const verdict = kind === 'wobble' ? `Wobble · ${weak ? 'too soft' : timing}` : quality >= 1 ? 'Perfect!' : `Good · ${timing}`;
-    this.showFeedback(a, kind === 'wobble' ? verdict : `${shotName(kind)} · ${verdict}`);
+    this.showPop(a, kind === 'wobble' ? verdict : `${shotName(kind)} · ${verdict}`);
+    if (quality >= 1 && kind !== 'wobble') this.perfect(a);
   }
 
   // ---------- Rally ----------
@@ -300,6 +322,7 @@ export class Badminton {
     this.decided = false;
     this.pendingHit = null;
     this.superChain = 0;
+    this.rallies++;
     for (const a of [this.near, this.far]) {
       a.down = null;
       a.busyUntil = 0;
@@ -325,7 +348,7 @@ export class Badminton {
     const across = -Math.sign(server.target.x || 1);
     const range: [number, number] = across > 0 ? [0.25, cfg.courtHalfWidth - 0.25] : [-cfg.courtHalfWidth + 0.25, -0.25];
     this.launch(makeShot(short ? 'shortServe' : 'serve', from, server.side, aim, power / 100, 0.7, now, range), server.side);
-    if (server.human && short) this.showFeedback(server, 'Short serve');
+    if (server.human && short) this.showPop(server, 'Short serve');
     this.hud.message.hidden = true;
     this.phase = 'rally';
   }
@@ -406,7 +429,8 @@ export class Badminton {
       this.decided = true;
       return;
     }
-    this.contact = findContact(flight, this.receiver, receiver.wrapper.position, Math.max(Date.now(), receiver.busyUntil));
+    const reaction = receiver.human ? cfg.reactionMs : cfg.cpuLevels[this.level].reactionMs;
+    this.contact = findContact(flight, this.receiver, receiver.wrapper.position, Math.max(Date.now(), receiver.busyUntil), reaction);
     this.decided = false;
     if (flight.kind === 'wobble' && receiver.human) {
       this.showFeedback(receiver, '⚡ Smash chance!');
@@ -496,16 +520,17 @@ export class Badminton {
   private lateMiss(a: Athlete, now: number, off: number): void {
     const cfg = TUNING.badminton;
     if (off > cfg.veryLateMs) {
-      this.showFeedback(a, `Way too late! (${Math.round(off)} ms)`);
+      this.showPop(a, `Way too late! (${Math.round(off)} ms)`);
       this.dive(a, now, this.shuttle.position);
     } else {
-      this.showFeedback(a, `Too late! (${Math.round(off)} ms)`);
+      this.showPop(a, `Too late! (${Math.round(off)} ms)`);
     }
+    this.tip(a, 'late');
     if (!this.decided) this.miss();
   }
 
   private cpuTurn(cpu: Athlete, now: number): void {
-    const cfg = TUNING.badminton.cpu;
+    const cfg = TUNING.badminton.cpuLevels[this.level];
     const contact = this.contact!;
     const incomingSmash = this.flight?.kind === 'smash';
     if (now < cpu.busyUntil) return; // still getting up: the shuttle will just fall
@@ -535,7 +560,8 @@ export class Badminton {
     }
     const short = Math.random() < cfg.dropChance;
     const wobble = Math.random() < cfg.wobbleChance;
-    this.hit(cpu, power, (Math.random() * 2 - 1) * cfg.aimRange, 0.5 + Math.random() * 0.5, contact.stroke, now, short, wobble);
+    const quality = cfg.quality[0] + Math.random() * (cfg.quality[1] - cfg.quality[0]);
+    this.hit(cpu, power, (Math.random() * 2 - 1) * cfg.aimRange, quality, contact.stroke, now, short, wobble);
   }
 
   private pointTo(winner: Side): void {
@@ -567,9 +593,9 @@ export class Badminton {
 
     const server = this.athlete(this.server);
     if (this.phase === 'serve' && !server.human && now >= this.cpuServeAt) {
-      const c = cfg.cpu;
+      const c = cfg.cpuLevels[this.level];
       const power = c.power[0] + Math.random() * (c.power[1] - c.power[0]);
-      this.serve(server, now, power, (Math.random() * 2 - 1) * c.aimRange, Math.random() < c.shortServeChance);
+      this.serve(server, now, power, (Math.random() * 2 - 1) * c.aimRange, Math.random() < cfg.cpu.shortServeChance);
     } else if (this.phase === 'rally' && this.flight) {
       if (this.pendingHit && now >= this.pendingHit.when) this.launchPendingHit();
       if (!this.decided && this.contact) {
@@ -579,7 +605,8 @@ export class Badminton {
           else this.cpuTurn(receiver, now);
         }
         else if (receiver.human && now > this.contact.time + this.hitWindow().late + cfg.lateGraceMs) {
-          this.showFeedback(receiver, 'Missed!');
+          this.showPop(receiver, 'Missed!');
+          this.tip(receiver, 'late');
           this.miss();
         }
       }
@@ -605,9 +632,11 @@ export class Badminton {
     this.puffs.update(now, dt);
     for (const a of [this.near, this.far]) {
       this.updateAthlete(a, now, dt);
+      this.updateGlow(a, now);
       if (now > a.feedbackUntil) a.feedback.hidden = true;
     }
     this.render(dt);
+    this.placePops(now);
   }
 
   /** One player: full screen from behind the near player. Two: left half near player, right half far player. */
@@ -663,7 +692,8 @@ export class Badminton {
     const distance = toTarget.length();
     if (distance > 0.02) {
       const timeLeft = a.deadline === null ? 1 : Math.max(0.05, (a.deadline - now) / 1000);
-      const speed = Math.min(cfg.maxRunSpeed, Math.max(cfg.runSpeed, distance / timeLeft));
+      const assist = 1 + cfg.reachAssist;
+      const speed = Math.min(cfg.maxRunSpeed * assist, Math.max(cfg.runSpeed * assist, distance / timeLeft));
       a.wrapper.position.addScaledVector(toTarget.normalize(), Math.min(distance, speed * dt));
       a.runPhase += dt * 14;
       a.bob.position.y = Math.abs(Math.sin(a.runPhase)) * 0.07;
@@ -706,6 +736,32 @@ export class Badminton {
     a.character.update(dt);
   }
 
+  /** The racket's gold glow after a Perfect hit, fading out. */
+  private updateGlow(a: Athlete, now: number): void {
+    const k = Math.max(0, (a.glowUntil - now) / TUNING.badminton.perfectGlowMs);
+    for (const m of a.racketMaterials) {
+      m.emissive.set('#ffc93d');
+      m.emissiveIntensity = k * 1.6;
+    }
+  }
+
+  /** Keeps each player's timing text just above their character's head, in their own half of the screen. */
+  private placePops(now: number): void {
+    const w = this.container.clientWidth || window.innerWidth;
+    const h = this.container.clientHeight || window.innerHeight;
+    const split = this.far.human;
+    for (const a of [this.near, this.far]) {
+      const visible = a.human && now < a.popUntil;
+      a.pop.hidden = !visible;
+      if (!visible) continue;
+      const half = split ? w / 2 : w;
+      const left = split && a.side === -1 ? w / 2 : 0;
+      const head = a.wrapper.position.clone().add(new THREE.Vector3(0, 2.1, 0)).project(a.camera);
+      a.pop.style.left = `${left + ((head.x + 1) / 2) * half}px`;
+      a.pop.style.top = `${((1 - head.y) / 2) * h}px`;
+    }
+  }
+
   /** Behind the athlete's own baseline, looking down the court over the net. */
   private updateCamera(a: Athlete, dt: number): void {
     const cfg = TUNING.badminton;
@@ -724,10 +780,16 @@ export class Badminton {
 
   // ---------- Helpers ----------
 
-  private makeAthlete(side: Side, feedback: HTMLElement): Athlete {
+  private makeAthlete(side: Side, feedback: HTMLElement, pop: HTMLElement): Athlete {
     const cfg = TUNING.badminton;
     const character = new Character({ shirt: '#9b5cff', skin: SKIN_TONES[3], handedness: 'right' }, { putter: false });
-    character.handArm.add(buildRacket(side === 1 ? '#ff8a3d' : '#00a6ed'));
+    const racket = buildRacket(side === 1 ? '#ff8a3d' : '#00a6ed');
+    character.handArm.add(racket);
+    const racketMaterials: THREE.MeshStandardMaterial[] = [];
+    racket.traverse((o) => {
+      const m = (o as THREE.Mesh).material;
+      if (m instanceof THREE.MeshStandardMaterial) racketMaterials.push(m);
+    });
     const bob = new THREE.Group();
     bob.add(character.root);
     const wrapper = new THREE.Group();
@@ -759,6 +821,11 @@ export class Badminton {
       score: 0,
       down: null,
       busyUntil: 0,
+      pop,
+      popUntil: 0,
+      racketMaterials,
+      glowUntil: 0,
+      lastTipRally: -99,
     };
   }
 
@@ -802,6 +869,39 @@ export class Badminton {
     return a.wrapper.position.clone().add(new THREE.Vector3(a.handSign * 0.45, height, -a.side * 0.3));
   }
 
+  /**
+   * Timing text popping up above the player's own character (Early / Perfect / Late …), coloured by how it went.
+   * Only for players (not the computer).
+   */
+  private showPop(a: Athlete, text: string): void {
+    if (!a.human) return;
+    const tone = /Perfect/.test(text)
+      ? 'perfect'
+      : /Too|Way|Missed|missed|failed|Out of/.test(text)
+        ? 'miss'
+        : /Wobble|Stretch/.test(text)
+          ? 'wobble'
+          : 'good';
+    a.pop.textContent = text;
+    a.pop.className = `badminton-pop ${tone}`;
+    void a.pop.offsetWidth; // restart the pop animation
+    a.pop.classList.add('on');
+    a.popUntil = Date.now() + TUNING.badminton.popMs;
+  }
+
+  /** After a miss, now and then a tip: "Wait for it!" (too early) or "Swing sooner!" (too late). */
+  private tip(a: Athlete, how: 'early' | 'late'): void {
+    if (!a.human || this.rallies - a.lastTipRally < TUNING.badminton.hintEveryRallies) return;
+    a.lastTipRally = this.rallies;
+    this.showFeedback(a, how === 'early' ? 'Tip: wait for it!' : 'Tip: swing sooner!');
+  }
+
+  /** A Perfect hit: the racket glows gold and the phone gives a short buzz. */
+  private perfect(a: Athlete): void {
+    a.glowUntil = Date.now() + TUNING.badminton.perfectGlowMs;
+    if (a.human) this.onCue?.(a.side, 'perfect');
+  }
+
   /** Text in the athlete's half; big = large, golden and bouncy (a Super Smash). */
   private showFeedback(a: Athlete, text: string, big = false): void {
     a.feedback.textContent = text;
@@ -812,6 +912,9 @@ export class Badminton {
 
   private renderScore(): void {
     this.hud.score.textContent = `${this.near.name} ${this.near.score} : ${this.far.score} ${this.far.name}`;
+    const names = { easy: 'Easy', normal: 'Normal', pro: 'Pro' };
+    this.hud.level.hidden = this.far.human;
+    this.hud.level.textContent = `CPU: ${names[this.level]} · keys 1 2 3`;
   }
 
   private readonly onResize = (): void => {
@@ -838,6 +941,9 @@ export class Badminton {
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       this.onSwing(-1, Date.now(), TUNING.badminton.keyPower, 0, e.shiftKey);
+    } else if ((e.key === '1' || e.key === '2' || e.key === '3') && !this.far.human) {
+      this.level = e.key === '1' ? 'easy' : e.key === '2' ? 'normal' : 'pro';
+      this.renderScore();
     } else if (e.key === 'Enter' && this.phase === 'over') {
       this.newMatch();
     }

@@ -156,6 +156,7 @@ Each of the six faces is a small world for one game. For now only the **Minigolf
 ## 13. Badminton (next game) — DRAFT, still being designed with the user
 
 **Mechanics upgrade (requested 2026-10-31):** see BADMINTON_MECHANICS.md for the full brief (short shot, wobble shots, dive/fall, Super Smash, timing feedback, rally escalation, match options).
+**Beach venue design (requested 2026-10-31):** see BADMINTON_BEACH.md (based on the user's reference photo: court, then players, shuttle, rackets).
 
 Status: decisions so far are recorded here. Do not start building Badminton until the user says so (Cube World hub and the Minigolf phases come first). Open questions are marked **OPEN**.
 

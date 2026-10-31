@@ -102,6 +102,9 @@ function showLab(on: boolean): void {
         feedbackNear: document.getElementById('badminton-feedback-near')!,
         feedbackFar: document.getElementById('badminton-feedback-far')!,
         flash: document.getElementById('badminton-flash')!,
+        popNear: document.getElementById('badminton-pop-near')!,
+        popFar: document.getElementById('badminton-pop-far')!,
+        level: document.getElementById('badminton-level')!,
       });
       badminton.onCue = (side, cue) => {
         const playerId = badmintonIds[side === 1 ? 0 : 1];
