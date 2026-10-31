@@ -266,7 +266,8 @@ running log of where we are, what the user decided, and what comes next).
     camera shake on landing, hitter's phone cue `super_smash` (strong vibration on Android). CPU tries one on high
     wobbles (`cpu.superSmashChance` 0.5) and returns one with `cpu.superSmashReturnChance` 0.3.
     Scripted: perfect try → Super Smash 504 ms; third in a chain 402 ms; −250 ms → "failed" + fall.
-  - Next: user tests step 3 → step 4 (timing feedback upgrade, more generous movement, CPU levels) — plan first.
+  - **User test step 3: "plays well" — approved.**
+  - Next: step 4 (timing feedback upgrade, more generous movement, CPU levels) — plan first.
 
 ### GitHub and the cloud (2026-10-31)
 - Project is on GitHub: **private** repo `MartasLokaj/projekt-sport` (remote `origin`, branch `main`). `gh` CLI is in
