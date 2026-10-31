@@ -537,6 +537,12 @@ body, round mitten hands, sturdier legs, chunky shoes).
 - Step 3: Quick start + Saved screen (+ the other phone screens in the dark look).
   Step 4: outfits per game + same-colour name tags (then drop the `colour_taken` refusal).
 
+### Approvals 2026-10-31 (evening)
+- User: "je to mega dobré" — **K4 dive-in transition, the new badminton camera, the footwork change (stop short +
+  reach, calmer runs) and the gentle return to the cube are approved.** "We'll work a lot on the graphics later."
+- User: "golf se mi taky hraje dobře" — minigolf plays well (did not say which holes; J3 holes 8–9 not confirmed
+  one by one).
+
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.
 - Plan first for bigger changes, list files, wait for OK. Phase by phase; the user tests on real phones before approval.

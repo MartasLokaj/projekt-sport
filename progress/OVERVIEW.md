@@ -61,14 +61,14 @@ obrazovky, dotažení editoru postavičky a **testování na skutečných telefo
 
 ## 3. Co čeká na tvůj test (postaveno, ale nevyzkoušeno)
 
-0. **Přechod z kostky do hry** (ponoření do strany kostky, bílý záblesk, kamera se snese ke hře) a zpět.
+0. ~~Přechod z kostky do hry~~ — schváleno.
 
 Tohle je teď **největší riziko**: hodně věcí je hotových jen „na Macu“, ne na skutečných telefonech.
 
 1. Minigolf jamky 8 (Most) a 9 (Finále).
 2. Badminton — trenér (coach). Záznam v `logs/badminton-outcomes.jsonl` je zatím jen z klávesnice Macu,
    ne z telefonu (žádné zpoždění Wi-Fi, síla pořád 60).
-3. Badminton — nová kamera (jede za hráčem, košík i postavička vždy v obraze) a stopa košíku.
+3. ~~Badminton — nová kamera a běh ke košíku~~ — schváleno.
 4. Badminton — 2 v 2 (potřebuje 3–4 telefony).
 5. Editor postavičky — co ukazuje telefon místo 3D náhledu (2D obrázek + poznámka proč).
 6. Míření v badmintonu na iPhonu vs. Androidu (jestli vlevo/vpravo nefunguje obráceně).
