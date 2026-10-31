@@ -357,6 +357,9 @@ running log of where we are, what the user decided, and what comes next).
 - **2026-10-31: merged the cloud branch again (Minigolf G1–G3: checker turf, wooden borders, wider lanes, closer
   camera, meadows/hills/boulders; Badminton beach venue step 1: `host/badminton/venue/` beach, props, sea).**
   Clean merge; checked: badminton on the beach runs (~2.7 ms per frame), minigolf hole 1 loads, no errors.
+- **2026-10-31: merged the cloud branch `claude/optimistic-ptolemy-k4bk8a` (Minigolf J1: ramps, gaps, tubes,
+  holes 4 Pipe and 5 Ski jump) on the user's request**, plus committed the user's `AVATAR.md` brief (SPEC phase 5).
+  Clean merge; type check passes, game modules load, badminton plays. Pushed `main`.
 
 ### Kick players from the lobby (2026-10-31, user request)
 - **Built, waiting for the user's test.** Hover a player's face under Play → red × (`.face-kick` in
