@@ -350,6 +350,13 @@ running log of where we are, what the user decided, and what comes next).
   few shader values. **Real fps on the MacBook Air not measured yet.** All values in `TUNING.badminton.beach`.
 - Next: user OK on step 1 (tweaks), then step 2 players (beach outfits), 3 shuttle (2 options), 4 rackets.
 
+### Badminton: deeper shots, more running (user, 2026-10-31: "the shuttle should fly to the back line, more movement"; palms: keep ours)
+- Clears, lifts and serves land right by the back line (depth up to 8.15 of 8.4) in a higher arc (apex 5.0–5.6),
+  drives deeper too; players wait nearer the net (`homeDepth` 4.0), so they run back for every high shot.
+  Measured with a scripted player vs the computer: overhead contacts moved from ~5 m to 6.5–7 m from the net.
+- The camera tips up a little to follow a high shuttle (`cameraTiltFrom`, `cameraTiltFollow`, `cameraTiltSpeed`),
+  so it never climbs out of the picture. Waiting for the user's test.
+
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.
 - Plan first for bigger changes, list files, wait for OK. Phase by phase; the user tests on real phones before approval.
