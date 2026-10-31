@@ -183,6 +183,7 @@ Status: decisions so far are recorded here. Do not start building Badminton unti
 - **Serve (user, 2026-10-30):** always diagonally into the receiver's service court (right court on an even score, left on odd), never straight.
 - **Shuttle:** bright glowing red and drawn bigger than real, so it is easy to follow. It is drawn 2.4× bigger than real (user, 2026-10-31). It flies slower than a real one, at a steady, predictable pace, and never slows down near the player (user, 2026-10-30).
 - **Later (user):** make the shot speeds easy to tell apart visually (e.g. a trail or effect that shows a fast smash vs a slow clear) — design phase (B5).
+- **No texts over the game (user, 2026-10-31):** while playing, only the score and the small rally counter show; feedback comes from visuals (glows, trails, flashes, animations) and the phone. The winner message shows at the end of a match.
 - **Super Smash (user, 2026-10-31):** allowed from anywhere on the court (only on a wobble, high, strong and well timed); the normal smash stays back-court only.
 - **Falling (user, 2026-10-31):** a player's character falls into the sand only when the swing is really late, or when a Super Smash attempt is badly timed. Too early = swing again; slightly off = a wobble, no fall.
 - **Shot depth (user, 2026-10-30):** for now every shot flies to the back of the court. Later the phone gets a big button that means "play a short shot" (drop).

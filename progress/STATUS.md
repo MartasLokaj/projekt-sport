@@ -286,7 +286,11 @@ running log of where we are, what the user decided, and what comes next).
     cap 15) / Long (to 21, win by 2, cap 30) (`matchLengths`, `FaceInfo.matchLengths`, mode detail "{length}",
     `Badminton.start(…, level, length)`); messages "Game point!", "Deuce: win by 2", "Next point wins!" (at the
     cap). Music / louder waves wait for sounds in B5 (none yet). Scripted: 11:9 wins, 15:14 wins by the cap.
-  - Next: user tests step 5 → B4 (2v2) — plan first.
+  - User: "good, but I don't like the texts, don't write them at all, you can't see the game" → `screenTexts:
+    false`: no timing pops, tips, "Smash chance!", "SUPER SMASH!" text, point messages, serve prompt, Mac keys line
+    or CPU label during play. Only the score, the rally counter and the result at the end of a match show. Visual
+    cues stay (gold racket glow, flash, trails, colours, phone texts). Set `screenTexts: true` to bring them back.
+  - Next: user tests → B4 (2v2) — plan first.
 
 ### GitHub and the cloud (2026-10-31)
 - Project is on GitHub: **private** repo `MartasLokaj/projekt-sport` (remote `origin`, branch `main`). `gh` CLI is in

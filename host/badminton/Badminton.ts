@@ -227,6 +227,7 @@ export class Badminton {
     this.setLook(this.near, near, true);
     this.setLook(this.far, far, far !== null);
     this.hud.screen.classList.toggle('split', this.far.human);
+    this.hud.screen.classList.toggle('no-texts', !TUNING.badminton.screenTexts);
     this.onResize();
     this.renderScore();
   }
@@ -356,7 +357,7 @@ export class Badminton {
     this.moveTo(other, new THREE.Vector3(-x, 0, -this.server * TUNING.badminton.homeDepth), null);
     this.cpuServeAt = Date.now() + TUNING.badminton.cpu.serveDelayMs;
     this.hud.message.textContent = server.human ? `${server.name}: swing to serve!` : `${server.name} serves`;
-    this.hud.message.hidden = false;
+    this.hud.message.hidden = !TUNING.badminton.screenTexts;
   }
 
   /** short: the SHORT button was held, a low short serve just past the short service line. */
@@ -606,7 +607,8 @@ export class Badminton {
       ? `${w.name} wins! ${this.near.score} : ${this.far.score}${rally}\nEnter: play again · Esc: back to the cube`
       : `Point to ${w.name}!${rally}${lastPoint ? '\nNext point wins!' : tied ? '\nDeuce: win by 2' : gamePoint ? '\nGame point!' : ''}`;
     this.hud.message.classList.toggle('long-rally', rally !== '');
-    this.hud.message.hidden = false;
+    // Between points nothing covers the game (unless screenTexts); the result at the end always shows.
+    this.hud.message.hidden = !won && !cfg.screenTexts;
     w.character.play('cheer');
     loser.character.play('slump');
   }
@@ -905,7 +907,7 @@ export class Badminton {
    * Only for players (not the computer).
    */
   private showPop(a: Athlete, text: string): void {
-    if (!a.human) return;
+    if (!a.human || !TUNING.badminton.screenTexts) return;
     const tone = /Perfect/.test(text)
       ? 'perfect'
       : /Too|Way|Missed|missed|failed|Out of/.test(text)
@@ -935,6 +937,7 @@ export class Badminton {
 
   /** Text in the athlete's half; big = large, golden and bouncy (a Super Smash). */
   private showFeedback(a: Athlete, text: string, big = false): void {
+    if (!TUNING.badminton.screenTexts) return;
     a.feedback.textContent = text;
     a.feedback.hidden = false;
     a.feedback.classList.toggle('super', big);

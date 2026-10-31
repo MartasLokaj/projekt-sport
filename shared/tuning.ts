@@ -520,6 +520,12 @@ export const TUNING = {
     scatter: 1.0,
     /** Mac keyboard (testing without a phone): Space swings with this power, arrows held = aim. */
     keyPower: 60,
+    /**
+     * Texts over the game while playing (timing text above the head, tips, "Smash chance!", "SUPER SMASH!",
+     * "Point to …", the serve prompt, the Mac keys line). Off on the user's request (2026-10-31: they hide the
+     * game); the score, the rally counter and the result at the end of a match always show.
+     */
+    screenTexts: false,
     /** Timing text above the player's character: how long it shows (ms); Perfect makes the racket glow (ms). */
     popMs: 900,
     perfectGlowMs: 350,
