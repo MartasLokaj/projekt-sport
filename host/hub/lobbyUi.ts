@@ -3,7 +3,8 @@ import { FACES, type FaceInfo } from './faces.ts';
 
 // The page parts of the Cube World lobby around the 3D cube: the join panel (QR code, room code) and
 // the chosen game's card (picture, facts, modes, Play button, dots to switch games). Both only show
-// while a game is chosen. The players themselves are shown only as characters on the cube.
+// while a game is chosen. The players themselves are shown only as characters on the cube, and as little
+// faces under the Play button: hover a face for a × that kicks that player (after a confirm dialog).
 // Styles are in host/ui/lobby.css.
 
 /** What the Play button would do for a game right now. */
@@ -18,6 +19,8 @@ const STATUS: Record<FaceInfo['status'], { text: string; tone: string }> = {
 export class LobbyUi {
   /** A dot under the game card was clicked: choose that game. */
   onChoose: (id: string) => void = () => {};
+  /** The host confirmed kicking this player. */
+  onKick: (playerId: string) => void = () => {};
 
   private readonly $ = (id: string): HTMLElement => document.getElementById(id)!;
   private readonly pick = this.$('pick');
@@ -27,8 +30,16 @@ export class LobbyUi {
   private readonly dots: HTMLButtonElement[] = [];
   private players: PlayerInfo[] = [];
   private face: FaceInfo | null = null;
+  private readonly kickDialog = this.$('kick-confirm');
+  /** The player the kick dialog asks about. */
+  private kickId: string | null = null;
 
   constructor() {
+    this.$('kick-yes').addEventListener('click', () => this.answerKick(true));
+    this.$('kick-cancel').addEventListener('click', () => this.answerKick(false));
+    this.kickDialog.addEventListener('click', (e) => {
+      if (e.target === this.kickDialog) this.answerKick(false); // a click outside the panel
+    });
     const dots = this.$('pick-dots');
     for (const face of FACES) {
       const dot = document.createElement('button');
@@ -74,21 +85,68 @@ export class LobbyUi {
     this.renderGame(false);
   }
 
-  /** The joined players' little faces under the Play button (a player who lost connection is faded). */
+  /**
+   * The joined players' little faces under the Play button (a player who lost connection is faded).
+   * Hovering a face shows a × to kick that player. A face whose player left (or was kicked) spins away.
+   */
   private renderFaces(): void {
     const row = this.$('pick-faces');
-    const faces = this.players.map((p) => {
-      const existing = row.querySelector<HTMLElement>(`[data-id="${CSS.escape(p.id)}"]`);
-      const face = existing ?? el('span', 'cw-avatar');
-      face.dataset.id = p.id;
+    const ids = new Set(this.players.map((p) => p.id));
+    for (const slot of row.querySelectorAll<HTMLElement>('.face-slot')) {
+      if (ids.has(slot.dataset.id!) || slot.classList.contains('is-leaving')) continue;
+      slot.classList.add('is-leaving');
+      setTimeout(() => slot.remove(), 520);
+    }
+    for (const p of this.players) {
+      let slot = row.querySelector<HTMLElement>(`.face-slot[data-id="${CSS.escape(p.id)}"]:not(.is-leaving)`);
+      if (!slot) {
+        slot = el('span', 'face-slot');
+        slot.dataset.id = p.id;
+        const kick = el('button', 'face-kick', '×') as HTMLButtonElement;
+        kick.type = 'button';
+        kick.addEventListener('click', () => this.askKick(p.id));
+        slot.append(el('span', 'cw-avatar'), kick);
+        row.append(slot);
+      }
+      const face = slot.querySelector<HTMLElement>('.cw-avatar')!;
       face.classList.toggle('is-away', !p.connected);
       face.style.setProperty('--shirt', p.colour);
       face.style.setProperty('--skin', p.skinTone);
       face.title = p.connected ? p.name : `${p.name} (away)`;
       face.setAttribute('aria-label', face.title);
-      return face;
-    });
-    row.replaceChildren(...faces);
+      const kick = slot.querySelector<HTMLElement>('.face-kick')!;
+      kick.title = `Kick ${p.name}`;
+      kick.setAttribute('aria-label', `Kick ${p.name}`);
+    }
+  }
+
+  // ---------- Kick dialog ----------
+
+  get kickOpen(): boolean {
+    return !this.kickDialog.hidden;
+  }
+
+  private askKick(playerId: string): void {
+    const player = this.players.find((p) => p.id === playerId);
+    if (!player) return;
+    this.kickId = playerId;
+    this.$('kick-title').textContent = `Kick ${player.name}?`;
+    this.$('kick-text').textContent = `${player.name} will be removed from the game. They can join again from their phone.`;
+    this.kickDialog.hidden = false;
+    this.$('kick-yes').focus();
+  }
+
+  /** Keys while the kick dialog is open: Enter kicks, Esc cancels. */
+  handleKickKey(e: KeyboardEvent): void {
+    if (e.key === 'Escape') this.answerKick(false);
+    else if (e.key === 'Enter') this.answerKick(true);
+  }
+
+  private answerKick(kick: boolean): void {
+    const id = this.kickId;
+    this.kickId = null;
+    this.kickDialog.hidden = true;
+    if (kick && id) this.onKick(id);
   }
 
   // ---------- Game card ----------

@@ -305,9 +305,14 @@ startButton.addEventListener('click', startSelected);
 document.getElementById('turn-left')!.addEventListener('click', () => hub?.cycle(-1));
 document.getElementById('turn-right')!.addEventListener('click', () => hub?.cycle(1));
 lobbyUi.onChoose = (id) => hub?.select(id);
+lobbyUi.onKick = (playerId) => send({ type: 'kick_player', playerId });
 window.addEventListener('keydown', (e) => {
   // A focused button handles Enter and Space itself (keyboard users can Tab to it).
   if (e.target instanceof HTMLButtonElement && (e.key === 'Enter' || e.key === ' ')) return;
+  if (lobbyUi.kickOpen) {
+    lobbyUi.handleKickKey(e);
+    return;
+  }
   const phase = lastState?.phase ?? 'lobby';
   if (onTitle && !playing && !labOpen) {
     if (!howTo.hidden) {

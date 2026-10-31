@@ -56,6 +56,8 @@ export class Hub {
   private readonly brightness: number[] = [];
   private readonly sign = new FaceSign();
   private readonly confetti = new Confetti();
+  /** Characters of players who left or were kicked: they spin up and shrink away, then go. */
+  private readonly leaving: { guest: Guest; t: number }[] = [];
   /** Players who joined since the last update: they jump down onto the cube instead of popping up. */
   private readonly arrivals = new Set<string>();
   /** True when the last selection chose a game (the cube hops), false when it let go. */
@@ -257,8 +259,8 @@ export class Hub {
     this.players = players;
     for (const [id, guest] of this.guests) {
       if (players.some((p) => p.id === id)) continue;
-      this.removeGuest(guest);
       this.guests.delete(id);
+      this.leave(guest);
     }
     this.addGuests();
   }
@@ -363,6 +365,7 @@ export class Hub {
       // Now and then somebody waves.
       if (t >= 1 && Math.random() < dt * 0.12) guest.character.play('cheer');
     });
+    this.updateLeaving(dt);
     this.confetti.update(dt, GRAVITY);
     this.composer.render();
     this.placeTags();
@@ -532,6 +535,35 @@ export class Hub {
   private clearGuests(): void {
     for (const guest of this.guests.values()) this.removeGuest(guest);
     this.guests.clear();
+  }
+
+  /** Starts the goodbye: a puff of confetti in the player's colour, then spin, hop up and shrink away. */
+  private leave(guest: Guest): void {
+    guest.tag.remove();
+    const root = guest.character.root;
+    if (!root.parent) return;
+    const at = root.getWorldPosition(new THREE.Vector3());
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(root.parent.getWorldQuaternion(new THREE.Quaternion()));
+    this.confetti.burst(at.addScaledVector(up, 0.3), guest.player.colour, up);
+    this.leaving.push({ guest, t: 0 });
+  }
+
+  private updateLeaving(dt: number): void {
+    const c = TUNING.hub;
+    for (let i = this.leaving.length - 1; i >= 0; i--) {
+      const l = this.leaving[i];
+      l.t += dt / 0.5;
+      const root = l.guest.character.root;
+      if (l.t >= 1) {
+        this.removeGuest(l.guest);
+        this.leaving.splice(i, 1);
+        continue;
+      }
+      root.rotation.y += dt * 18;
+      root.position.y += dt * 2.2 * (1 - l.t);
+      root.scale.setScalar(Math.max(0.001, c.characterScale * (1 - l.t * l.t)));
+      l.guest.character.update(dt);
+    }
   }
 
   private removeGuest(guest: Guest): void {

@@ -268,6 +268,16 @@ running log of where we are, what the user decided, and what comes next).
   new lobby UI `host/ui/`, living cube, confetti, fonts) into `main` on the user's request.** Merge was clean;
   checked in the dev browser: title → cube → Badminton → Play → game → Esc back to the cube, no errors.
 
+### Kick players from the lobby (2026-10-31, user request)
+- **Built, waiting for the user's test.** Hover a player's face under Play → red × (`.face-kick` in
+  `host/hub/lobbyUi.ts`, styles in `host/ui/lobby.css`) → dialog "Kick Eva?" (`#kick-confirm` in `host/index.html`;
+  Enter kicks, Esc cancels) → host sends `kick_player` → server (`server/lobby.ts`) deletes the seat (only outside a
+  match), the phone gets `join_error: kicked` ("You were removed from the game" + "Join again" button). The face
+  spins away; the cube character (`Hub.leave`) bursts confetti and spins up and shrinks away (any player who
+  leaves now animates like that). Note: the dialog needs `#lobby-screen > #kick-confirm` to beat the
+  `#lobby-screen > *:not(#hub-canvas)` z-index rule.
+- Touches the cloud's hub files (`host/hub/`, `host/ui/`): tell the cloud session if it is still working there.
+
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.
 - Plan first for bigger changes, list files, wait for OK. Phase by phase; the user tests on real phones before approval.

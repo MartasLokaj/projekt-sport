@@ -124,7 +124,8 @@ export type JoinError =
   | 'game_full'
   | 'colour_taken'
   | 'invalid'
-  | 'replaced'; // the same player opened the game in another tab
+  | 'replaced' // the same player opened the game in another tab
+  | 'kicked'; // the big screen removed this player (they may join again)
 
 /** Sent by the host page or a phone. */
 export type ClientMessage =
@@ -157,6 +158,8 @@ export type ClientMessage =
   | { type: 'ball_result'; result: BallResult }
   /** From the host: the current player hit with the Mac keyboard (for testing without a phone). */
   | { type: 'host_stroke' }
+  /** From the host, in the lobby: remove this player (their phone is told and may join again). */
+  | { type: 'kick_player'; playerId: string }
   /** From the host: open or close the Badminton Swing Lab (phones switch to the swing test). */
   | { type: 'lab_mode'; on: boolean }
   /** From a phone: what time is it on the server? t = the phone's clock when sent. */

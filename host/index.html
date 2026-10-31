@@ -133,6 +133,16 @@
   <body>
     <div id="offline-banner" role="status" hidden>Lost connection to the game server · reconnecting…</div>
     <div id="lobby-screen">
+      <div id="kick-confirm" class="kick-backdrop" hidden>
+        <section class="cw-panel kick-panel" role="dialog" aria-modal="true" aria-labelledby="kick-title">
+          <h2 id="kick-title">Kick player?</h2>
+          <p id="kick-text"></p>
+          <div class="kick-buttons">
+            <button id="kick-cancel" class="cw-btn cw-btn--ghost" type="button">Cancel<kbd>Esc</kbd></button>
+            <button id="kick-yes" class="cw-btn cw-btn--danger" type="button">Kick<kbd>Enter</kbd></button>
+          </div>
+        </section>
+      </div>
       <div id="hub-canvas"></div>
       <p class="cw-brand"><span class="cw-brand-mark" aria-hidden="true"></span>Cube World</p>
 
