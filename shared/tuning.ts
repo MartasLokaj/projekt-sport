@@ -304,6 +304,17 @@ export const TUNING = {
     /** The name sign at the back of the chosen side: how far in from the edge, and how long it takes to spring up (s). */
     signInset: 0.45,
     signPopSeconds: 0.6,
+    /** Trees at the edges lean out over the edge by this much (radians). */
+    overhangLean: 0.4,
+    /** The minigolf waterfall: where along the front edge it pours (sideways, -3..3) and how wide it is. */
+    waterfallX: 0.15,
+    waterfallWidth: 0.7,
+    /** Things orbiting the cube: radius, seconds per round, tilt of the orbit (degrees), size. */
+    orbiters: [
+      { kind: 'golfball', radius: 6.6, seconds: 24, tilt: 18, size: 0.32 },
+      { kind: 'shuttle', radius: 7.6, seconds: 33, tilt: -22, size: 1.6 },
+      { kind: 'cube', radius: 8.4, seconds: 41, tilt: 52, size: 0.45 },
+    ],
     choosePop: 0.025,
     /** Camera: distance from the cube, height and field of view (degrees). Closer = bigger cube. */
     cameraDistance: 16.5,

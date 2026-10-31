@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Forest } from '../game/vegetation.ts';
+import { TUNING } from '../../shared/tuning.ts';
 
 // The little worlds on the cube's sides. Each is built flat (+y up, about 5 x 5 units) and the hub
 // stands it on its side of the cube. Minigolf looks like our real course: tiny islands in a cute
@@ -94,7 +95,7 @@ export type Tick = (time: number, dt: number) => void;
 /** Builds a side's little world; animated worlds keep their per-frame update in `userData.tick`. */
 export function buildFace(face: FaceInfo, kit: FaceKit, size: number): THREE.Group {
   if (face.id === 'minigolf') return minigolfWorld(kit, size);
-  if (face.id === 'badminton') return badmintonWorld(size);
+  if (face.id === 'badminton') return badmintonWorld(kit, size);
   return constructionWorld(FACES.indexOf(face), size);
 }
 
@@ -162,15 +163,22 @@ function minigolfWorld(kit: FaceKit, size: number): THREE.Group {
   g.add(windmill);
   const blades = windmill.getObjectByName('blades');
 
+  // Things that spill over the edges: trees leaning out over three sides, and a waterfall pouring
+  // off the front edge of the sea, down past the cube and away into space.
+  swaying.push(
+    overhang(g, kit.forest, 'Tree_4_A', -2.5, -2.5, 0.17),
+    overhang(g, kit.forest, 'Tree_1_A', 2.6, 0.2, 0.15),
+    overhang(g, kit.forest, 'Tree_2_A', -2.6, 1.7, 0.14),
+  );
+  const waterfall = new Waterfall(size);
+  g.add(waterfall.root);
+
   const phases = swaying.map((_, k) => k * 1.7);
   const tick: Tick = (time, dt) => {
     sea.update(time);
+    waterfall.update(time);
     if (blades) blades.rotation.z -= dt * 1.4;
-    // A soft breeze: every plant leans a little, each at its own moment.
-    swaying.forEach((plant, k) => {
-      plant.rotation.z = Math.sin(time * 1.3 + phases[k]) * 0.05;
-      plant.rotation.x = Math.sin(time * 0.9 + phases[k] * 1.3) * 0.03;
-    });
+    sway(swaying, time, phases);
     if (ball) {
       // A putt every few seconds: roll, slow down, drop into the cup, pop back on the tee.
       const t = (time % 4.5) / 3;
@@ -211,6 +219,129 @@ class Sea {
     }
     position.needsUpdate = true;
     this.mesh.geometry.computeVertexNormals();
+  }
+}
+
+/** A soft breeze: every plant leans a little, each at its own moment. */
+function sway(plants: readonly THREE.Object3D[], time: number, phases: readonly number[]): void {
+  plants.forEach((plant, k) => {
+    const phase = phases[k] ?? k * 1.7;
+    plant.rotation.z = Math.sin(time * 1.3 + phase) * 0.05;
+    plant.rotation.x = Math.sin(time * 0.9 + phase * 1.3) * 0.03;
+  });
+}
+
+/**
+ * A tree standing on a grassy knoll at the very edge of a side, leaning out so its crown hangs over
+ * the edge into space. Returns the tree, so it can sway.
+ */
+function overhang(g: THREE.Group, forest: Forest, name: string, x: number, z: number, scale: number): THREE.Mesh {
+  const out = new THREE.Vector3(x, 0, z).normalize();
+  const knoll = new THREE.Mesh(new THREE.SphereGeometry(0.42, 20, 12), mat('#6fc244', 0.9));
+  knoll.scale.y = 0.45;
+  knoll.position.set(x, 0.12, z);
+  knoll.castShadow = true;
+  knoll.receiveShadow = true;
+  g.add(knoll);
+  const tree = new THREE.Mesh(forest.geometries.get(name)!, forest.material);
+  tree.scale.setScalar(scale);
+  tree.rotation.y = x * 3 + z;
+  tree.castShadow = true;
+  const pivot = new THREE.Group();
+  pivot.position.set(x, 0.24, z);
+  // Lean the top outwards: turn around the line along the edge.
+  pivot.quaternion.setFromAxisAngle(new THREE.Vector3(out.z, 0, -out.x), TUNING.hub.overhangLean);
+  pivot.add(tree);
+  g.add(pivot);
+  return tree;
+}
+
+/**
+ * Water spilling over the front edge of the minigolf sea: a ribbon that runs over the rim, then arcs
+ * out and down past the cube, streaming and fading into space. A little spray where it tips over.
+ */
+class Waterfall {
+  readonly root = new THREE.Group();
+  private readonly material: THREE.ShaderMaterial;
+  private readonly spray: { sprite: THREE.Sprite; phase: number; x: number }[] = [];
+  /** Where the water tips over the rim (distance from the side's middle). */
+  private readonly lip: number;
+
+  constructor(size: number) {
+    const width = TUNING.hub.waterfallWidth;
+    const centre = TUNING.hub.waterfallX;
+    const lip = size / 2 - 0.25;
+    const segments = 48;
+    const positions: number[] = [];
+    const uvs: number[] = [];
+    const indices: number[] = [];
+    for (let k = 0; k <= segments; k++) {
+      const v = k / segments;
+      // The first bit runs flat over the rim, then it falls in a curve that clears the cube's rounded edge.
+      let y: number;
+      let z: number;
+      if (v < 0.08) {
+        z = lip - 0.5 + (v / 0.08) * 0.5;
+        y = 0.075 + (v / 0.08) * 0.05;
+      } else {
+        const u = (v - 0.08) / 0.92;
+        z = lip + 1.8 * u + 0.6 * u * u;
+        y = 0.125 - 1.1 * u - 6.2 * u * u;
+      }
+      const spread = width * (1 + Math.max(0, v - 0.08) * 1.6); // it fans out a little as it falls
+      positions.push(centre - spread / 2, y, z, centre + spread / 2, y, z);
+      uvs.push(0, v, 1, v);
+      if (k < segments) {
+        const a = k * 2;
+        indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+      }
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.setIndex(indices);
+    this.material = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      uniforms: { time: { value: 0 } },
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: `
+        uniform float time; varying vec2 vUv;
+        float hash(float n){ return fract(sin(n) * 43758.5453); }
+        void main(){
+          // Streaks that run down the fall, faster lower down; white foam at the lip.
+          float lane = floor(vUv.x * 14.0);
+          float speed = 0.9 + hash(lane) * 0.6;
+          float streak = fract(vUv.y * 5.0 - time * speed + hash(lane + 3.0));
+          float bright = smoothstep(0.55, 1.0, streak) * 0.6;
+          float foam = smoothstep(0.14, 0.06, vUv.y) * step(0.06, vUv.y);
+          vec3 water = mix(vec3(0.33, 0.72, 0.98), vec3(1.0), clamp(bright + foam, 0.0, 1.0));
+          float edge = smoothstep(0.0, 0.18, vUv.x) * smoothstep(1.0, 0.82, vUv.x);
+          float fade = 1.0 - smoothstep(0.55, 1.0, vUv.y);
+          gl_FragColor = vec4(water, (0.72 + bright * 0.3) * edge * fade);
+        }`,
+    });
+    const sheet = new THREE.Mesh(geometry, this.material);
+    sheet.renderOrder = 3;
+    this.root.add(sheet);
+    const puff = new THREE.SpriteMaterial({ map: dustPuffTexture(), color: '#e8f6ff', transparent: true, depthWrite: false, opacity: 0 });
+    for (let k = 0; k < 6; k++) {
+      const sprite = new THREE.Sprite(puff.clone());
+      this.root.add(sprite);
+      this.spray.push({ sprite, phase: k / 6, x: centre + (k / 5 - 0.5) * width });
+    }
+    this.lip = lip;
+  }
+
+  update(time: number): void {
+    this.material.uniforms.time.value = time;
+    for (const s of this.spray) {
+      const life = (time * 0.6 + s.phase) % 1;
+      s.sprite.position.set(s.x, 0.15 - life * 0.6, this.lip + 0.15 + life * 0.25);
+      s.sprite.scale.setScalar(0.35 + life * 0.5);
+      s.sprite.material.opacity = Math.sin(life * Math.PI) * 0.5;
+    }
   }
 }
 
@@ -311,8 +442,13 @@ function constructionWorld(seed: number, size: number): THREE.Group {
 }
 
 /** The next game, hinted: a badminton court with a net, and a big shuttlecock under a tarp. */
-function badmintonWorld(size: number): THREE.Group {
+function badmintonWorld(kit: FaceKit, size: number): THREE.Group {
   const g = new THREE.Group();
+  // Two trees at the back corners lean out over the edge.
+  const swaying = [
+    overhang(g, kit.forest, 'Tree_1_A', -2.55, -2.55, 0.17),
+    overhang(g, kit.forest, 'Tree_3_A', 2.55, -2.5, 0.15),
+  ];
   const court = new THREE.Mesh(
     new RoundedBoxGeometry(size - 0.6, 0.2, size - 0.6, 4, 0.1),
     new THREE.MeshStandardMaterial({ map: courtTexture(), roughness: 0.8 }),
@@ -348,6 +484,7 @@ function badmintonWorld(size: number): THREE.Group {
   const from = new THREE.Vector3();
   const to = new THREE.Vector3();
   const next = new THREE.Vector3();
+  const phases = [0, 2.1];
   const shot = (t: number, k: number, out: THREE.Vector3): THREE.Vector3 => {
     // Shot k goes from one baseline to the other, a little left or right each time.
     const dir = k % 2 === 0 ? 1 : -1;
@@ -364,6 +501,7 @@ function badmintonWorld(size: number): THREE.Group {
     // Cork first, along the flight.
     shuttle.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), next.sub(shuttle.position).normalize());
     shadow.position.set(shuttle.position.x, 0.105, shuttle.position.z);
+    sway(swaying, time, phases);
   };
   g.userData.tick = tick;
   return g;

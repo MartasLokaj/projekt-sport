@@ -46,6 +46,8 @@ export class Hub {
   /** How bright each side is drawn now (1 = its own colours). */
   private readonly brightness: number[] = [];
   private readonly sign = new FaceSign();
+  /** Little moons going round the cube: a golf ball, a shuttlecock and a tiny cube. */
+  private readonly orbiters: { pivot: THREE.Group; body: THREE.Object3D; seconds: number; spinSelf: boolean }[] = [];
   private readonly haloColour = new THREE.Color(TUNING.hub.glowColour);
   /** Seconds since a game was chosen (drives the little pop of the cube). */
   private chosenAge = 10;
@@ -170,6 +172,16 @@ export class Hub {
     );
     this.planet.add(this.spinner);
     this.scene.add(this.planet);
+    for (const o of c.orbiters) {
+      // Each one rides on a tilted ring round the cube.
+      const pivot = new THREE.Group();
+      pivot.rotation.set(THREE.MathUtils.degToRad(o.tilt), Math.random() * Math.PI * 2, THREE.MathUtils.degToRad(o.tilt * 0.4));
+      const body = makeOrbiter(o.kind, o.size);
+      body.position.x = o.radius;
+      pivot.add(body);
+      this.planet.add(pivot);
+      this.orbiters.push({ pivot, body, seconds: o.seconds, spinSelf: o.kind !== 'shuttle' });
+    }
 
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
@@ -299,6 +311,10 @@ export class Hub {
       (layer.material as THREE.ShaderMaterial).uniforms.time.value = this.time;
     });
     this.dust.rotation.y += dt * 0.04;
+    for (const o of this.orbiters) {
+      o.pivot.rotation.y += ((Math.PI * 2) / o.seconds) * dt;
+      if (o.spinSelf) o.body.rotation.y += dt * 0.8;
+    }
     (this.dust.material as THREE.ShaderMaterial).uniforms.time.value = this.time;
 
     // Characters wait until their side has (nearly) turned up, then pop up one after another.
@@ -567,6 +583,49 @@ function makeNebula(): THREE.Sprite[] {
     sprite.position.set(x, y, z);
     sprite.scale.setScalar(scale);
     return sprite;
+  });
+}
+
+/** A small thing that circles the cube like a moon. */
+function makeOrbiter(kind: string, size: number): THREE.Object3D {
+  if (kind === 'golfball') {
+    const ball = new THREE.Mesh(
+      new THREE.SphereGeometry(size, 32, 20),
+      new THREE.MeshStandardMaterial({ color: '#f4f6ff', roughness: 0.45, bumpMap: dimpleTexture(), bumpScale: 1.5 }),
+    );
+    ball.castShadow = true;
+    return ball;
+  }
+  if (kind === 'shuttle') {
+    // Flies cork first along its ring.
+    const shuttle = new THREE.Group();
+    const skirt = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.24, 16, 1, true), new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.6, side: THREE.DoubleSide }));
+    skirt.position.y = 0.1;
+    const cork = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 12), new THREE.MeshStandardMaterial({ color: '#ff5b3a', emissive: '#ff3a1a', emissiveIntensity: 0.8 }));
+    cork.position.y = -0.04;
+    shuttle.add(skirt, cork);
+    shuttle.scale.setScalar(size);
+    shuttle.rotation.x = Math.PI / 2;
+    return shuttle;
+  }
+  const cube = new THREE.Mesh(new RoundedBoxGeometry(size, size, size, 3, size * 0.2), new THREE.MeshStandardMaterial({ color: '#b9a6ff', roughness: 0.35, emissive: '#5b46c9', emissiveIntensity: 0.4 }));
+  cube.rotation.set(0.5, 0, 0.6);
+  return cube;
+}
+
+/** Dimples for the golf ball (a bump map of little round dents). */
+function dimpleTexture(): THREE.Texture {
+  return canvasTexture(256, 128, (c) => {
+    c.fillStyle = '#ffffff';
+    c.fillRect(0, 0, 256, 128);
+    c.fillStyle = '#9a9a9a';
+    for (let y = 6; y < 128; y += 11) {
+      for (let x = (y / 11) % 2 ? 6 : 12; x < 256; x += 12) {
+        c.beginPath();
+        c.arc(x, y, 3.6, 0, Math.PI * 2);
+        c.fill();
+      }
+    }
   });
 }
 
