@@ -1,36 +1,86 @@
 import * as THREE from 'three';
 
-// Graybox effects for badminton: a trail of dots behind the shuttle and little sand puffs.
-// The beautiful versions come in phase B5; keep them in this file.
+// Effects for badminton: a streak behind the shuttle, little sand puffs, seagulls and the racket swoosh.
 
-/** A trail of shrinking dots along where the shuttle has just been. */
+/**
+ * A streak behind the shuttle: a glowing ribbon along where it has just been, widest at the shuttle and thinning
+ * and fading towards the tail. Two ribbons crossed (flat and upright), so it reads from any camera.
+ */
 export class Trail {
-  readonly mesh: THREE.InstancedMesh;
+  readonly mesh: THREE.Mesh;
   private readonly points: { position: THREE.Vector3; time: number }[] = [];
-  private readonly matrix = new THREE.Matrix4();
-  private readonly material: THREE.MeshBasicMaterial;
+  private readonly positions: Float32Array;
+  private readonly alphas: Float32Array;
+  private readonly geometry = new THREE.BufferGeometry();
+  private readonly material: THREE.ShaderMaterial;
+  private readonly side = new THREE.Vector3();
+  private readonly up = new THREE.Vector3();
+  private readonly dir = new THREE.Vector3();
 
-  constructor(private readonly count = 40) {
-    this.material = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.8, depthWrite: false });
-    this.mesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.14, 8, 6), this.material, count);
+  /** width = how wide the streak is at the shuttle (m). */
+  constructor(private readonly count = 40, private readonly width = 0.22) {
+    // Per sample: 2 vertices for the flat ribbon, 2 for the upright one.
+    this.positions = new Float32Array(count * 4 * 3);
+    this.alphas = new Float32Array(count * 4);
+    this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
+    this.geometry.setAttribute('alpha', new THREE.BufferAttribute(this.alphas, 1));
+    const index: number[] = [];
+    for (let i = 0; i < count - 1; i++) {
+      for (const o of [0, 2]) {
+        const a = i * 4 + o;
+        const b = (i + 1) * 4 + o;
+        index.push(a, a + 1, b, a + 1, b + 1, b);
+      }
+    }
+    this.geometry.setIndex(index);
+    this.material = new THREE.ShaderMaterial({
+      uniforms: { colour: { value: new THREE.Color('#ffffff') } },
+      vertexShader: 'attribute float alpha; varying float vAlpha; void main() { vAlpha = alpha; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: 'uniform vec3 colour; varying float vAlpha; void main() { gl_FragColor = vec4(colour, vAlpha); }',
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+    });
+    this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.mesh.frustumCulled = false;
-    this.mesh.count = 0;
+    this.mesh.visible = false;
   }
 
   /** Adds the shuttle's position (when visible == true) and redraws; lengthMs = how long the trail is. */
   update(position: THREE.Vector3, now: number, visible: boolean, colour: string, lengthMs: number): void {
-    this.material.color.set(colour);
+    this.material.uniforms.colour.value.set(colour);
     if (visible) this.points.push({ position: position.clone(), time: now });
     while (this.points.length > 0 && (now - this.points[0].time > lengthMs || this.points.length > this.count)) this.points.shift();
     if (!visible) this.points.length = 0;
-    this.mesh.count = this.points.length;
-    this.points.forEach((p, i) => {
-      const age = (now - p.time) / lengthMs;
-      const s = Math.max(0.05, 1 - age);
-      this.matrix.makeScale(s, s, s).setPosition(p.position);
-      this.mesh.setMatrixAt(i, this.matrix);
-    });
-    this.mesh.instanceMatrix.needsUpdate = true;
+    const n = this.points.length;
+    this.mesh.visible = n >= 2;
+    if (!this.mesh.visible) return;
+    for (let i = 0; i < this.count; i++) {
+      // Newest sample first (at the shuttle), then back along the path; unused samples collapse onto the tail.
+      const k = Math.min(i, n - 1);
+      const p = this.points[n - 1 - k].position;
+      const q = this.points[Math.max(0, n - 2 - k)].position;
+      this.dir.subVectors(p, q);
+      if (this.dir.lengthSq() < 1e-8) this.dir.set(0, 0, 1);
+      this.dir.normalize();
+      this.side.set(-this.dir.z, 0, this.dir.x);
+      if (this.side.lengthSq() < 1e-6) this.side.set(1, 0, 0);
+      this.side.normalize();
+      this.up.crossVectors(this.side, this.dir).normalize();
+      const age = i < n ? (now - this.points[n - 1 - k].time) / lengthMs : 1;
+      const fade = Math.max(0, 1 - age);
+      const w = (this.width / 2) * fade;
+      const o = i * 12;
+      for (const [j, axis, sign] of [[0, this.side, -1], [1, this.side, 1], [2, this.up, -1], [3, this.up, 1]] as const) {
+        this.positions[o + j * 3] = p.x + axis.x * w * sign;
+        this.positions[o + j * 3 + 1] = p.y + axis.y * w * sign;
+        this.positions[o + j * 3 + 2] = p.z + axis.z * w * sign;
+        this.alphas[i * 4 + j] = fade * fade * 0.9;
+      }
+    }
+    this.geometry.attributes.position.needsUpdate = true;
+    this.geometry.attributes.alpha.needsUpdate = true;
   }
 }
 

@@ -664,9 +664,9 @@ export const TUNING = {
     // seconds = flight time (slow at 0 % power, fast at 100 %), drag = how much the shuttle slows down in flight
     // (a real shuttle slows down a lot; the user wants it slow, steady and easy to predict, so drag is kept low).
     /** The serve always goes diagonally into the receiver's service court (between the centre line and the sideline). */
-    serve: { depth: [7.4, 8.15], apex: 5.0, seconds: [2.35, 1.95], drag: 1.0 },
-    clear: { depth: [7.5, 8.15], apex: 5.4, seconds: [2.35, 1.85], drag: 1.1 },
-    lift: { depth: [7.3, 8.15], apex: 5.6, seconds: [2.45, 1.95], drag: 1.0 },
+    serve: { depth: [7.4, 8.15], apex: 3.8, seconds: [2.35, 1.95], drag: 1.0 },
+    clear: { depth: [7.5, 8.15], apex: 4.0, seconds: [2.35, 1.85], drag: 1.1 },
+    lift: { depth: [7.3, 8.15], apex: 4.2, seconds: [2.45, 1.95], drag: 1.0 },
     drive: { depth: [6.8, 8.0], apex: 0.4, seconds: [1.45, 1.1], drag: 0.6 },
     smash: { depth: [3.25, 5.25], apex: 0, seconds: [1.15, 0.8], drag: 0.3 },
     /** Drop shot (SHORT button held): soft, just over the net, lands close behind it. Slower swing = shorter. */
@@ -690,7 +690,7 @@ export const TUNING = {
      * Wobble shot: what a bad hit becomes (too weak, timing outside the Good part, or a dive). Slow, high and
      * wobbly with a wavy trail, so the other side sees its chance coming. It mostly ignores the aim.
      */
-    wobble: { depth: [4.0, 6.5], apex: 4.5, seconds: [2.9, 2.6], drag: 0.8 },
+    wobble: { depth: [4.0, 6.5], apex: 3.6, seconds: [2.9, 2.6], drag: 0.8 },
     /** A swing weaker than this (percent) gives a wobble shot (not for drops). */
     wobblePower: 25,
     /** The Good part of the hit window: further than this early or late (but still a hit) gives a wobble (ms). */
@@ -706,9 +706,9 @@ export const TUNING = {
      * Super Smash gets the fire trail.
      */
     trails: {
-      serve: { colour: '#ffffff', ms: 300 },
-      clear: { colour: '#ffffff', ms: 300 },
-      lift: { colour: '#ffffff', ms: 300 },
+      serve: { colour: '#ffffff', ms: 450 },
+      clear: { colour: '#ffffff', ms: 450 },
+      lift: { colour: '#ffffff', ms: 450 },
       drive: { colour: '#3fe0e0', ms: 380 },
       drop: { colour: '#5be36b', ms: 380 },
       shortServe: { colour: '#5be36b', ms: 380 },
@@ -774,18 +774,26 @@ export const TUNING = {
     matchLength: 'quick' as 'quick' | 'normal' | 'long',
     pointPauseMs: 1600,
 
-    /** Camera behind the player: height, distance behind the baseline, and how far down the court it looks. */
-    cameraHeight: 4.2,
-    cameraBack: 5.0,
-    cameraLookAt: -4,
+    /**
+     * Camera behind the player, framed like a console sports game: low and close behind the baseline, so the
+     * court fills the picture. Height, distance behind the baseline, the point it looks at (z down the court,
+     * cameraLookY high) and how much it follows the player sideways (cameraFollowX, 1 = fully) and forwards /
+     * backwards from homeDepth (cameraFollowZ), so the player stays big in the lower middle of the picture.
+     */
+    cameraHeight: 3.6,
+    cameraBack: 1.8,
+    cameraLookAt: -2.5,
+    cameraLookY: -0.5,
+    cameraFollowX: 0.6,
+    cameraFollowZ: 0.35,
     /** When the shuttle flies higher than cameraTiltFrom (m), the camera looks up this share of the extra height, at this speed. */
-    cameraTiltFrom: 3.5,
-    cameraTiltFollow: 0.5,
+    cameraTiltFrom: 3.0,
+    cameraTiltFollow: 0.4,
     cameraTiltSpeed: 3,
-    cameraFov: 50,
-    /** Split screen (two players): each half is narrow, so the camera sees wider and sits a little closer. */
-    splitCameraFov: 62,
-    splitCameraBack: 4.0,
+    cameraFov: 42,
+    /** Split screen (two players): each half is narrow, so the camera sees wider and sits a little further back. */
+    splitCameraFov: 56,
+    splitCameraBack: 2.4,
     /** The shuttle is drawn this much bigger than real, so it is easy to follow from the sofa. */
     shuttleScale: 2.4,
     /**

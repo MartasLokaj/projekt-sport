@@ -431,6 +431,18 @@ running log of where we are, what the user decided, and what comes next).
     a Perfect (the frame still glows gold). Hub (`host/hub/Hub.ts`) uses the same `buildRacket`.
   - User chose the **white (classic) shuttle**.
 
+### Badminton camera and shuttle flight, console-sports style (user, 2026-10-31, reference screenshot) — waiting for the user's look
+- User: "make it look more like Nintendo; not the characters now (later); the camera angle and how the shuttle
+  moves; you should see mainly the court, not what is around it."
+- Camera low and close behind the baseline (`cameraHeight` 3.6, `cameraBack` 1.8, `cameraFov` 42, looks at
+  `cameraLookAt` -2.5 / `cameraLookY` -0.5), follows the team sideways (`cameraFollowX` 0.6) and a little
+  forwards/backwards (`cameraFollowZ` 0.35, from the deepest teammate), tips up for high shots (`cameraTiltFrom` 3,
+  `cameraTiltFollow` 0.4): measured, a clear never leaves the top of the picture. Split screen: fov 56, back 2.4.
+- Lower arcs (same flight times): serve apex 3.8, clear 4.0, lift 4.2, wobble 3.6. Overhead contacts still at
+  ~3 m high, 6–6.7 m from the net.
+- Shuttle trail is now a glowing streak (two crossed ribbons, widest at the shuttle, fading to the tail; additive),
+  `Trail` in `effects.ts`; white trails 450 ms.
+
 ### Badminton B4 — 2 v 2 (built 2026-10-31, user: "Bílý, postav B4") — **NOT TESTED (NEVYZKOUŠENO)**
 - **The user cannot test it now (not enough phones). Come back to it when they have 3–4 phones; do not treat B4
   as approved until then.**
