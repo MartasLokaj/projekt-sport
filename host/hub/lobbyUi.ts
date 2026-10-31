@@ -7,6 +7,14 @@ import { FACES, type FaceInfo } from './faces.ts';
 // faces under the Play button: hover a face for a × that kicks that player (after a confirm dialog).
 // Styles are in host/ui/lobby.css.
 
+/** The computer's difficulty, chosen in a "Versus CPU" mode row. */
+export type CpuLevel = 'easy' | 'normal' | 'pro';
+const LEVELS: { id: CpuLevel; label: string; key: string }[] = [
+  { id: 'easy', label: 'Easy', key: '1' },
+  { id: 'normal', label: 'Normal', key: '2' },
+  { id: 'pro', label: 'Pro', key: '3' },
+];
+
 /** What the Play button would do for a game right now. */
 export type PlayState = { enabled: boolean; label: string; note: string; warn: boolean };
 
@@ -21,6 +29,8 @@ export class LobbyUi {
   onChoose: (id: string) => void = () => {};
   /** The host confirmed kicking this player. */
   onKick: (playerId: string) => void = () => {};
+  /** The computer's difficulty for the next match against it (Easy / Normal / Pro in the mode row, or keys 1 2 3). */
+  cpuLevel: CpuLevel = 'normal';
 
   private readonly $ = (id: string): HTMLElement => document.getElementById(id)!;
   private readonly pick = this.$('pick');
@@ -120,6 +130,19 @@ export class LobbyUi {
     }
   }
 
+  setCpuLevel(level: CpuLevel): void {
+    this.cpuLevel = level;
+    this.renderGame(false);
+  }
+
+  /** Keys 1 2 3 choose the computer's level while a game with a Versus CPU mode is chosen. */
+  handleLevelKey(e: KeyboardEvent): boolean {
+    const level = LEVELS.find((l) => l.key === e.key);
+    if (!level || !this.face?.modes.some((m) => m.levels)) return false;
+    this.setCpuLevel(level.id);
+    return true;
+  }
+
   // ---------- Kick dialog ----------
 
   get kickOpen(): boolean {
@@ -201,6 +224,22 @@ export class LobbyUi {
       const text = el('div', '');
       text.append(el('b', '', mode.label), el('span', '', mode.detail));
       item.append(text);
+      if (mode.levels) {
+        // Easy / Normal / Pro for the computer, right in its mode row.
+        const levels = el('div', 'mode-levels');
+        levels.setAttribute('role', 'radiogroup');
+        levels.setAttribute('aria-label', 'Computer level');
+        for (const level of LEVELS) {
+          const button = el('button', level.id === this.cpuLevel ? 'is-on' : '', level.label) as HTMLButtonElement;
+          button.type = 'button';
+          button.title = `${level.label} (key ${level.key})`;
+          button.setAttribute('role', 'radio');
+          button.setAttribute('aria-checked', String(level.id === this.cpuLevel));
+          button.addEventListener('click', () => this.setCpuLevel(level.id));
+          levels.append(button);
+        }
+        item.append(levels);
+      }
       return item;
     });
     this.$('pick-modes').replaceChildren(...modes);

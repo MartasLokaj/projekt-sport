@@ -16,7 +16,8 @@ type Vec = readonly [number, number, number];
 export type FaceStatus = 'ready' | 'prototype' | 'soon';
 
 /** A way to play a game. `players` = how many phones it needs (the mode that matches the phones joined is shown as active). */
-export type GameMode = { label: string; detail: string; players: readonly [number, number] };
+/** levels: the mode is against the computer, so its card row offers Easy / Normal / Pro. */
+export type GameMode = { label: string; detail: string; players: readonly [number, number]; levels?: boolean };
 
 export type FaceInfo = {
   id: string;
@@ -77,7 +78,7 @@ export const FACES: readonly FaceInfo[] = [
     maxPlayers: 2,
     controls: 'Swing like a racket',
     modes: [
-      { label: 'Versus CPU', detail: 'One phone · first to 4, win by 2', players: [0, 1] },
+      { label: 'Versus CPU', detail: 'One phone · first to 4, win by 2', players: [0, 1], levels: true },
       { label: '1 v 1', detail: 'Two phones · split screen', players: [2, 4] },
     ],
     normal: [1, 0, 0],

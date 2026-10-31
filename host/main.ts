@@ -111,7 +111,7 @@ function showLab(on: boolean): void {
         if (playerId) send({ type: 'badminton_cue', playerId, cue });
       };
       if (import.meta.env.DEV) Object.assign(window, { badminton }); // for debugging in the browser console
-      badminton.start(...badmintonPlayers());
+      badminton.start(...badmintonPlayers(), lobbyUi.cpuLevel);
     } else lab.start();
   } else {
     lab.stop();
@@ -330,6 +330,7 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (phase === 'lobby' && !playing) {
+    if (lobbyUi.handleLevelKey(e)) return;
     if (e.key === 'l' || e.key === 'L') {
       openBadminton('lab');
       return;

@@ -181,8 +181,12 @@ export class Badminton {
 
   // ---------- Public ----------
 
-  /** Starts a new match: near = the first phone's player, far = the second phone's player or null for the computer. */
-  start(near: PlayerInfo | null, far: PlayerInfo | null): void {
+  /**
+   * Starts a new match: near = the first phone's player, far = the second phone's player or null for the
+   * computer, which plays at `level` (chosen in the lobby; keys 1 2 3 still change it during the match).
+   */
+  start(near: PlayerInfo | null, far: PlayerInfo | null, level: keyof typeof TUNING.badminton.cpuLevels = this.level): void {
+    this.level = level;
     this.setPlayers(near, far);
     this.newMatch();
     this.snapAthletes();

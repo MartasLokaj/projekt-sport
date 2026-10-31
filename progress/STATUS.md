@@ -275,7 +275,10 @@ running log of where we are, what the user decided, and what comes next).
     `cpuLevels` easy/normal/pro (reaction, return chances, smash/drop/wobble/Super Smash chances, aim, power,
     quality), keys 1 2 3 in a match against it, "CPU: Normal" label next to the score. Scripted: Perfect → gold pop +
     glow + cue; tips every 3 rallies; Pro selectable.
-  - Next: user tests step 4 → step 5 (rally escalation, shot trails by type, match options) — plan first.
+  - User: "good, but I want the difficulty already where I pick Versus CPU or 1 v 1" → done: the Versus CPU mode row
+    in the lobby card has Easy / Normal / Pro (`GameMode.levels`, `LobbyUi.cpuLevel`, keys 1 2 3 in the lobby too);
+    `Badminton.start(near, far, level)` uses it (keys 1 2 3 still work during the match).
+  - Next: user tests → step 5 (rally escalation, shot trails by type, match options) — plan first.
 
 ### GitHub and the cloud (2026-10-31)
 - Project is on GitHub: **private** repo `MartasLokaj/projekt-sport` (remote `origin`, branch `main`). `gh` CLI is in

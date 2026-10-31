@@ -335,6 +335,42 @@
   background: var(--accent);
   box-shadow: 0 0 10px var(--accent);
 }
+.mode > div:first-child {
+  flex: 1 1 auto;
+}
+/* Easy / Normal / Pro in the Versus CPU row, on its own line under the text. */
+.mode:has(.mode-levels) {
+  flex-wrap: wrap;
+  row-gap: var(--cw-s2);
+}
+.mode-levels {
+  display: flex;
+  flex: 1 0 100%;
+  margin-left: calc(10px + var(--cw-s3));
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.25);
+}
+.mode-levels button {
+  flex: 1;
+  font: inherit;
+  font-size: var(--cw-fs-small);
+  font-weight: 800;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--cw-text-2);
+  cursor: pointer;
+}
+.mode-levels button:hover {
+  color: var(--cw-text);
+}
+.mode-levels button.is-on {
+  background: var(--accent);
+  color: #1a0d05;
+}
 .mode b {
   display: block;
   font-size: var(--cw-fs-body);
