@@ -1,4 +1,4 @@
-import type { PlayerInfo } from '../../shared/protocol.ts';
+import { COURSE_SIZES, HOLE_COUNT, type PlayerInfo } from '../../shared/protocol.ts';
 import { TUNING } from '../../shared/tuning.ts';
 import { FACES, type FaceInfo } from './faces.ts';
 
@@ -15,6 +15,11 @@ const LEVELS: { id: CpuLevel; label: string; key: string }[] = [
   { id: 'normal', label: 'Normal', key: '2' },
   { id: 'pro', label: 'Pro', key: '3' },
 ];
+
+/** "3 random holes" / "All 9 holes" */
+function courseText(size: number): string {
+  return size >= HOLE_COUNT ? `All ${HOLE_COUNT} holes` : `${size} random holes`;
+}
 
 /** How long a match lasts, chosen in the card (badminton: see TUNING.badminton.matchLengths). */
 export type MatchLength = keyof typeof TUNING.badminton.matchLengths;
@@ -41,6 +46,10 @@ export class LobbyUi {
   onKick: (playerId: string) => void = () => {};
   /** The computer's difficulty for the next match against it (Easy / Normal / Pro in the mode row, or keys 1 2 3). */
   cpuLevel: CpuLevel = 'normal';
+  /** How many holes the next minigolf game has (3 holes / 9 holes in the mode row, or keys 3 and 9). */
+  courseSize: number = TUNING.rules.courseSize;
+  /** The course size was changed (the server has to know: a game can also be started from a phone). */
+  onCourse: (size: number) => void = () => {};
   /** The match length for the next match (Quick / Normal / Long in the card's Match row). */
   matchLength: MatchLength = TUNING.badminton.matchLength;
 
@@ -167,6 +176,20 @@ export class LobbyUi {
     this.renderGame(false);
   }
 
+  setCourseSize(size: number): void {
+    this.courseSize = size;
+    this.onCourse(size);
+    this.renderGame(false);
+  }
+
+  /** Keys 3 and 9 choose the course size while a game with a course choice is chosen. */
+  handleCourseKey(e: KeyboardEvent): boolean {
+    const size = COURSE_SIZES.find((s) => String(s) === e.key);
+    if (size === undefined || !this.face?.modes.some((m) => m.courses)) return false;
+    this.setCourseSize(size);
+    return true;
+  }
+
   /** Keys 1 2 3 choose the computer's level while a game with a Versus CPU mode is chosen. */
   handleLevelKey(e: KeyboardEvent): boolean {
     const level = LEVELS.find((l) => l.key === e.key);
@@ -254,7 +277,8 @@ export class LobbyUi {
     const modes = face.modes.map((mode, i) => {
       const item = el('li', i === (active < 0 ? 0 : active) ? 'mode is-active' : 'mode');
       const text = el('div', '');
-      text.append(el('b', '', mode.label), el('span', '', mode.detail.replace('{length}', lengthText(this.matchLength))));
+      const detail = mode.detail.replace('{length}', lengthText(this.matchLength)).replace('{course}', courseText(this.courseSize));
+      text.append(el('b', '', mode.label), el('span', '', detail));
       item.append(text);
       if (mode.levels) {
         // Easy / Normal / Pro for the computer, right in its mode row.
@@ -271,6 +295,22 @@ export class LobbyUi {
           levels.append(button);
         }
         item.append(levels);
+      }
+      if (mode.courses) {
+        // 3 random holes / the whole course, right in the mode row.
+        const sizes = el('div', 'mode-levels');
+        sizes.setAttribute('role', 'radiogroup');
+        sizes.setAttribute('aria-label', 'Number of holes');
+        for (const size of COURSE_SIZES) {
+          const button = el('button', size === this.courseSize ? 'is-on' : '', `${size} holes`) as HTMLButtonElement;
+          button.type = 'button';
+          button.title = `${courseText(size)} (key ${size})`;
+          button.setAttribute('role', 'radio');
+          button.setAttribute('aria-checked', String(size === this.courseSize));
+          button.addEventListener('click', () => this.setCourseSize(size));
+          sizes.append(button);
+        }
+        item.append(sizes);
       }
       return item;
     });

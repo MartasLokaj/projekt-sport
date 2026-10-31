@@ -1,4 +1,4 @@
-import { HOLE_COUNT, type BallResult, type GameState } from '../shared/protocol.ts';
+import type { BallResult, GameState } from '../shared/protocol.ts';
 import { TUNING } from '../shared/tuning.ts';
 
 // Turns, strokes and scores over all holes. The server is the referee: it decides whose turn it is,
@@ -12,6 +12,8 @@ export class Match {
   private current: string | null = null;
   private turn = 0;
   private hole = 0;
+  /** The course's holes in this game, in order (indices into the host's HOLES). */
+  private course: number[] = [];
   /** Scores of the finished holes, per player. */
   private holeScores = new Map<string, number[]>();
   private strokes = new Map<string, number>();
@@ -32,11 +34,12 @@ export class Match {
     return this.current;
   }
 
-  /** firstHole: a testing shortcut to start later in the course (the skipped holes show "–" on the scoreboard). */
-  start(playerIds: string[], isConnected: (id: string) => boolean, firstHole = 0): void {
+  /** course: which of the course's holes to play, in order. */
+  start(playerIds: string[], isConnected: (id: string) => boolean, course: number[]): void {
     this.order = [...playerIds];
+    this.course = course;
     this.holeScores = new Map(playerIds.map((id) => [id, []]));
-    this.startHole(firstHole, isConnected);
+    this.startHole(0, isConnected);
   }
 
   /** After a hole's scoreboard: on to the next hole. */
@@ -94,7 +97,8 @@ export class Match {
     return {
       phase: this.phase,
       hole: this.hole,
-      holeCount: HOLE_COUNT,
+      holeCount: this.course.length,
+      course: this.course,
       leaderId,
       current: this.current,
       turn: this.turn,
@@ -122,7 +126,7 @@ export class Match {
         const scores = this.holeScores.get(id);
         if (scores) scores[this.hole] = this.score(id);
       }
-      this.phase = this.hole + 1 >= HOLE_COUNT ? 'game_end' : 'hole_end';
+      this.phase = this.hole + 1 >= this.course.length ? 'game_end' : 'hole_end';
       this.current = null;
       return;
     }

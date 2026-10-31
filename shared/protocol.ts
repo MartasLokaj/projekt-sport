@@ -3,8 +3,10 @@
 export const WS_PATH = '/ws';
 
 export const MAX_PLAYERS = 4;
-/** Number of holes in a game (the holes themselves are defined on the host, host/game/course.ts). */
+/** Number of holes on the whole course (the holes themselves are defined on the host, host/game/course.ts, HOLES). */
 export const HOLE_COUNT = 9;
+/** How many holes a game can have: a quick game picks this many at random, or the whole course. */
+export const COURSE_SIZES = [3, HOLE_COUNT] as const;
 export const ROOM_CODE_LENGTH = 4;
 export const NAME_MAX_LENGTH = 12;
 export const SHIRT_COLOURS = ['#ff5a5f', '#ffb400', '#3ec300', '#00a6ed', '#9b5cff', '#ff7ac6'] as const;
@@ -94,9 +96,12 @@ export type BallResult = 'rest' | 'holed' | 'out';
 /** The match, decided by the server. */
 export type GameState = {
   phase: 'lobby' | 'playing' | 'hole_end' | 'game_end';
-  /** Current hole, counting from 0. */
+  /** Current hole of this game, counting from 0 (course[hole] is which of the course's holes it is). */
   hole: number;
+  /** How many holes this game has. */
   holeCount: number;
+  /** The course's holes played in this game, in order (indices into HOLES, counting from 0). */
+  course: number[];
   /** The player who may start the game from their phone (the first connected one). */
   leaderId: string | null;
   /** Whose turn it is (null when nobody's). */
@@ -149,8 +154,10 @@ export type ClientMessage =
   | ({ type: 'practice' } & Stroke)
   | ({ type: 'swing_progress' } & SwingProgress)
   /** From the host, or from the leader's phone. */
-  /** firstHole (0-based) is a testing shortcut: start the game at that hole (the host page's ?hole=N). */
+  /** firstHole (0-based) is a testing shortcut: play from that hole to the end of the course (the host page's ?hole=N). */
   | { type: 'start_game'; firstHole?: number }
+  /** From the host: how many holes the next games have (one of COURSE_SIZES; fewer than all = picked at random). */
+  | { type: 'set_course'; size: number }
   /** From the host, or from the leader's phone, after a hole's scoreboard. */
   | { type: 'next_hole' }
   /** From the host: back to the lobby. */

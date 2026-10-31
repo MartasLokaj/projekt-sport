@@ -164,6 +164,7 @@ function connect(): void {
     offlineBanner.hidden = true;
     lobbyUi.setOnline(true);
     send({ type: 'host_hello' });
+    send({ type: 'set_course', size: lobbyUi.courseSize });
   });
   ws.addEventListener('message', (event) => {
     const msg = JSON.parse(event.data) as ServerMessage;
@@ -318,6 +319,7 @@ document.getElementById('turn-left')!.addEventListener('click', () => hub?.cycle
 document.getElementById('turn-right')!.addEventListener('click', () => hub?.cycle(1));
 lobbyUi.onChoose = (id) => hub?.select(id);
 lobbyUi.onKick = (playerId) => send({ type: 'kick_player', playerId });
+lobbyUi.onCourse = (size) => send({ type: 'set_course', size });
 window.addEventListener('keydown', (e) => {
   // A focused button handles Enter and Space itself (keyboard users can Tab to it).
   if (e.target instanceof HTMLButtonElement && (e.key === 'Enter' || e.key === ' ')) return;
@@ -338,7 +340,7 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (phase === 'lobby' && !playing) {
-    if (lobbyUi.handleLevelKey(e)) return;
+    if (lobbyUi.handleLevelKey(e) || lobbyUi.handleCourseKey(e)) return;
     if (e.key === 'l' || e.key === 'L') {
       openBadminton('lab');
       return;

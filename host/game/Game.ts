@@ -90,6 +90,8 @@ export class Game {
   private restTime = 0;
   private stepAccumulator = 0;
   private messageTimer: number | undefined;
+  /** Which hole of this game we are on and how many it has (a quick game plays only some of the course's holes). */
+  private coursePosition = { hole: 0, count: HOLES.length };
   /** Sideways pull on the rolling ball from a twisted swing (see ball.ts). */
   private curve = 0;
 
@@ -283,7 +285,8 @@ export class Game {
 
   /** The match changed on the server: new round, new turn, strokes or finished players. */
   syncState(game: GameState): void {
-    if (game.phase === 'playing' && this.lastPhase !== 'playing') this.resetRound(game.hole);
+    this.coursePosition = { hole: game.hole, count: game.holeCount };
+    if (game.phase === 'playing' && this.lastPhase !== 'playing') this.resetRound(game.course[game.hole] ?? game.hole);
     this.lastPhase = game.phase;
     for (const player of this.players.values()) player.inMatch = false;
     for (const entry of game.players) {
@@ -757,7 +760,8 @@ export class Game {
   private updateInfo(): void {
     const player = this.active ? this.players.get(this.active) : undefined;
     const turn = player && this.state !== 'waiting' ? ` · ${player.name}: ${player.strokes} stroke${player.strokes === 1 ? '' : 's'}` : '';
-    this.hud.info.textContent = `Hole ${this.hole.def.number}/${this.holes.length} · Par ${this.hole.def.par}${turn}`;
+    const { hole, count } = this.coursePosition;
+    this.hud.info.textContent = `Hole ${hole + 1}/${count} · Par ${this.hole.def.par}${turn}`;
     this.hud.info.style.borderLeft = player ? `10px solid ${player.colour}` : '';
   }
 

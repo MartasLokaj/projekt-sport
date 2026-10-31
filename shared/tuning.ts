@@ -64,6 +64,8 @@ export const TUNING = {
     pickedUpScore: 7,
     /** How long the hole-in celebration shows before the next turn (milliseconds). */
     holedPauseMs: 2500,
+    /** How many holes a minigolf game has until the host chooses otherwise in the lobby (3 = 3 random holes, 9 = all). */
+    courseSize: 3,
   },
 
   ball: {

@@ -1,5 +1,6 @@
 import type { WebSocket } from 'ws';
 import {
+  COURSE_SIZES,
   HOLE_COUNT,
   MAX_PLAYERS,
   NAME_MAX_LENGTH,
@@ -54,6 +55,8 @@ export class Lobby {
   private match = new Match();
   /** Whether the Badminton Swing Lab is open (phones then show the swing test). */
   private lab = false;
+  /** How many holes the next games have (the host's choice in the lobby). */
+  private courseSize: number = HOLE_COUNT;
   /** Called for every badminton swing, so the server can save it for tuning. */
   onBadmintonSwing: ((entry: object) => void) | null = null;
   private readonly isConnected = (id: string): boolean => this.seats.get(id)?.socket != null;
@@ -134,8 +137,13 @@ export class Lobby {
         const players = [...this.seats.values()].filter((s) => s.socket).map((s) => s.id);
         if (players.length === 0) return;
         const firstHole = Math.max(0, Math.min(HOLE_COUNT - 1, Math.floor(Number(msg.firstHole) || 0)));
-        this.match.start(players, this.isConnected, firstHole);
+        this.match.start(players, this.isConnected, firstHole > 0 ? range(firstHole, HOLE_COUNT) : pickCourse(this.courseSize));
         this.broadcastGame();
+        return;
+      }
+      case 'set_course': {
+        if (!this.hosts.has(ws)) return;
+        if ((COURSE_SIZES as readonly number[]).includes(msg.size)) this.courseSize = msg.size;
         return;
       }
       case 'next_hole': {
@@ -368,4 +376,19 @@ function send(ws: WebSocket, msg: ServerMessage): void {
 
 function refuse(ws: WebSocket, reason: JoinError): void {
   send(ws, { type: 'join_error', reason });
+}
+
+/** The numbers from..to-1. */
+function range(from: number, to: number): number[] {
+  return Array.from({ length: Math.max(0, to - from) }, (_, i) => from + i);
+}
+
+/** `size` different holes of the course at random, played in the course's order (all of them when size is the whole course). */
+function pickCourse(size: number): number[] {
+  const all = range(0, HOLE_COUNT);
+  for (let i = all.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [all[i], all[j]] = [all[j], all[i]];
+  }
+  return all.slice(0, Math.min(size, HOLE_COUNT)).sort((a, b) => a - b);
 }

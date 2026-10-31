@@ -17,7 +17,8 @@ export type FaceStatus = 'ready' | 'prototype' | 'soon';
 
 /** A way to play a game. `players` = how many phones it needs (the mode that matches the phones joined is shown as active). */
 /** levels: the mode is against the computer, so its card row offers Easy / Normal / Pro. */
-export type GameMode = { label: string; detail: string; players: readonly [number, number]; levels?: boolean };
+/** levels: Easy / Normal / Pro buttons for the computer; courses: 3 holes / 9 holes buttons ("{course}" in detail describes the choice). */
+export type GameMode = { label: string; detail: string; players: readonly [number, number]; levels?: boolean; courses?: boolean };
 
 export type FaceInfo = {
   id: string;
@@ -65,7 +66,7 @@ export const FACES: readonly FaceInfo[] = [
     minPlayers: 1,
     maxPlayers: 4,
     controls: 'Swing like a putter',
-    modes: [{ label: '3-hole course', detail: 'Take turns, lowest total wins', players: [1, 4] }],
+    modes: [{ label: 'Course', detail: '{course} · take turns, lowest total wins', players: [1, 4], courses: true }],
     normal: [0, 0, 1],
     forward: [0, -1, 0],
   },

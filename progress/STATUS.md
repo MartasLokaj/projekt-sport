@@ -90,6 +90,12 @@ running log of where we are, what the user decided, and what comes next).
     `funnel` {radius, depth}: the green sinks into a bowl, the cup at its bottom) — a straight 90–100 % shot can be a
     hole in one. (The first idea, pipe first and then the jump, did not work: the ball loses too much speed in the
     pipe's bends.) `HOLE_COUNT` = 9; scoreboard columns a little narrower so 9 holes fit.
+  - **J3 approved by the user ("super").**
+  - **Course choice — done, waiting for the user's test.** The Minigolf card's mode row has **3 holes / 9 holes**
+    buttons (keys 3 and 9; default `TUNING.rules.courseSize` = 3). The host tells the server (`set_course`); every new
+    game (also started from a phone, or "play again") then gets `pickCourse()` = 3 different random holes played in
+    course order, or all 9. `GameState.course` lists the course's holes in this game, `holeCount` its length; the HUD
+    and the scoreboard count the game's holes (Hole 1/3…).
 - **4c Juice — not started:** hole intro fly-over with "Hole N · Par P", confetti on hole-in (+ special hole-in-one
   celebration), ball trail, impact particles, small camera nudge on hit, sounds (Kenney CC0 audio — ask before
   download), phone vibration on hole-in (host → server → phone `vibrate` message), podium with winner celebration,
