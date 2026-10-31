@@ -126,10 +126,10 @@ export type Contact = {
   position: THREE.Vector3;
   time: number;
   /**
-   * overhead = high in the back court (clear, or smash when hit hard); smash = high near the net;
+   * overhead = high (a clear, or from the back court a smash when hit hard);
    * drive = about chest height (a flat, fast shot); lift = low (underhand).
    */
-  stroke: 'overhead' | 'smash' | 'drive' | 'lift';
+  stroke: 'overhead' | 'drive' | 'lift';
 };
 
 /**
@@ -154,13 +154,6 @@ export function findContact(flight: Flight, side: number, at: THREE.Vector3, now
   };
   const chosen = earliest(cfg.runSpeed) ?? earliest(cfg.maxRunSpeed) ?? 0.98;
   const position = flight.positionAt(chosen);
-  const stroke =
-    position.y >= cfg.overheadFrom
-      ? Math.abs(position.z) < cfg.frontZone
-        ? 'smash'
-        : 'overhead'
-      : position.y >= cfg.driveFrom
-        ? 'drive'
-        : 'lift';
+  const stroke = position.y >= cfg.overheadFrom ? 'overhead' : position.y >= cfg.driveFrom ? 'drive' : 'lift';
   return { position, time: flight.timeAt(chosen), stroke };
 }

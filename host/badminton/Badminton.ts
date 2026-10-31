@@ -65,7 +65,6 @@ const READY_POSE = { x: -0.5, z: -0.35 };
 /** Racket arm while the shuttle comes: up and back for overhead, back and low for a lift, out to the side for a drive. */
 const WINDUP: Record<Stroke, { x: number; z: number }> = {
   overhead: { x: -3.4, z: -0.3 },
-  smash: { x: -3.4, z: -0.3 },
   drive: { x: 0.9, z: -1.3 },
   lift: { x: 1.0, z: -0.3 },
 };
@@ -111,7 +110,7 @@ export class Badminton {
     sun.position.set(6, 14, 4);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
-    Object.assign(sun.shadow.camera, { left: -10, right: 10, top: 10, bottom: -10, near: 1, far: 40 });
+    Object.assign(sun.shadow.camera, { left: -14, right: 14, top: 14, bottom: -14, near: 1, far: 45 });
     this.scene.add(sun, buildCourt());
 
     this.shadow = new THREE.Mesh(
@@ -213,7 +212,7 @@ export class Badminton {
     const other = this.athlete(-this.server as Side);
     // Even score: serve from the right service court, odd: from the left (right = +x for the near side, -x for the far side).
     const x = this.server * (server.score % 2 === 0 ? 1 : -1) * 0.9;
-    this.moveTo(server, new THREE.Vector3(x, 0, this.server * 2.6), null);
+    this.moveTo(server, new THREE.Vector3(x, 0, this.server * TUNING.badminton.serveDepth), null);
     this.moveTo(other, new THREE.Vector3(-x, 0, -this.server * TUNING.badminton.homeDepth), null);
     this.cpuServeAt = Date.now() + TUNING.badminton.cpu.serveDelayMs;
     this.hud.message.textContent = server.human ? `${server.name}: swing to serve!` : `${server.name} serves`;
@@ -236,12 +235,9 @@ export class Badminton {
   private hit(athlete: Athlete, power: number, aim: number, quality: number): ShotKind {
     const cfg = TUNING.badminton;
     const contact = this.contact!;
-    const kind: ShotKind =
-      contact.stroke === 'lift' || contact.stroke === 'drive'
-        ? contact.stroke
-        : contact.stroke === 'smash' || power >= cfg.smashPower
-          ? 'smash'
-          : 'clear';
+    // A smash only from the back of the court; elsewhere a hard overhead is a clear.
+    const back = Math.abs(contact.position.z) >= cfg.smashFromDepth;
+    const kind: ShotKind = contact.stroke !== 'overhead' ? contact.stroke : back && power >= cfg.smashPower ? 'smash' : 'clear';
     this.decided = true;
     // The shuttle never slows down to wait for the phone: when the swing's message arrives a moment after
     // the hit, the return shot starts from where the shuttle is by then.
@@ -289,7 +285,7 @@ export class Badminton {
       const smashPower = TUNING.badminton.smashPower;
       power = Math.random() < cfg.smashChance ? Math.max(power, smashPower + 5) : Math.min(power, smashPower - 5);
     }
-    this.hit(cpu, power, Math.random() * 1.6 - 0.8, 0.5 + Math.random() * 0.5);
+    this.hit(cpu, power, (Math.random() * 2 - 1) * cfg.aimRange, 0.5 + Math.random() * 0.5);
   }
 
   private pointTo(winner: Side): void {
@@ -298,12 +294,15 @@ export class Badminton {
     w.score++;
     this.server = winner;
     this.renderScore();
-    const won = w.score >= TUNING.badminton.pointsToWin;
+    const cfg = TUNING.badminton;
+    const won = w.score >= cfg.pointsToWin && w.score - loser.score >= cfg.winBy;
     this.phase = won ? 'over' : 'point';
-    this.pointEndsAt = Date.now() + TUNING.badminton.pointPauseMs;
+    this.pointEndsAt = Date.now() + cfg.pointPauseMs;
+    const gamePoint = w.score >= cfg.pointsToWin - 1 && w.score - loser.score >= cfg.winBy - 1;
+    const tied = w.score === loser.score && w.score >= cfg.pointsToWin - 1;
     this.hud.message.textContent = won
       ? `${w.name} wins! ${this.near.score} : ${this.far.score}\nEnter: play again · Esc: back to the cube`
-      : `Point to ${w.name}!`;
+      : `Point to ${w.name}!${tied ? '\nDeuce: win by 2' : gamePoint ? '\nGame point!' : ''}`;
     this.hud.message.hidden = false;
     w.character.play('cheer');
     loser.character.play('slump');
@@ -319,7 +318,7 @@ export class Badminton {
     const server = this.athlete(this.server);
     if (this.phase === 'serve' && !server.human && now >= this.cpuServeAt) {
       const c = cfg.cpu;
-      this.serve(server, now, c.power[0] + Math.random() * (c.power[1] - c.power[0]), Math.random() * 1.6 - 0.8);
+      this.serve(server, now, c.power[0] + Math.random() * (c.power[1] - c.power[0]), (Math.random() * 2 - 1) * c.aimRange);
     } else if (this.phase === 'rally' && this.flight) {
       if (!this.decided && this.contact) {
         const receiver = this.athlete(this.receiver);
@@ -397,6 +396,10 @@ export class Badminton {
       a.wrapper.position.addScaledVector(toTarget.normalize(), Math.min(distance, speed * dt));
       a.runPhase += dt * 14;
       a.bob.position.y = Math.abs(Math.sin(a.runPhase)) * 0.07;
+    } else if (this.phase === 'rally' && this.receiver !== a.side) {
+      // Ready on the toes while the other side plays.
+      a.runPhase += dt * cfg.readyBouncesPerSecond * Math.PI;
+      a.bob.position.y = Math.abs(Math.sin(a.runPhase)) * cfg.readyBounce;
     } else {
       a.bob.position.y *= 0.8;
     }

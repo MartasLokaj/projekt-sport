@@ -162,7 +162,13 @@ running log of where we are, what the user decided, and what comes next).
   Scripted 2-player test in the dev browser: rallies, scoring, no errors, ~2.7 ms CPU per frame (two renders).
   - User: "now it's too slow again" → flight times set halfway between the B2 and the slow version
     (about 15 % faster: clear ~2.1 s, smash ~1.0 s).
-  - Next: user test with two phones → B4 2v2 (plan first).
+  - User: "speed is super". Then (done): **to 4 points, win by 2** (`pointsToWin` 4, `winBy` 2, "Game point!" /
+    "Deuce" messages); **court 25 % bigger** (`courtHalfWidth` 3.25, `courtHalfLength` 8.4, `shortServiceLine` 2.5,
+    depths, home/serve positions, faster running `runSpeed` 6 / `maxRunSpeed` 10.5); **more movement**: ready bounce
+    on the toes while the other side plays (`readyBounce`), computer aims across the whole court (`cpu.aimRange` 1);
+    **smash only from the back** (`smashFromDepth` 4.6; the old "high at the front = smash" rule is gone).
+    Scripted test: smashes only from 5.0–6.0 m, a match ended 4 : 2 with "Game point!".
+  - Next: user test (also with two phones) → B4 2v2 (plan first).
 
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.

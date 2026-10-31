@@ -380,17 +380,26 @@ export const TUNING = {
   // Badminton prototype (phase B2): one player against the computer on a plain court.
   // Distances in metres (net at z = 0, the player's half at +z), times in milliseconds unless the name says otherwise.
   badminton: {
-    /** Singles court: half of the width and half of the length; net height. */
-    courtHalfWidth: 2.6,
-    courtHalfLength: 6.7,
+    /**
+     * Court: half of the width and half of the length (25 % bigger than a real singles court, so the
+     * characters run more), net height, and the short service line's distance from the net.
+     */
+    courtHalfWidth: 3.25,
+    courtHalfLength: 8.4,
     netHeight: 1.55,
+    shortServiceLine: 2.5,
     /** Characters are the minigolf chibis scaled up this much (1 = 0.9 m tall). */
     characterScale: 1.8,
     /** Where a character waits between shots (distance from the net). */
-    homeDepth: 3.6,
+    homeDepth: 4.5,
+    /** The server stands this far from the net. */
+    serveDepth: 3.25,
     /** Running: normal top speed, and the speed allowed when it is the only way to get there in time (m/s). */
-    runSpeed: 5,
-    maxRunSpeed: 9,
+    runSpeed: 6,
+    maxRunSpeed: 10.5,
+    /** While waiting for the other side's shot, characters bounce on their toes (height in m, bounces per second). */
+    readyBounce: 0.05,
+    readyBouncesPerSecond: 2.2,
     /**
      * Where the racket meets the shuttle. Like real players, a character takes the shuttle as early as it can:
      * the first point of the flight in its half that it can reach in time (at runSpeed, or maxRunSpeed if it
@@ -409,9 +418,12 @@ export const TUNING = {
     overheadFrom: 1.7,
     driveFrom: 1.0,
     /** How far beside the shuttle the character stands for each stroke, so the racket meets it (m). */
-    reach: { overhead: 0.35, smash: 0.35, drive: 0.8, lift: 0.6 },
-    /** Overhead contact closer to the net than this is a "high shuttle at the front": a smash (m). */
-    frontZone: 2.2,
+    reach: { overhead: 0.35, drive: 0.8, lift: 0.6 },
+    /**
+     * A smash is only possible from the back of the court: an overhead hit hard (power >= smashPower) at least
+     * this far from the net (m). Closer to the net a hard overhead is a clear.
+     */
+    smashFromDepth: 4.6,
     /** The server holds the shuttle at this height. */
     serveHeight: 0.9,
 
@@ -423,7 +435,7 @@ export const TUNING = {
     perfectMs: 100,
     /** After the right moment, wait this much longer for the phone's message before calling it a miss (Wi-Fi delay). */
     lateGraceMs: 300,
-    /** Power at or above this (percent) makes an overhead shot a smash. */
+    /** Power at or above this (percent) makes an overhead shot from the back court a smash. */
     smashPower: 70,
     /** Aim -1..1 moves the target this far sideways, as a share of the half width (1 = to the sideline). */
     aimReach: 0.9,
@@ -436,27 +448,28 @@ export const TUNING = {
     // seconds = flight time (slow at 0 % power, fast at 100 %), drag = how much the shuttle slows down in flight
     // (a real shuttle slows down a lot; the user wants it slow, steady and easy to predict, so drag is kept low).
     /** The serve always goes diagonally into the receiver's service court (between the centre line and the sideline). */
-    serve: { depth: [5.2, 6.3], apex: 3.2, seconds: [2.35, 1.95], drag: 1.0 },
-    clear: { depth: [5.0, 6.3], apex: 3.4, seconds: [2.35, 1.85], drag: 1.1 },
-    lift: { depth: [4.8, 6.2], apex: 3.6, seconds: [2.45, 1.95], drag: 1.0 },
-    drive: { depth: [4.6, 6.0], apex: 0.4, seconds: [1.45, 1.1], drag: 0.6 },
-    smash: { depth: [2.6, 4.2], apex: 0, seconds: [1.15, 0.8], drag: 0.3 },
+    serve: { depth: [6.5, 7.9], apex: 3.2, seconds: [2.35, 1.95], drag: 1.0 },
+    clear: { depth: [6.25, 7.9], apex: 3.4, seconds: [2.35, 1.85], drag: 1.1 },
+    lift: { depth: [6.0, 7.75], apex: 3.6, seconds: [2.45, 1.95], drag: 1.0 },
+    drive: { depth: [5.75, 7.5], apex: 0.4, seconds: [1.45, 1.1], drag: 0.6 },
+    smash: { depth: [3.25, 5.25], apex: 0, seconds: [1.15, 0.8], drag: 0.3 },
     /** Every shot clears the net by at least this much (m). */
     netClearance: 0.35,
     /** A Perfect hit flies this much faster. */
     perfectSpeedup: 0.9,
 
     /** The computer: chance to return a normal shot and a smash, its power range (percent), and serve delay (ms). */
-    cpu: { hitChance: 0.85, smashReturnChance: 0.55, power: [30, 85], smashChance: 0.35, serveDelayMs: 1300 },
+    cpu: { hitChance: 0.85, smashReturnChance: 0.55, power: [30, 85], smashChance: 0.35, serveDelayMs: 1300, aimRange: 1 },
 
-    /** Rally scoring: first to this many points wins. Pause after a point (ms). */
-    pointsToWin: 11,
+    /** Rally scoring: first to pointsToWin, but you must lead by winBy (4 : 4 → 5 : 4 → 6 : 4 wins). Pause after a point (ms). */
+    pointsToWin: 4,
+    winBy: 2,
     pointPauseMs: 1600,
 
     /** Camera behind the player: height, distance behind the baseline, and how far down the court it looks. */
     cameraHeight: 4.2,
     cameraBack: 5.0,
-    cameraLookAt: -3,
+    cameraLookAt: -4,
     cameraFov: 50,
     /** Split screen (two players): each half is narrow, so the camera sees wider and sits a little closer. */
     splitCameraFov: 62,

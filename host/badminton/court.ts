@@ -21,7 +21,7 @@ export function buildCourt(): THREE.Group {
   court.receiveShadow = true;
   group.add(court);
 
-  // Lines: sidelines, baselines, centre line and the short service lines (1.98 m from the net).
+  // Lines: sidelines, baselines, centre line and the short service lines.
   const lineMaterial = new THREE.MeshBasicMaterial({ color: '#ffffff' });
   const line = (x: number, z: number, sx: number, sz: number): void => {
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(sx, sz), lineMaterial);
@@ -33,8 +33,9 @@ export function buildCourt(): THREE.Group {
   for (const sx of [-1, 1]) line(sx * w, 0, t, l * 2);
   for (const sz of [-1, 1]) {
     line(0, sz * l, w * 2, t);
-    line(0, sz * 1.98, w * 2, t);
-    line(0, sz * (1.98 + l) / 2, t, l - 1.98);
+    const s = cfg.shortServiceLine;
+    line(0, sz * s, w * 2, t);
+    line(0, (sz * (s + l)) / 2, t, l - s);
   }
 
   // Net: two posts, a see-through mesh and a white band on top.
