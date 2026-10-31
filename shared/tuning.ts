@@ -295,6 +295,15 @@ export const TUNING = {
     /** Glowing specks floating round the cube, and how strong the coloured clouds far behind are. */
     dust: 140,
     nebulaOpacity: 0.28,
+    /** How much the colour clouds and the planets turn along with the cube (depth: planets are nearer than the clouds). */
+    nebulaParallax: 0.004,
+    planetParallax: 0.08,
+    /** A shooting star every so many seconds (from..to), and how long one takes to cross. */
+    shootingStarEvery: [5, 11],
+    shootingStarSeconds: 0.9,
+    /** The light outline round the cube: how much bigger than the cube it is, and how bright. */
+    outlineScale: 1.035,
+    outlineStrength: 1.6,
     /** The glowing frame round the chosen side (0..1), and how much the cube pops when a game is chosen. */
     frameOpacity: 0.85,
     /** The soft glow lying on the chosen side (share of the frame's brightness). */

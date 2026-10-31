@@ -304,10 +304,10 @@ class Waterfall {
       transparent: true,
       depthWrite: false,
       side: THREE.DoubleSide,
-      uniforms: { time: { value: 0 } },
+      uniforms: { time: { value: 0 }, brightness: { value: 1 } },
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
       fragmentShader: `
-        uniform float time; varying vec2 vUv;
+        uniform float time; uniform float brightness; varying vec2 vUv;
         float hash(float n){ return fract(sin(n) * 43758.5453); }
         void main(){
           // Streaks that run down the fall, faster lower down; white foam at the lip.
@@ -319,7 +319,7 @@ class Waterfall {
           vec3 water = mix(vec3(0.33, 0.72, 0.98), vec3(1.0), clamp(bright + foam, 0.0, 1.0));
           float edge = smoothstep(0.0, 0.18, vUv.x) * smoothstep(1.0, 0.82, vUv.x);
           float fade = 1.0 - smoothstep(0.55, 1.0, vUv.y);
-          gl_FragColor = vec4(water, (0.72 + bright * 0.3) * edge * fade);
+          gl_FragColor = vec4(water * brightness, (0.72 + bright * 0.3) * edge * fade);
         }`,
     });
     const sheet = new THREE.Mesh(geometry, this.material);

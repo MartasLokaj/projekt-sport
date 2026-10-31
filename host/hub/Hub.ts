@@ -36,6 +36,12 @@ export class Hub {
   /** Star layers, nearest first: they turn a little with the cube, the near ones more (depth). */
   private readonly starLayers: THREE.Points[];
   private readonly dust: THREE.Points;
+  /** Far colour clouds and the planets: they also follow the cube's turning a little, at their own depth. */
+  private readonly nebula = new THREE.Group();
+  private readonly planets = new THREE.Group();
+  private readonly shootingStar = new ShootingStar();
+  /** A thin light outline round the cube in the chosen game's colour. */
+  private readonly outline: THREE.Mesh;
   private readonly faces: THREE.Group[] = [];
   /** A glowing frame around each side, lit while that side's game is chosen. */
   private readonly frames: THREE.Mesh[] = [];
@@ -105,10 +111,12 @@ export class Hub {
     this.camera.position.set(0, c.cameraHeight, c.cameraDistance);
     this.camera.lookAt(0, 0, 0);
 
-    this.scene.add(makeSky(), ...makeNebula());
+    this.nebula.add(...makeNebula());
+    this.planets.add(...makePlanets());
+    this.scene.add(makeSky(), this.nebula, this.planets, this.shootingStar.mesh);
     this.starLayers = [makeStars(0, 0.55, 1.5), makeStars(1, 0.35, 1.0), makeStars(2, 0.1, 0.7)];
     this.dust = makeDust();
-    this.scene.add(...this.starLayers, this.dust, ...makePlanets());
+    this.scene.add(...this.starLayers, this.dust);
     this.halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('#ffffff'), color: c.glowColour, transparent: true, depthWrite: false, opacity: 0.55 }));
     this.halo.scale.setScalar(c.cubeSize * 3);
     this.halo.renderOrder = -1;
@@ -132,6 +140,9 @@ export class Hub {
     );
     body.receiveShadow = true;
     this.spinner.add(body);
+    this.outline = new THREE.Mesh(body.geometry, outlineMaterial(c.glowColour));
+    this.outline.scale.setScalar(c.outlineScale);
+    this.spinner.add(this.outline);
     const tilt = new THREE.Quaternion().setFromAxisAngle(SIDE, THREE.MathUtils.degToRad(c.chosenTiltDegrees));
     FACES.forEach((face, i) => {
       const normal = new THREE.Vector3(...face.normal);
@@ -290,6 +301,10 @@ export class Hub {
       this.brightness[i] += (bright - before) * (1 - Math.exp(-5 * dt));
       if (Math.abs(this.brightness[i] - before) > 0.0005) {
         for (const p of this.palettes[i]) {
+          if (p.material instanceof THREE.ShaderMaterial) {
+            p.material.uniforms.brightness.value = this.brightness[i];
+            continue;
+          }
           p.material.color.copy(p.colour).multiplyScalar(this.brightness[i]);
           if (p.emissive) (p.material as THREE.MeshStandardMaterial).emissive.copy(p.emissive).multiplyScalar(this.brightness[i]);
         }
@@ -304,6 +319,12 @@ export class Hub {
     // Depth: when the cube turns, the near stars turn a little with it and the far ones barely.
     const turned = before.invert().premultiply(this.spinner.quaternion);
     const yaw = new THREE.Euler().setFromQuaternion(turned, 'YXZ');
+    for (const [group, depth] of [[this.nebula, c.nebulaParallax], [this.planets, c.planetParallax]] as const) {
+      group.rotation.y += yaw.y * depth;
+      group.rotation.x += yaw.x * depth;
+    }
+    this.shootingStar.update(dt);
+    (this.outline.material as THREE.ShaderMaterial).uniforms.colour.value.copy(this.haloColour);
     this.starLayers.forEach((layer, i) => {
       const depth = c.starParallax[i];
       layer.rotation.y += yaw.y * depth + dt * 0.006;
@@ -636,7 +657,14 @@ function collectPalette(world: THREE.Object3D): { material: THREE.Material & { c
   world.traverse((o) => {
     const materials = (o as THREE.Mesh).material;
     for (const material of Array.isArray(materials) ? materials : materials ? [materials] : []) {
-      if (seen.has(material) || !('color' in material)) continue;
+      if (seen.has(material)) continue;
+      // Shaders that can be dimmed say so with a "brightness" uniform; the palette keeps them with no colour.
+      if (material instanceof THREE.ShaderMaterial && material.uniforms.brightness) {
+        seen.add(material);
+        palette.push({ material: material as unknown as THREE.Material & { color: THREE.Color }, colour: new THREE.Color(), emissive: null });
+        continue;
+      }
+      if (!('color' in material)) continue;
       seen.add(material);
       const m = material as THREE.Material & { color: THREE.Color; emissive?: THREE.Color };
       palette.push({ material: m, colour: m.color.clone(), emissive: m.emissive ? m.emissive.clone() : null });
@@ -685,12 +713,131 @@ function frameGeometry(outer: number, inner: number, corner: number): THREE.Shap
 }
 
 /** Two little pastel planets far away. */
-function makePlanets(): THREE.Mesh[] {
-  const pink = new THREE.Mesh(new THREE.SphereGeometry(6, 32, 16), new THREE.MeshStandardMaterial({ color: '#ff9ad1', roughness: 0.6 }));
-  pink.position.set(-45, 18, -70);
-  const cyan = new THREE.Mesh(new THREE.SphereGeometry(3, 32, 16), new THREE.MeshStandardMaterial({ color: '#7ff3ff', roughness: 0.6 }));
-  cyan.position.set(40, -12, -60);
-  return [pink, cyan];
+/** Planets far away: a pink one with a ring, a small icy one and a big striped one in the distance. */
+function makePlanets(): THREE.Object3D[] {
+  const planet = (radius: number, colours: string[], x: number, y: number, z: number): THREE.Mesh => {
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(radius, 40, 24),
+      new THREE.MeshStandardMaterial({ map: bandTexture(colours), roughness: 0.7, emissive: colours[0], emissiveIntensity: 0.12 }),
+    );
+    mesh.position.set(x, y, z);
+    mesh.rotation.z = 0.3;
+    return mesh;
+  };
+  const pink = planet(6, ['#ff9ad1', '#ffc2e3', '#e478b8'], -45, 18, -70);
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(8, 12, 64),
+    new THREE.MeshBasicMaterial({ map: ringTexture(), transparent: true, side: THREE.DoubleSide, depthWrite: false, opacity: 0.8 }),
+  );
+  ring.rotation.set(1.2, 0.2, 0.3);
+  pink.add(ring);
+  const icy = planet(3, ['#7ff3ff', '#bffaff', '#5fd4e6'], 40, -12, -60);
+  const giant = planet(14, ['#ffb35c', '#ffd59a', '#e58a3a', '#ffc77e'], 95, 48, -150);
+  return [pink, icy, giant];
+}
+
+/** Soft horizontal stripes, like a gas planet. */
+function bandTexture(colours: string[]): THREE.Texture {
+  return canvasTexture(64, 256, (c) => {
+    const g = c.createLinearGradient(0, 0, 0, 256);
+    colours.concat(colours).forEach((colour, k, all) => g.addColorStop(k / (all.length - 1), colour));
+    c.fillStyle = g;
+    c.fillRect(0, 0, 64, 256);
+  });
+}
+
+/** A planet ring: faint bands that fade at the inner and outer edge. */
+function ringTexture(): THREE.Texture {
+  return canvasTexture(256, 256, (c) => {
+    const g = c.createRadialGradient(128, 128, 85, 128, 128, 128);
+    g.addColorStop(0, 'rgba(255,220,240,0)');
+    g.addColorStop(0.2, 'rgba(255,220,240,0.7)');
+    g.addColorStop(0.45, 'rgba(255,190,225,0.35)');
+    g.addColorStop(0.6, 'rgba(255,230,245,0.75)');
+    g.addColorStop(1, 'rgba(255,220,240,0)');
+    c.fillStyle = g;
+    c.fillRect(0, 0, 256, 256);
+  });
+}
+
+/** Light along the cube's silhouette: drawn on the inside of a slightly bigger copy, brightest where it turns away. */
+function outlineMaterial(colour: string): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    uniforms: { colour: { value: new THREE.Color(colour) }, strength: { value: TUNING.hub.outlineStrength } },
+    vertexShader: `
+      varying vec3 vNormal; varying vec3 vView;
+      void main() {
+        vec4 view = modelViewMatrix * vec4(position, 1.0);
+        vNormal = normalize(normalMatrix * normal);
+        vView = normalize(-view.xyz);
+        gl_Position = projectionMatrix * view;
+      }`,
+    fragmentShader: `
+      uniform vec3 colour; uniform float strength; varying vec3 vNormal; varying vec3 vView;
+      void main() {
+        float rim = pow(1.0 - abs(dot(normalize(vNormal), normalize(vView))), 4.0);
+        gl_FragColor = vec4(colour * rim * strength, rim);
+      }`,
+  });
+}
+
+/** Now and then a shooting star streaks across the sky far behind the cube. */
+class ShootingStar {
+  readonly mesh: THREE.Mesh;
+  private wait = 3;
+  private age = 1;
+  private readonly velocity = new THREE.Vector3();
+
+  constructor() {
+    this.mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(1, 1),
+      new THREE.MeshBasicMaterial({ map: streakTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }),
+    );
+    this.mesh.scale.set(18, 0.5, 1);
+    this.mesh.visible = false;
+  }
+
+  update(dt: number): void {
+    const c = TUNING.hub;
+    this.wait -= dt;
+    if (this.wait <= 0) {
+      // A new one: somewhere high up, flying down and sideways.
+      this.wait = c.shootingStarEvery[0] + Math.random() * (c.shootingStarEvery[1] - c.shootingStarEvery[0]);
+      this.age = 0;
+      const side = Math.random() < 0.5 ? -1 : 1;
+      this.mesh.position.set(-side * (20 + Math.random() * 60), 25 + Math.random() * 35, -90);
+      this.velocity.set(side * (60 + Math.random() * 30), -(25 + Math.random() * 20), 0);
+      this.mesh.rotation.z = Math.atan2(this.velocity.y, this.velocity.x);
+      this.mesh.visible = true;
+    }
+    if (!this.mesh.visible) return;
+    this.age += dt;
+    const life = this.age / c.shootingStarSeconds;
+    this.mesh.position.addScaledVector(this.velocity, dt);
+    (this.mesh.material as THREE.MeshBasicMaterial).opacity = Math.sin(Math.min(1, life) * Math.PI);
+    if (life >= 1) this.mesh.visible = false;
+  }
+}
+
+/** A bright head on the right fading into a long tail on the left. */
+function streakTexture(): THREE.Texture {
+  return canvasTexture(256, 16, (c) => {
+    const g = c.createLinearGradient(0, 0, 256, 0);
+    g.addColorStop(0, 'rgba(180,220,255,0)');
+    g.addColorStop(0.85, 'rgba(220,240,255,0.7)');
+    g.addColorStop(1, 'rgba(255,255,255,1)');
+    c.fillStyle = g;
+    c.beginPath();
+    c.moveTo(0, 8);
+    c.lineTo(250, 3);
+    c.arc(250, 8, 5, -Math.PI / 2, Math.PI / 2);
+    c.closePath();
+    c.fill();
+  });
 }
 
 function glowTexture(colour: string): THREE.Texture {
