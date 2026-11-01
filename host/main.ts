@@ -220,7 +220,7 @@ function startSelected(): void {
     openBadminton('game');
     return;
   }
-  send({ type: 'start_game', firstHole: firstHoleForTesting() });
+  send({ type: 'start_game', firstHole: firstHoleForTesting(), course: lobbyUi.course });
 }
 
 /** Testing shortcut: open the page with ?hole=4 to start the game at hole 4. */
@@ -378,7 +378,8 @@ function renderScores(state: GameState): void {
   scoreboardRows.replaceChildren();
   const header = el('div', 'board-row board-header');
   header.append(el('span', 'board-place'), el('span', 'score-dot hidden-dot'), el('span', 'board-name', ''));
-  for (let h = 0; h < state.holeCount; h++) header.append(el('span', 'board-hole', `${h + 1}`));
+  // The real hole numbers (a 3-hole game plays 3 of the 9).
+  for (let h = 0; h < state.holeCount; h++) header.append(el('span', 'board-hole', `${(state.course[h] ?? h) + 1}`));
   header.append(el('span', 'board-score', 'Total'));
   scoreboardRows.append(header);
   const ranked = [...state.players].sort((a, b) => a.total - b.total);
@@ -448,7 +449,7 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (e.key === 'Enter' && phase === 'hole_end') send({ type: 'next_hole' });
-  else if (e.key === 'Enter' && phase === 'game_end') send({ type: 'start_game', firstHole: firstHoleForTesting() });
+  else if (e.key === 'Enter' && phase === 'game_end') send({ type: 'start_game', firstHole: firstHoleForTesting(), course: lobbyUi.course });
   else if (e.key === 'Escape' && phase !== 'lobby') send({ type: 'end_game' });
 });
 

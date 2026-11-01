@@ -11,6 +11,7 @@ import {
   SKIN_TONES,
   type BadmintonSwing,
   type ClientMessage,
+  type CourseId,
   type Handedness,
   type JoinError,
   type PlayerInfo,
@@ -39,6 +40,18 @@ type Seat = {
   lastStrokeAt: number;
 };
 
+/** The holes of a new game: all of them, or `holes` of them picked at random (kept in course order). */
+export function pickCourse(id: CourseId): number[] {
+  const all = Array.from({ length: HOLE_COUNT }, (_, i) => i);
+  const count = Math.min(HOLE_COUNT, TUNING.rules.courses[id].holes);
+  if (count >= HOLE_COUNT) return all;
+  for (let i = all.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [all[i], all[j]] = [all[j], all[i]];
+  }
+  return all.slice(0, count).sort((a, b) => a - b);
+}
+
 export function makeRoomCode(): string {
   let code = '';
   for (let i = 0; i < ROOM_CODE_LENGTH; i++) {
@@ -54,6 +67,8 @@ export class Lobby {
   /** Phones that know the right room code (joined or looking at the join form). */
   private phones = new Set<WebSocket>();
   private match = new Match();
+  /** The minigolf course last chosen on the big screen (3 random holes or all of them). */
+  private course: CourseId = 'short';
   /** Whether the Badminton Swing Lab is open (phones then show the swing test). */
   private lab = false;
   /** Called for every badminton swing, so the server can save it for tuning. */
@@ -149,8 +164,11 @@ export class Lobby {
         if (!this.match.canStart) return;
         const players = [...this.seats.values()].filter((s) => s.socket).map((s) => s.id);
         if (players.length === 0) return;
+        // The course chosen on the big screen; a start from the leader's phone (no course) plays the last one again.
+        if (msg.course === 'short' || msg.course === 'full') this.course = msg.course;
         const firstHole = Math.max(0, Math.min(HOLE_COUNT - 1, Math.floor(Number(msg.firstHole) || 0)));
-        this.match.start(players, this.isConnected, firstHole);
+        // The testing shortcut (start at hole N) always plays the full course.
+        this.match.start(players, this.isConnected, pickCourse(firstHole > 0 ? 'full' : this.course), firstHole);
         this.broadcastGame();
         return;
       }

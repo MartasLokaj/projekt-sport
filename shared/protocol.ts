@@ -7,6 +7,9 @@ export const WS_PATH = '/ws';
 export const MAX_PLAYERS = 4;
 /** Number of holes in a game (the holes themselves are defined on the host, host/game/course.ts). */
 export const HOLE_COUNT = 9;
+
+/** The courses the lobby offers (see TUNING.rules.courses). */
+export type CourseId = 'short' | 'full';
 export const ROOM_CODE_LENGTH = 4;
 export const NAME_MAX_LENGTH = 12;
 export const SHIRT_COLOURS = ['#ff5a5f', '#ffb400', '#3ec300', '#00a6ed', '#9b5cff', '#ff7ac6'] as const;
@@ -98,9 +101,11 @@ export type BallResult = 'rest' | 'holed' | 'out';
 /** The match, decided by the server. */
 export type GameState = {
   phase: 'lobby' | 'playing' | 'hole_end' | 'game_end';
-  /** Current hole, counting from 0. */
+  /** Current hole, counting from 0 within this game's course. */
   hole: number;
   holeCount: number;
+  /** The holes this game plays, in order: indexes into the host's HOLES (a 3-hole game picks 3 at random). */
+  course: number[];
   /** The player who may start the game from their phone (the first connected one). */
   leaderId: string | null;
   /** Whose turn it is (null when nobody's). */
@@ -161,7 +166,8 @@ export type ClientMessage =
   | ({ type: 'swing_progress' } & SwingProgress)
   /** From the host, or from the leader's phone. */
   /** firstHole (0-based) is a testing shortcut: start the game at that hole (the host page's ?hole=N). */
-  | { type: 'start_game'; firstHole?: number }
+  /** course: which course from TUNING.rules.courses (default: the one chosen last). firstHole: testing shortcut (full course). */
+  | { type: 'start_game'; firstHole?: number; course?: CourseId }
   /** From the host, or from the leader's phone, after a hole's scoreboard. */
   | { type: 'next_hole' }
   /** From the host: back to the lobby. */

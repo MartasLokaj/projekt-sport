@@ -554,6 +554,18 @@ body, round mitten hands, sturdier legs, chunky shoes).
 - Checked in the dev browser: all files decode, every event fires in play (minigolf and CPU-vs-CPU badminton), mute.
   Not done: phone sounds, a volume slider (only levels in tuning + M).
 
+### Minigolf course choice (user, 2026-11-01: "add a 3 hole course with 3 random holes of the 9") — built, waiting for the user's test
+- Lobby card (Minigolf): mode "Course · {course} · take turns, lowest total wins" + a Course row **3 holes / 9 holes**
+  (`TUNING.rules.courses`, first = default = 3 holes; `LobbyUi.course`, `FaceInfo.courses`, same row element as the
+  badminton Match row, label switches).
+- Server: `start_game.course` ('short' | 'full'); `pickCourse()` in `server/lobby.ts` picks 3 random holes kept in
+  course order; the lobby remembers the last course, so a start from the leader's phone or "play again" reuses it
+  (a new random draw each game). `?hole=N` testing always plays the full course. `Match` plays `course: number[]`;
+  `GameState.course` (indexes into HOLES), `hole` = position in it, `holeCount` = its length.
+- Host: `Game` loads `HOLES[course[hole]]`, HUD "Hole 2/3"; scoreboard columns show the real hole numbers (e.g. 1 4 8).
+- Checked: test server (4 random draws, full, phone start reuses last course, ?hole shortcut) and the dev browser
+  (card row, a 3-hole game loads the right holes, HUD and scoreboard). **Server code changed → restart needed.**
+
 ### Stale server (2026-11-01): "only 5 holes" and "live character edits don't work / aren't saved"
 - Both were the same cause: the running `npm run dev` had been started at 13:53 on 2026-10-31, after Minigolf J1
   (HOLE_COUNT 5) but before J2/J3 (9 holes) and avatar step 2 (`set_look`) were merged. Server code only changes

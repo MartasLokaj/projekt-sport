@@ -25,6 +25,9 @@ function lengthText(length: MatchLength): string {
   return `first to ${m.to}, win by ${m.winBy}${m.cap === null ? '' : `, max ${m.cap}`}`;
 }
 
+/** Which minigolf course, chosen in the card (see TUNING.rules.courses). */
+export type CourseId = keyof typeof TUNING.rules.courses;
+
 /** What the Play button would do for a game right now. */
 export type PlayState = { enabled: boolean; label: string; note: string; warn: boolean };
 
@@ -43,6 +46,8 @@ export class LobbyUi {
   cpuLevel: CpuLevel = 'normal';
   /** The match length for the next match (Quick / Normal / Long in the card's Match row). */
   matchLength: MatchLength = TUNING.badminton.matchLength;
+  /** The minigolf course for the next game (3 holes / 9 holes in the card's Course row). */
+  course: CourseId = Object.keys(TUNING.rules.courses)[0] as CourseId;
 
   private readonly $ = (id: string): HTMLElement => document.getElementById(id)!;
   private readonly pick = this.$('pick');
@@ -142,10 +147,28 @@ export class LobbyUi {
     }
   }
 
-  /** The Match row (Quick / Normal / Long) under the modes, for games that have it. */
+  /** The Match row (Quick / Normal / Long) or the Course row (3 holes / 9 holes) under the modes, for games that have it. */
   private renderLengths(face: FaceInfo): void {
     const row = this.$('pick-length');
-    row.hidden = !face.matchLengths;
+    row.hidden = !face.matchLengths && !face.courses;
+    this.$('pick-length-label').textContent = face.courses ? 'Course' : 'Match';
+    row.querySelector('.mode-levels')!.setAttribute('aria-label', face.courses ? 'Course' : 'Match length');
+    if (face.courses) {
+      const buttons = (Object.keys(TUNING.rules.courses) as CourseId[]).map((id) => {
+        const button = el('button', id === this.course ? 'is-on' : '', TUNING.rules.courses[id].label) as HTMLButtonElement;
+        button.type = 'button';
+        button.title = TUNING.rules.courses[id].detail;
+        button.setAttribute('role', 'radio');
+        button.setAttribute('aria-checked', String(id === this.course));
+        button.addEventListener('click', () => {
+          this.course = id;
+          this.renderGame(false);
+        });
+        return button;
+      });
+      row.querySelector('.mode-levels')!.replaceChildren(...buttons);
+      return;
+    }
     if (!face.matchLengths) return;
     const buttons = (Object.keys(TUNING.badminton.matchLengths) as MatchLength[]).map((id) => {
       const button = el('button', id === this.matchLength ? 'is-on' : '', TUNING.badminton.matchLengths[id].label) as HTMLButtonElement;
@@ -254,7 +277,7 @@ export class LobbyUi {
     const modes = face.modes.map((mode, i) => {
       const item = el('li', i === (active < 0 ? 0 : active) ? 'mode is-active' : 'mode');
       const text = el('div', '');
-      text.append(el('b', '', mode.label), el('span', '', mode.detail.replace('{length}', lengthText(this.matchLength))));
+      text.append(el('b', '', mode.label), el('span', '', mode.detail.replace('{length}', lengthText(this.matchLength)).replace('{course}', TUNING.rules.courses[this.course].detail)));
       item.append(text);
       if (mode.levels) {
         // Easy / Normal / Pro for the computer, right in its mode row.

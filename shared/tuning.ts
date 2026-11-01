@@ -78,6 +78,14 @@ export const TUNING = {
     pickedUpScore: 7,
     /** How long the hole-in celebration shows before the next turn (milliseconds). */
     holedPauseMs: 2500,
+    /**
+     * Courses to choose in the lobby card: `holes` holes picked at random from all of them (played in course
+     * order), or all of them. The first one is chosen at the start.
+     */
+    courses: {
+      short: { label: '3 holes', holes: 3, detail: '3 random holes' },
+      full: { label: '9 holes', holes: 9, detail: 'All 9 holes' },
+    },
   },
 
   ball: {

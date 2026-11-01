@@ -4,7 +4,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import type { BallResult, GameState, PlayerInfo, SwingProgress } from '../../shared/protocol.ts';
+import { HOLE_COUNT, type BallResult, type GameState, type PlayerInfo, type SwingProgress } from '../../shared/protocol.ts';
 import { TUNING } from '../../shared/tuning.ts';
 import { sound } from '../audio/sound.ts';
 import { applyCurve, applyRollingResistance, createBall, curveFromTwist, shotSpeed } from './ball.ts';
@@ -82,6 +82,9 @@ export class Game {
   private active: string | null = null;
   private lastTurn = -1;
   private lastPhase: GameState['phase'] = 'lobby';
+  /** Which hole of this game's course we are on (from 0) and how many it has (a 3-hole game plays 3 of HOLES). */
+  private coursePos = 0;
+  private courseLength = HOLE_COUNT;
   /** Where the current turn's ball started, and the direction straight ahead then (for placing the watchers). */
   private readonly turnStart = new THREE.Vector3();
   private turnYaw = 0;
@@ -292,7 +295,9 @@ export class Game {
 
   /** The match changed on the server: new round, new turn, strokes or finished players. */
   syncState(game: GameState): void {
-    if (game.phase === 'playing' && this.lastPhase !== 'playing') this.resetRound(game.hole);
+    this.coursePos = game.hole;
+    this.courseLength = game.holeCount;
+    if (game.phase === 'playing' && this.lastPhase !== 'playing') this.resetRound(game.course[game.hole] ?? game.hole);
     this.lastPhase = game.phase;
     for (const player of this.players.values()) player.inMatch = false;
     for (const entry of game.players) {
@@ -795,7 +800,7 @@ export class Game {
   private updateInfo(): void {
     const player = this.active ? this.players.get(this.active) : undefined;
     const turn = player && this.state !== 'waiting' ? ` · ${player.name}: ${player.strokes} stroke${player.strokes === 1 ? '' : 's'}` : '';
-    this.hud.info.textContent = `Hole ${this.hole.def.number}/${this.holes.length} · Par ${this.hole.def.par}${turn}`;
+    this.hud.info.textContent = `Hole ${this.coursePos + 1}/${this.courseLength} · Par ${this.hole.def.par}${turn}`;
     this.hud.info.style.borderLeft = player ? `10px solid ${player.colour}` : '';
   }
 
