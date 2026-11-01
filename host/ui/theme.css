@@ -333,3 +333,114 @@
 #mute-badge[hidden] {
   display: none;
 }
+
+/* ---------- Podium after a match (host/results/Podium.ts) ---------- */
+
+#podium-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  overflow: hidden;
+  font-family: var(--cw-font, sans-serif);
+  color: #1d2340;
+}
+#podium-screen[hidden] {
+  display: none;
+}
+#podium-screen canvas {
+  position: absolute;
+  inset: 0;
+}
+.podium-head {
+  position: absolute;
+  top: clamp(16px, 4vh, 40px);
+  left: 0;
+  right: 0;
+  text-align: center;
+  pointer-events: none;
+  animation: podium-drop 700ms cubic-bezier(0.2, 1.4, 0.4, 1) both 300ms;
+}
+.podium-head h1 {
+  margin: 0;
+  font-size: clamp(34px, 6vw, 72px);
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 4px 0 rgba(0, 0, 0, 0.18), 0 0 30px rgba(255, 200, 80, 0.6);
+}
+.podium-head p {
+  margin: 6px 0 0;
+  font-size: clamp(16px, 2vw, 24px);
+  font-weight: 700;
+  color: rgba(29, 35, 64, 0.75);
+}
+.podium-tags {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.podium-tag {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  padding: 6px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  border-bottom: 4px solid var(--colour, #888);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
+  text-align: center;
+  white-space: nowrap;
+  animation: podium-pop 500ms cubic-bezier(0.2, 1.6, 0.4, 1) both 900ms;
+}
+.podium-tag b {
+  display: block;
+  font-size: 17px;
+}
+.podium-tag span {
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0.7;
+}
+.podium-tag.is-winner {
+  background: #fff7d6;
+  box-shadow: 0 0 0 3px #ffd84d, 0 8px 24px rgba(255, 190, 40, 0.45);
+}
+.podium-tag.is-winner b::before {
+  content: '👑 ';
+}
+.podium-buttons {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: clamp(16px, 4vh, 40px);
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 0 16px;
+  animation: podium-rise 500ms ease-out both 1200ms;
+}
+@keyframes podium-drop {
+  from { opacity: 0; transform: translateY(-40px) scale(0.8); }
+}
+@keyframes podium-pop {
+  from { opacity: 0; transform: translate(-50%, -60%) scale(0.5); }
+}
+@keyframes podium-rise {
+  from { opacity: 0; transform: translateY(30px); }
+}
+.podium-buttons .cw-btn {
+  width: auto;
+  min-width: 220px;
+}
+/* On the bright podium sky the quiet button needs a solid look. */
+.podium-buttons .cw-btn--ghost {
+  color: #1d2340;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 5px 0 rgba(29, 35, 64, 0.18);
+}
+.podium-buttons .cw-btn--ghost kbd {
+  font-size: 12px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(29, 35, 64, 0.1);
+}

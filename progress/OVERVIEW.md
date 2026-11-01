@@ -82,8 +82,8 @@ v minigolfu, obrazovky s výsledky, dotažení editoru postavičky, nastavení a
 ## 4. Co ještě chybí (seřazeno podle důležitosti)
 
 **A. Aby se to dalo ukázat kamarádům**
-- **Výsledky po zápase** (oběma hrám): stupně vítězů s oslavou, tlačítka „Play again / Back to the cube“,
-  a úvod zápasu (hráči vedle sebe, odpočet 3-2-1).
+- ~~Stupně vítězů s oslavou~~ — postaveno 1. 11. (čeká na tvůj pohled). Zbývá úvod zápasu (hráči vedle sebe,
+  odpočet 3-2-1).
 - **Minigolf efekty (4c):** úvodní průlet jamkou „Hole N · Par P“, konfety při trefě, velká oslava hole-in-one,
   stopa za míčkem, malé zatřesení kamerou při ráně, vibrace telefonu, vítr v trávě a stromech.
 - **Měření plynulosti** na MacBooku Air.

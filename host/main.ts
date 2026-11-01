@@ -7,6 +7,8 @@ import { Badminton } from './badminton/Badminton.ts';
 import { Lab } from './lab/Lab.ts';
 import { Flash } from './ui/transition.ts';
 import { sound, type MusicName } from './audio/sound.ts';
+import { Podium, type PodiumShow } from './results/Podium.ts';
+import { lookOf } from './game/character.ts';
 
 // The big screen. The lobby is Cube World: a cube floating in space with one game on each side,
 // the QR code to join, and the players' characters standing on top. "Play" asks the server to start
@@ -113,6 +115,8 @@ function leaveGame(id: string, hide: () => void): void {
   transition(async () => {
     await flash.cover();
     hide();
+    podium.hide();
+    podiumGame = null;
     sound.playMusic('lobby');
     lobbyScreen.hidden = false;
     hub?.start();
@@ -120,6 +124,70 @@ function leaveGame(id: string, hide: () => void): void {
     hub?.pullOut(id);
     flash.reveal();
   });
+}
+
+// The podium after a match (both games): Enter plays again, Esc goes back to the cube.
+const podium = new Podium();
+if (import.meta.env.DEV) Object.assign(window, { podium }); // for debugging in the browser console
+let podiumGame: 'minigolf' | 'badminton' | null = null;
+
+/** Behind the flash: `stop` pauses the game underneath, then the podium shows. */
+function showPodium(show: PodiumShow, stop: () => void): void {
+  transition(async () => {
+    await flash.cover();
+    stop();
+    podiumGame = show.game;
+    podium.show(show);
+    flash.reveal();
+  });
+}
+
+/** Behind the flash: the podium goes and `start` starts the next match, whose camera glides in. */
+function leavePodium(start: () => void): void {
+  transition(async () => {
+    await flash.cover();
+    podium.hide();
+    podiumGame = null;
+    start();
+    flash.reveal();
+  });
+}
+
+podium.onPlayAgain = () => {
+  if (transitioning) return;
+  if (podiumGame === 'minigolf') send({ type: 'start_game', firstHole: firstHoleForTesting(), course: lobbyUi.course });
+  else if (podiumGame === 'badminton') {
+    leavePodium(() => {
+      badminton?.start(badmintonPlayers(), lobbyUi.cpuLevel, lobbyUi.matchLength, badmintonDoubles);
+      badminton?.swoopIn();
+    });
+  }
+};
+podium.onBack = () => {
+  if (transitioning) return;
+  if (podiumGame === 'minigolf') send({ type: 'end_game' });
+  else if (podiumGame === 'badminton') send({ type: 'lab_mode', on: false });
+};
+
+/** Minigolf's podium: ranked by total strokes (fewest wins; equal totals share a place). */
+function minigolfPodium(state: GameState): PodiumShow {
+  const ranked = [...state.players].sort((a, b) => a.total - b.total);
+  const entries = ranked.map((entry) => {
+    const player = players.find((p) => p.id === entry.id);
+    return {
+      name: nameOf(entry.id),
+      look: player ? lookOf(player) : { shirt: colourOf(entry.id), skin: '#f3c79a', handedness: 'right' as const },
+      place: 1 + ranked.filter((other) => other.total < entry.total).length,
+      detail: `${entry.total} stroke${entry.total === 1 ? '' : 's'}`,
+    };
+  });
+  const winners = entries.filter((e) => e.place === 1);
+  return {
+    game: 'minigolf',
+    title: winners.length === 1 ? `${winners[0].name} wins!` : "It's a tie!",
+    subtitle: `Minigolf · ${state.holeCount} holes`,
+    entries,
+  };
 }
 
 // Badminton: the prototype game (Badminton side of the cube → Enter) and the Swing Lab (L).
@@ -137,6 +205,8 @@ let labOpen = false;
  * with 3 or 4 phones it is 2 v 2: the 3rd joins the near side, the 4th the far side (else the computer).
  */
 let badmintonIds: (string | null)[] = [null, null];
+/** Whether the current badminton match is 2 v 2 (for Play again on the podium). */
+let badmintonDoubles = false;
 
 function badmintonPlayers(): (PlayerInfo | null)[] {
   return badmintonIds.map((id) => players.find((p) => p.id === id) ?? null);
@@ -163,6 +233,7 @@ function showLab(on: boolean): void {
       badmintonScreen.hidden = false;
       const connected = players.filter((p) => p.connected);
       const doubles = connected.length >= 3;
+      badmintonDoubles = doubles;
       badmintonIds = [0, 1, 2, 3].slice(0, doubles ? 4 : 2).map((seat) => connected[seat]?.id ?? null);
       badminton ??= new Badminton(document.getElementById('badminton-canvas')!, {
         screen: badmintonScreen,
@@ -182,6 +253,12 @@ function showLab(on: boolean): void {
         if (playerId) send({ type: 'badminton_cue', playerId, cue });
       };
       badminton.onOutcome = (outcome) => send({ type: 'badminton_outcome', outcome });
+      // After the last point the reactions play a moment, then the podium comes (unless a new match began).
+      badminton.onMatchOver = () => {
+        window.setTimeout(() => {
+          if (badminton?.matchOver && !badmintonScreen.hidden && !podium.visible) showPodium(badminton.podium(), () => badminton?.stop());
+        }, TUNING.podium.badmintonDelayMs);
+      };
       if (import.meta.env.DEV) Object.assign(window, { badminton }); // for debugging in the browser console
       badminton.start(badmintonPlayers(), lobbyUi.cpuLevel, lobbyUi.matchLength, doubles);
       badminton.swoopIn();
@@ -338,6 +415,14 @@ async function onGameState(state: GameState): Promise<void> {
   }
   g.syncState(state);
   renderScores(state);
+  // The last hole is done: the podium. A new game from the podium: back to the course, the camera gliding in.
+  if (state.phase === 'game_end' && previous?.phase !== 'game_end') showPodium(minigolfPodium(state), () => g.stop());
+  else if (state.phase === 'playing' && podiumGame === 'minigolf') {
+    leavePodium(() => {
+      g.start();
+      g.swoopIn();
+    });
+  }
 }
 
 function nameOf(id: string): string {
@@ -368,7 +453,7 @@ function renderScores(state: GameState): void {
   }
 
   const finished = state.phase === 'hole_end' || state.phase === 'game_end';
-  scoreboardEl.hidden = !finished;
+  scoreboardEl.hidden = !finished || state.phase === 'game_end'; // the end of a game shows the podium instead
   if (!finished) return;
   const last = state.phase === 'game_end';
   scoreboardTitle.textContent = last ? 'Final results' : `Hole ${state.hole + 1} complete!`;

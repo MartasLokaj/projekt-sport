@@ -554,6 +554,26 @@ body, round mitten hands, sturdier legs, chunky shoes).
 - Checked in the dev browser: all files decode, every event fires in play (minigolf and CPU-vs-CPU badminton), mute.
   Not done: phone sounds, a volume slider (only levels in tuning + M).
 
+### Podium after a match (both games) — built 2026-11-01 (user: "pusťme se do stupňů vítězů a oslavy"), waiting for the user's look
+- `host/results/Podium.ts` (own WebGL canvas, `#podium-screen` styles in `theme.css`, tuning `TUNING.podium`):
+  1st step in the middle (highest), 2nd left, 3rd right, numbers on the fronts; shared places stand together on one
+  step, 4th and lower beside it on the ground; one name tag per place ("Martas & Tom · 1st · 4 points", 👑 for
+  the winners); sky gradient + ground per game (meadow for minigolf, beach sand for badminton, fog into the sky);
+  camera swoops down then sways; winners alternate jump / cheer under confetti bursts (with a sparkle sound), the
+  others clap; win jingle. Buttons Play again (Enter) and Back to the cube (Esc); while it shows, Enter/Esc are caught
+  before the games' own keys.
+- Minigolf (`host/main.ts`): on `game_end` → flash → game paused → podium (`minigolfPodium`: ranked by total strokes,
+  equal totals share a place, "Martas wins!" / "It's a tie!", "Minigolf · 3 holes"). The final scoreboard table no
+  longer shows (hole_end still does). Play again sends `start_game` with the chosen course → flash → back to the
+  course, camera glides in. Esc → `end_game` → back to the cube (podium hidden in `leaveGame`).
+- Badminton: `Badminton.onMatchOver` (last point; the point jingle plays, the win jingle comes with the podium) →
+  after `badmintonDelayMs` 1800 (reactions) → podium (`Badminton.podium()`: winning team 1st, others 2nd, points,
+  "Martas & Tom win!", score line). Play again restarts the match with the same players / level / length / 2 v 2.
+  Athletes now keep their `look` for this.
+- Checked in the dev browser (fake server): minigolf 4 players (win and tie), Play again and Esc; badminton 2 v 2
+  CPU match to the end, Play again (0 : 0, new match), Esc back to the cube; no console errors.
+- Not done yet: match intro (players side by side + 3-2-1).
+
 ### Minigolf course choice (user, 2026-11-01: "add a 3 hole course with 3 random holes of the 9") — approved ("je to pecka")
 - Lobby card (Minigolf): mode "Course · {course} · take turns, lowest total wins" + a Course row **3 holes / 9 holes**
   (`TUNING.rules.courses`, first = default = 3 holes; `LobbyUi.course`, `FaceInfo.courses`, same row element as the

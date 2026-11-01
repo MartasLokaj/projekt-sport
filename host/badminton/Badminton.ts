@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { SKIN_TONES, type PlayerInfo } from '../../shared/protocol.ts';
 import { TUNING } from '../../shared/tuning.ts';
 import { sound } from '../audio/sound.ts';
-import { Character } from '../game/character.ts';
+import { Character, type CharacterLook } from '../game/character.ts';
+import type { PodiumShow } from '../results/Podium.ts';
 import { buildRacket, buildShuttle, setRacketColour } from './court.ts';
 import { buildBeach, type Venue } from './venue/beach.ts';
 import { Birds, SandPuffs, Swoosh, Trail } from './effects.ts';
@@ -44,6 +45,8 @@ type Athlete = {
   /** A phone's player, or null for the computer. */
   human: boolean;
   name: string;
+  /** Shirt, skin and the rest of the character (for the podium after the match). */
+  look: CharacterLook;
   /** Moves around the court and faces the net; bob makes the running bounce. */
   wrapper: THREE.Group;
   bob: THREE.Group;
@@ -193,6 +196,8 @@ export class Badminton {
   onCue: ((seat: number, cue: BadmintonCue) => void) | null = null;
   /** How each judged swing went, for the outcome log (set by host/main.ts). */
   onOutcome: ((outcome: Record<string, unknown>) => void) | null = null;
+  /** The last point of a match was played (set by host/main.ts, which then shows the podium). */
+  onMatchOver: (() => void) | null = null;
   /** Learns each player's timing, power, aim and Wi-Fi delay and adapts the game to them. */
   readonly coach = new Coach();
   /** The swing being judged now (raw values from the phone), until its verdict is known. */
@@ -783,7 +788,8 @@ export class Badminton {
     const lead = w.score - loser.score;
     const won = w.score >= m.to && (lead >= m.winBy || (m.cap !== null && w.score >= m.cap));
     this.phase = won ? 'over' : 'point';
-    sound.play(won ? 'jingle-win' : 'jingle-point');
+    sound.play('jingle-point'); // the win jingle plays with the podium
+    if (won) this.onMatchOver?.();
     this.pointEndsAt = Date.now() + cfg.pointPauseMs;
     const gamePoint = w.score >= m.to - 1 && (lead >= m.winBy - 1 || (m.cap !== null && w.score >= m.cap - 1));
     const tied = lead === 0 && w.score >= m.to - 1;
@@ -1190,6 +1196,7 @@ export class Badminton {
       ring,
       human: side === 1,
       name: side === 1 ? 'You' : 'CPU',
+      look: { shirt: '#9b5cff', skin: SKIN_TONES[3], handedness: 'right' },
       wrapper,
       bob,
       character,
@@ -1231,7 +1238,8 @@ export class Badminton {
     const handedness = human ? (player?.handedness ?? 'right') : 'right';
     const shirt = human ? (player?.colour ?? (a.side === 1 ? '#ff5a5f' : '#00a6ed')) : '#9b5cff';
     const skin = human ? (player?.skinTone ?? SKIN_TONES[1]) : SKIN_TONES[3];
-    a.character.setLook({ shirt, skin, handedness: 'right', look: human ? player?.look : undefined });
+    a.look = { shirt, skin, handedness, look: human ? player?.look : undefined };
+    a.character.setLook({ ...a.look, handedness: 'right' });
     // The beach look: tank top in the player's colour, darker shorts, bare feet, a headband; racket in their colour.
     const outfit = TUNING.badminton.outfit;
     const shorts = new THREE.Color(shirt).lerp(new THREE.Color(outfit.shortsBase), outfit.shortsShade);
@@ -1369,6 +1377,31 @@ export class Badminton {
   }
 
   /** "Martas", or "Martas & Eva" in 2 v 2. */
+  /** True once the last point of the match has been played (until a new match starts). */
+  get matchOver(): boolean {
+    return this.phase === 'over';
+  }
+
+  /** Who stands where on the podium after a match: the winning team on the top step, the others on the 2nd. */
+  podium(): PodiumShow {
+    const winner: Side = this.near.score > this.far.score ? 1 : -1;
+    const entries = ([1, -1] as Side[]).flatMap((side) =>
+      this.team(side).map((a) => ({
+        name: a.name,
+        look: a.look,
+        place: side === winner ? 1 : 2,
+        detail: `${this.athlete(side).score} points`,
+      })),
+    );
+    const many = this.team(winner).length > 1;
+    return {
+      game: 'badminton',
+      title: `${this.teamName(winner)} win${many ? '' : 's'}!`,
+      subtitle: `Badminton · ${this.teamName(1)} ${this.near.score} : ${this.far.score} ${this.teamName(-1)}`,
+      entries,
+    };
+  }
+
   private teamName(side: Side): string {
     return this.team(side).map((a) => a.name).join(' & ');
   }

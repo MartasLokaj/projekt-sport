@@ -497,6 +497,34 @@ export const TUNING = {
     waves: { everyMs: [3500, 7000], level: 0.35, rate: [0.85, 1.05] },
   },
 
+  /** The podium after a match (host/results/Podium.ts): steps, characters, camera and the celebration. */
+  podium: {
+    /** Characters are drawn this much bigger than in the games. */
+    characterScale: 2,
+    /** Height of the 1st, 2nd and 3rd step, and how wide one step is (m). */
+    stepHeights: [1.5, 1.0, 0.6],
+    stepWidth: 2.2,
+    stepDepth: 1.8,
+    stepColours: ['#ffd84d', '#d9e2f2', '#f0a868'],
+    /** Camera: where it ends (height, distance), where it looks (height), how long it swoops in (s), how much it sways. */
+    cameraHeight: 3.2,
+    cameraDistance: 9.5,
+    lookHeight: 2.1,
+    cameraFov: 40,
+    swoopSeconds: 1.6,
+    sway: 0.6,
+    /** Confetti over the winners every few seconds (random between the two), pieces per burst. */
+    confettiEvery: [1.2, 2.4],
+    confettiPieces: 60,
+    /** The winners jump or cheer, the others clap, every few seconds. */
+    cheerEvery: [1.6, 2.6],
+    /** How long after the last point of a badminton match the podium comes (ms), so the reactions can play. */
+    badmintonDelayMs: 1800,
+    /** Background colours (top, bottom) and the ground's colour per game (the ground fades into the sky far away). */
+    sky: { minigolf: ['#7ec8ff', '#d9f3ff'], badminton: ['#ffb36b', '#ffe3b0'] },
+    ground: { minigolf: '#8fd16a', badminton: '#f1dcae' },
+  },
+
   /** The way from the cube into a game and back (host/hub/Hub.ts diveIn/pullOut, host/ui/transition.ts). */
   transition: {
     /** Play: the camera flies into the chosen side (seconds) and ends this far from the side's middle. */
