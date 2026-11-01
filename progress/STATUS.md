@@ -554,6 +554,17 @@ body, round mitten hands, sturdier legs, chunky shoes).
 - Checked in the dev browser: all files decode, every event fires in play (minigolf and CPU-vs-CPU badminton), mute.
   Not done: phone sounds, a volume slider (only levels in tuning + M).
 
+### Stale server (2026-11-01): "only 5 holes" and "live character edits don't work / aren't saved"
+- Both were the same cause: the running `npm run dev` had been started at 13:53 on 2026-10-31, after Minigolf J1
+  (HOLE_COUNT 5) but before J2/J3 (9 holes) and avatar step 2 (`set_look`) were merged. Server code only changes
+  on restart, so the server ended games after hole 5 and ignored `set_look`; on every reconnect its old look in
+  `joined` overwrote the phone's saved look (so it looked "not saved").
+- Checked against a fresh test server (port 8444, Node `ws` client): set_look reaches the host
+  (`player_look_saved`), the new look comes back after a reconnect, `holeCount` 9. Restarted the user's server in
+  the Terminal panel tab "game server" (the old process was gone by then — possibly stopped by a cleanup command).
+- Also: the lobby card said "3-hole course" → now `${HOLE_COUNT}-hole course` (`host/hub/faces.ts`).
+- Lesson: after merging anything that touches `server/` or `shared/`, tell the user to restart the server.
+
 ### Approvals 2026-10-31 (evening)
 - User: "je to mega dobré" — **K4 dive-in transition, the new badminton camera, the footwork change (stop short +
   reach, calmer runs) and the gentle return to the cube are approved.** "We'll work a lot on the graphics later."

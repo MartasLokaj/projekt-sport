@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Forest } from '../game/vegetation.ts';
+import { HOLE_COUNT } from '../../shared/protocol.ts';
 import { TUNING } from '../../shared/tuning.ts';
 
 // The little worlds on the cube's sides. Each is built flat (+y up, about 5 x 5 units) and the hub
@@ -65,7 +66,7 @@ export const FACES: readonly FaceInfo[] = [
     minPlayers: 1,
     maxPlayers: 4,
     controls: 'Swing like a putter',
-    modes: [{ label: '3-hole course', detail: 'Take turns, lowest total wins', players: [1, 4] }],
+    modes: [{ label: `${HOLE_COUNT}-hole course`, detail: 'Take turns, lowest total wins', players: [1, 4] }],
     normal: [0, 0, 1],
     forward: [0, -1, 0],
   },
