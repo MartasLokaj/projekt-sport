@@ -537,7 +537,7 @@ body, round mitten hands, sturdier legs, chunky shoes).
 - Step 3: Quick start + Saved screen (+ the other phone screens in the dark look).
   Step 4: outfits per game + same-colour name tags (then drop the `colour_taken` refusal).
 
-### Sounds (K3 + game sounds) — built 2026-10-31 (user: "ano, stáhni"), waiting for the user's ears
+### Sounds (K3 + game sounds) — built 2026-10-31 (user: "ano, stáhni"), approved ("je to dobré"; music may be swapped later)
 - Downloaded (user approved the list): Kenney Interface Sounds (0.80 MB zip), Impact Sounds (0.76 MB), Music Jingles
   (1.18 MB) via the site's Download button (zips in the user's ~/Downloads); OpenGameArt CC0: Beach Ocean Waves
   wave_01 (626 KB), Flowerbed Fields loop (lobby), Feel Good Island Loop (minigolf), Happy Ukelele Island Surfing Theme
@@ -554,7 +554,7 @@ body, round mitten hands, sturdier legs, chunky shoes).
 - Checked in the dev browser: all files decode, every event fires in play (minigolf and CPU-vs-CPU badminton), mute.
   Not done: phone sounds, a volume slider (only levels in tuning + M).
 
-### Minigolf course choice (user, 2026-11-01: "add a 3 hole course with 3 random holes of the 9") — built, waiting for the user's test
+### Minigolf course choice (user, 2026-11-01: "add a 3 hole course with 3 random holes of the 9") — approved ("je to pecka")
 - Lobby card (Minigolf): mode "Course · {course} · take turns, lowest total wins" + a Course row **3 holes / 9 holes**
   (`TUNING.rules.courses`, first = default = 3 holes; `LobbyUi.course`, `FaceInfo.courses`, same row element as the
   badminton Match row, label switches).
@@ -576,6 +576,8 @@ body, round mitten hands, sturdier legs, chunky shoes).
   the Terminal panel tab "game server" (the old process was gone by then — possibly stopped by a cleanup command).
 - Also: the lobby card said "3-hole course" → now `${HOLE_COUNT}-hole course` (`host/hub/faces.ts`).
 - Lesson: after merging anything that touches `server/` or `shared/`, tell the user to restart the server.
+- After the restart the user said "je to mega dobré": live character editing and saving work (avatar step 2 OK; whether
+  the phone shows the 3D or the 2D preview is still not reported).
 
 ### Approvals 2026-10-31 (evening)
 - User: "je to mega dobré" — **K4 dive-in transition, the new badminton camera, the footwork change (stop short +

@@ -1,27 +1,27 @@
-# Projekt-sport — celkový přehled (stav k 31. 10. 2026)
+# Projekt-sport — celkový přehled (stav k 1. 11. 2026)
 
-Jeden soubor, kde je všechno pohromadě: kolik je hotovo, co jsme dnes udělali, co chybí a nápady na zlepšení.
+Jeden soubor, kde je všechno pohromadě: kolik je hotovo, co jsme udělali, co chybí a nápady na zlepšení.
 Podrobný deník pro Clauda zůstává v `progress/STATUS.md`, zadání v `SPEC.md`.
 
 ---
 
-## 1. Celkem hotovo: zhruba **65 %**
+## 1. Celkem hotovo: zhruba **75 %**
 
-Hratelný základ obou her existuje. Chybí hlavně zvuky, „šťáva“ (efekty, oslavy), úvodní/výsledkové
-obrazovky, dotažení editoru postavičky a **testování na skutečných telefonech**.
+Obě hry jsou hratelné, se zvuky, s hudbou a s přechodem z kostky do hry. Chybí hlavně efekty a oslavy
+v minigolfu, obrazovky s výsledky, dotažení editoru postavičky, nastavení a test s kamarády.
 
 | Část | Hotovo | Stručně |
 |---|---|---|
 | Základ (server, připojení telefonů, QR, znovupřipojení) | **100 %** | Schváleno na telefonech. |
-| Minigolf – hratelnost (fáze 0–3: míček, tahy, skóre, postavičky, levák/pravák) | **100 %** | Schváleno. |
-| Minigolf – vzhled a jamky (fáze 4a, 4b, 9 jamek) | **95 %** | Všech 9 jamek schváleno. |
-| Minigolf – „šťáva“ (fáze 4c: konfety, zvuky, úvod jamky, stupně vítězů) | **0 %** | Nezačato. |
-| Badminton – hratelnost (B1–B3, mechaniky 1–5, běhání) | **90 %** | Většina schválena. Trenér (coach) čeká na test. |
-| Badminton – 2 v 2 (B4) | **70 %** | Postaveno, **nevyzkoušeno** (chybí 3–4 telefony). |
-| Badminton – pláž, oblečení, košík, rakety, kamera | **80 %** | Postaveno, nová kamera čeká na tvůj pohled. |
-| Kostka (lobby, Cube World) | **60 %** | Vzhled hotový. Chybí zvuky (K3), přechody a výsledky (K4), lobby na telefonu (K5). |
-| Editor postavičky na telefonu (fáze 5) | **45 %** | Krok 1 schválen, krok 2 má problém s 3D náhledem na telefonu, kroky 3–4 chybí. |
-| Doladění (fáze 6: nastavení, návod, test s přáteli) | **5 %** | Titulní menu a návod už jsou, zbytek ne. |
+| Minigolf – hratelnost (míček, tahy, skóre, postavičky, levák/pravák) | **100 %** | Schváleno. |
+| Minigolf – vzhled a jamky | **100 %** | 9 jamek schváleno, volba 3 náhodné / 9 jamek schválena. |
+| Minigolf – efekty a oslavy (4c: úvod jamky, konfety, stopa míčku, stupně vítězů) | **20 %** | Zvuky hotové, zbytek chybí. |
+| Badminton – hratelnost, běhání, kamera | **95 %** | Schváleno. Trenér (coach) čeká na test z telefonu. |
+| Badminton – 2 v 2 | **70 %** | Postaveno, **nevyzkoušeno** (chybí 3–4 telefony). |
+| Badminton – pláž, oblečení, košík, rakety | **90 %** | Hotovo, grafiku ještě vylepšíme. |
+| Kostka (lobby) | **75 %** | Vzhled, zvuky, hudba a přechod do hry hotové. Chybí výsledky po zápase a lobby na telefonu. |
+| Editor postavičky na telefonu (fáze 5) | **60 %** | Kroky 1–2 fungují (živé úpravy, ukládání). Chybí kroky 3–4. |
+| Doladění (fáze 6: nastavení, návod, test s přáteli) | **10 %** | Titulní menu, návod a ztlumení (M) jsou, zbytek ne. |
 | Ověření 60 snímků/s na MacBooku Air | **0 %** | Nikdy neměřeno na skutečném MacBooku Air. |
 
 ---
@@ -59,47 +59,53 @@ obrazovky, dotažení editoru postavičky a **testování na skutečných telefo
 
 ---
 
+## 2b. Co jsme udělali 31. 10. večer a 1. 11.
+
+- **Přechod z kostky do hry:** kamera vletí do strany kostky, bílý záblesk, kamera se snese ke hře, a zpět. Schváleno.
+- **Badminton:** kamera jede za hráčem, košík i postavička jsou vždy v obraze; postavička drží odstup a natáhne raketu. Schváleno.
+- **Zvuky a hudba** na kostce, v minigolfu i v badmintonu (CC0), klávesa M ztlumí. Schváleno.
+- **Opraveno:** jen 5 jamek a nefunkční živé úpravy postavičky (server běžel ze starého kódu).
+- **Minigolf:** volba 3 náhodné jamky / všech 9 v kartě. Schváleno.
+
+---
+
 ## 3. Co čeká na tvůj test (postaveno, ale nevyzkoušeno)
 
-0. ~~Přechod z kostky do hry~~ — schváleno.
-
-Tohle je teď **největší riziko**: hodně věcí je hotových jen „na Macu“, ne na skutečných telefonech.
-
-1. ~~Minigolf jamky 8 (Most) a 9 (Finále)~~ — schváleno, všech 9 jamek je top.
-2. Badminton — trenér (coach). Záznam v `logs/badminton-outcomes.jsonl` je zatím jen z klávesnice Macu,
-   ne z telefonu (žádné zpoždění Wi-Fi, síla pořád 60).
-3. ~~Badminton — nová kamera a běh ke košíku~~ — schváleno.
-4. Badminton — 2 v 2 (potřebuje 3–4 telefony).
-5. Editor postavičky — co ukazuje telefon místo 3D náhledu (2D obrázek + poznámka proč).
-6. Míření v badmintonu na iPhonu vs. Androidu (jestli vlevo/vpravo nefunguje obráceně).
-7. Plynulost (60 snímků/s) na MacBooku Air, hlavně badminton na rozdělené obrazovce a minigolf s trávou.
+1. Badminton — trenér (coach): zahraj si s telefonem aspoň 20 úderů, pak ho doladím podle záznamu.
+2. Badminton — 2 v 2 (potřebuje 3–4 telefony).
+3. Míření v badmintonu na iPhonu vs. Androidu (jestli vlevo/vpravo nefunguje obráceně).
+4. Editor postavičky: je na telefonu vidět 3D postavička, nebo jen 2D obrázek?
+5. Plynulost (60 snímků/s) na MacBooku Air, hlavně badminton na rozdělené obrazovce a minigolf s trávou.
 
 ---
 
 ## 4. Co ještě chybí (seřazeno podle důležitosti)
 
 **A. Aby se to dalo ukázat kamarádům**
-- **Zvuky a hudba** (kostka, minigolf, badminton) — zatím je hra úplně potichu. Potřeba stáhnout CC0 zvuky
-  (vždy se předem zeptám: název, zdroj, velikost).
-- **Úvod a výsledky:** přechod z kostky do hry, odpočet 3-2-1, obrazovka výsledků s „Play again / Back to the cube“.
-- **Minigolf „šťáva“ (4c):** úvodní průlet jamkou „Hole N · Par P“, konfety při trefě, oslava hole-in-one,
-  stopa míčku, vibrace, stupně vítězů, vítr v trávě.
+- **Výsledky po zápase** (oběma hrám): stupně vítězů s oslavou, tlačítka „Play again / Back to the cube“,
+  a úvod zápasu (hráči vedle sebe, odpočet 3-2-1).
+- **Minigolf efekty (4c):** úvodní průlet jamkou „Hole N · Par P“, konfety při trefě, velká oslava hole-in-one,
+  stopa za míčkem, malé zatřesení kamerou při ráně, vibrace telefonu, vítr v trávě a stromech.
 - **Měření plynulosti** na MacBooku Air.
 
 **B. Dotažení**
 - Editor postavičky krok 3 (rychlý start, uložené postavičky, tmavý vzhled všech obrazovek na telefonu)
-  a krok 4 (oblečení podle hry, stejná barva pro víc hráčů).
-- Lobby na telefonu (K5): telefon ukáže vybranou hru, kdo je připojený, tlačítko Ready; vedoucí hráč může
-  na telefonu otáčet kostkou a spustit hru.
-- Volba 3 / 9 jamek v minigolfu.
+  a krok 4 (oblečení podle hry, víc hráčů smí mít stejnou barvu).
+- Lobby na telefonu (K5): telefon ukáže vybranou hru a kdo je připojený; vedoucí hráč může na telefonu
+  vybrat hru a spustit ji.
+- Automatický restart serveru po změně (aby se už nestalo, že běží starý kód).
 
 **C. Fáze 6 – doladění**
-- Nastavení (hlasitost, hudba, citlivost švihu, náhradní ovládání), návod s animací švihu,
-  **test s přáteli** a oprava hlavních problémů.
+- Nastavení na obrazovce (hlasitost hudby a efektů, citlivost švihu, náhradní ovládání),
+  návod s animací švihu, **test s přáteli** a oprava hlavních problémů.
 
-**D. Drobnosti**
+**D. Grafika (domluveno na později)**
+- Velké vylepšení grafiky obou her a postaviček.
+
+**E. Drobnosti a později**
 - Oranžové bočnice pod mlýnem, strom občas zakryje kameru v zatáčce, finální název hry.
-- Později: další prostředí pro badminton (oblak, tělocvična, zahrada), další hry na kostce.
+- Případně jiná hudba (výměna je snadná).
+- Další prostředí pro badminton, další hry na kostce (tenis, box, bowling, curling…).
 
 ---
 
