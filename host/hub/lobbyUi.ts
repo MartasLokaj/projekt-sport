@@ -263,6 +263,10 @@ export class LobbyUi {
     const phones = this.players.filter((p) => p.connected).length;
     if (!face) return { enabled: false, label: 'Play', note: '', warn: false };
     if (face.status === 'soon') return { enabled: false, label: 'Coming soon', note: 'This world is still being built', warn: false };
+    if (face.id === 'curling') {
+      // Works without phones too: the Mac keyboard can throw (hold Space).
+      return { enabled: true, label: 'Play', note: phones === 0 ? 'No phone yet: hold Space to throw on the Mac' : '', warn: false };
+    }
     if (face.id === 'badminton') {
       // Works without phones too: the Mac keyboard can swing (Space, ↑).
       const note = phones === 0 ? 'No phone yet: Space swings on the Mac' : phones > 2 ? 'The first two play' : '';
@@ -372,6 +376,12 @@ const ICONS: Record<FaceInfo['icon'], string> = {
       <rect x="64" y="96" width="32" height="10" rx="3" fill="#ff7a59"/>
       <path d="M64 106 Q80 136 96 106 Z" fill="#ff5b3a"/>
     </g>
+  </svg>`,
+  stone: `<svg viewBox="0 0 160 160" aria-hidden="true">
+    <ellipse cx="80" cy="126" rx="68" ry="20" fill="#bfe6ff"/>
+    <path d="M34 100 Q34 76 80 76 Q126 76 126 100 L126 108 Q126 126 80 126 Q34 126 34 108 Z" fill="#8a9099"/>
+    <ellipse cx="80" cy="84" rx="40" ry="11" fill="#a9afb8"/>
+    <rect x="64" y="58" width="14" height="26" rx="5" fill="#e84a4a"/><rect x="64" y="56" width="50" height="14" rx="7" fill="#e84a4a"/>
   </svg>`,
   mystery: `<svg viewBox="0 0 160 160" aria-hidden="true">
     <rect x="34" y="34" width="92" height="92" rx="22" fill="#5b4fd6"/><rect x="34" y="34" width="92" height="46" rx="22" fill="#6f63ee"/>

@@ -1063,6 +1063,50 @@ export const TUNING = {
     },
   },
 
+  // Curling prototype (phase C1, SPEC §14): one ice sheet, stones thrown with the phone's minigolf swing.
+  // Distances in metres: the thrower stands at z = 0 and throws towards -z; times in seconds.
+  curling: {
+    /** The ice: half of its width, how far the house's centre (the target) is, and how far the ice goes. */
+    sheetHalfWidth: 2.3,
+    houseDistance: 26,
+    sheetLength: 30,
+    /** The house rings (outer to inner) and the far hog line's distance in front of the house's centre. */
+    ringRadii: [1.83, 1.22, 0.61, 0.15],
+    hogLineBeforeHouse: 6.4,
+    /** Stone radius (drawn a bit bigger than a real 0.145 m, so it is easy to see) and how many per end (both teams). */
+    stoneRadius: 0.17,
+    stonesPerEnd: 8,
+    /** The stone slows down this much every second (m/s²); lower = slides further. */
+    friction: 1.45,
+    /** Throw speed for 0 % and 100 % swing power (m/s). About 66 % stops in the middle of the house. */
+    minSpeed: 4,
+    maxSpeed: 11,
+    /** Phone aim (degrees) times this = the throw's direction (degrees), clamped to ±maxAimDegrees. */
+    aimScale: 0.2,
+    maxAimDegrees: 6,
+    /** Mac keyboard: ← → turn the aim this fast (degrees per second); holding Space fills the power in this many seconds. */
+    keyAimSpeed: 3,
+    keyChargeSeconds: 1.6,
+    /**
+     * Curl: a twisted swing makes the stone drift sideways, more as it slows down (like a real stone):
+     * sideways pull = curl / (speed + curlSoftening), at most curlMax (m/s²).
+     */
+    curl: 0.9,
+    curlSoftening: 0.8,
+    curlMax: 0.6,
+    /** How bouncy a stone hitting another stone is (1 = no energy lost). */
+    restitution: 0.88,
+    /** All stones thrown and still: wait this long, then the next end starts with an empty sheet. */
+    nextEndDelay: 3,
+    /**
+     * Camera: behind the thrower (height, distance back), following the stone, and above the house when everything
+     * stopped (for houseSeconds, then back behind the thrower for the next stone). smoothing: higher = snappier.
+     */
+    camera: { height: 2.2, back: 4.2, followHeight: 3, followBack: 5, houseHeight: 9, houseBack: 3.5, houseSeconds: 2.5, smoothing: 3 },
+    /** Team colours of the stones' handles (red team, yellow team). */
+    teamColours: ['#e84a4a', '#f5c518'],
+  },
+
   // Swing Lab on the big screen: a shuttle drops to the hit line, the player swings when it gets there.
   badmintonLab: {
     /** Time from the shuttle appearing to reaching the hit line, and the pause before the next one (milliseconds). */

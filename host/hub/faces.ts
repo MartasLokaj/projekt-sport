@@ -26,7 +26,7 @@ export type FaceInfo = {
   status: FaceStatus;
   /** The game's own colour in the menu (its card, its dot, the glow on its side of the cube). */
   accent: string;
-  icon: 'golf' | 'shuttle' | 'mystery';
+  icon: 'golf' | 'shuttle' | 'stone' | 'mystery';
   minPlayers: number;
   maxPlayers: number;
   /** One line on how you play with the phone. */
@@ -91,7 +91,20 @@ export const FACES: readonly FaceInfo[] = [
     normal: [1, 0, 0],
     forward: [0, 0, 1],
   },
-  { id: 'mystery-1', ...MYSTERY, normal: [0, 1, 0], forward: [0, 0, 1] },
+  {
+    id: 'curling',
+    title: 'Curling',
+    description: 'Slide stones across a frozen pond. Closest to the middle scores.',
+    status: 'prototype',
+    accent: '#5cc8ff',
+    icon: 'stone',
+    minPlayers: 1,
+    maxPlayers: 4,
+    controls: 'Swing like a putter to throw',
+    modes: [{ label: 'Practice', detail: 'Any phone throws the next stone', players: [0, 4] }],
+    normal: [0, 1, 0],
+    forward: [0, 0, 1],
+  },
   { id: 'mystery-2', ...MYSTERY, normal: [-1, 0, 0], forward: [0, 0, 1] },
   { id: 'mystery-3', ...MYSTERY, normal: [0, 0, -1], forward: [0, 1, 0] },
   { id: 'mystery-4', ...MYSTERY, normal: [0, -1, 0], forward: [0, 0, -1] },
@@ -104,6 +117,7 @@ export type Tick = (time: number, dt: number) => void;
 export function buildFace(face: FaceInfo, kit: FaceKit, size: number): THREE.Group {
   if (face.id === 'minigolf') return minigolfWorld(kit, size);
   if (face.id === 'badminton') return badmintonWorld(kit, size);
+  if (face.id === 'curling') return curlingWorld(size);
   return constructionWorld(FACES.indexOf(face), size);
 }
 
@@ -510,6 +524,68 @@ function badmintonWorld(kit: FaceKit, size: number): THREE.Group {
     shuttle.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), next.sub(shuttle.position).normalize());
     shadow.position.set(shuttle.position.x, 0.105, shuttle.position.z);
     sway(swaying, time, phases);
+  };
+  g.userData.tick = tick;
+  return g;
+}
+
+/** The curling side: a snowy island with a frozen pond; a stone slides into the house again and again. */
+function curlingWorld(size: number): THREE.Group {
+  const g = new THREE.Group();
+  const snow = new THREE.Mesh(new RoundedBoxGeometry(size - 0.6, 0.2, size - 0.6, 4, 0.1), mat('#f4f8fc', 0.95));
+  snow.receiveShadow = true;
+  g.add(snow);
+  const pond = new THREE.Mesh(new THREE.CircleGeometry(1.75, 48), new THREE.MeshStandardMaterial({ color: '#cdeaff', roughness: 0.15 }));
+  pond.rotation.x = -Math.PI / 2;
+  pond.scale.set(0.8, 1.15, 1);
+  pond.position.y = 0.102;
+  pond.receiveShadow = true;
+  g.add(pond);
+  const ring = (inner: number, outer: number, colour: string): void => {
+    const mesh = new THREE.Mesh(new THREE.RingGeometry(inner, outer, 40), mat(colour, 0.4));
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(0, 0.104, -1.1);
+    g.add(mesh);
+  };
+  ring(0.32, 0.48, '#3d7fd9');
+  ring(0.05, 0.16, '#e04848');
+  // Little snowy pine trees round the pond.
+  const random = seededRandom(7);
+  for (let k = 0; k < 9; k++) {
+    const a = (k / 9) * Math.PI * 2 + 0.3;
+    const tree = new THREE.Group();
+    const h = 0.5 + random() * 0.35;
+    const pine = new THREE.Mesh(new THREE.ConeGeometry(0.22, h, 12), mat('#2f7a52', 0.8));
+    pine.position.y = 0.1 + h / 2 + 0.08;
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.12, h * 0.35, 12), mat('#ffffff', 0.9));
+    cap.position.y = 0.1 + h * 0.85 + 0.08;
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.12, 8), mat('#8a5a3a', 0.9));
+    trunk.position.y = 0.16;
+    tree.add(trunk, pine, cap);
+    tree.position.set(Math.cos(a) * 2.05, 0, Math.sin(a) * 2.05);
+    tree.traverse((o) => (o.castShadow = true));
+    g.add(tree);
+  }
+  // A stone in each team colour waits by the house; the red one slides in from the near end, curling a little.
+  const stone = (colour: string): THREE.Group => {
+    const s = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.12, 0.08, 20), mat('#8a9099', 0.55));
+    body.position.y = 0.14;
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.12), mat(colour, 0.35));
+    handle.position.y = 0.2;
+    s.add(body, handle);
+    s.traverse((o) => (o.castShadow = true));
+    g.add(s);
+    return s;
+  };
+  stone('#f5c518').position.set(0.32, 0, -1.25);
+  const slider = stone('#e84a4a');
+  const tick: Tick = (time) => {
+    const t = Math.min(1, (time % 5) / 3.5);
+    const glide = 1 - (1 - t) ** 2;
+    slider.position.set(Math.sin(glide * Math.PI * 0.5) * 0.25 - 0.1, 0, THREE.MathUtils.lerp(1.6, -1.05, glide));
+    slider.rotation.y = glide * 2.5;
+    slider.scale.setScalar(time % 5 > 4.6 ? 0.001 : 1);
   };
   g.userData.tick = tick;
   return g;

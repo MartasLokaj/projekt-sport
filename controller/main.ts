@@ -78,6 +78,8 @@ let gameState: GameState | null = null;
 let lastTurn = -1;
 /** The big screen has the Badminton Swing Lab open. */
 let labOpen = false;
+/** Whether Curling is open on the big screen (the controls then stay open in the lobby). */
+let curlingOpen = false;
 
 // ---------- Screens ----------
 
@@ -157,7 +159,15 @@ function renderTurn(): void {
   let text = '';
   let button: string | null = null;
 
-  if (state.phase === 'lobby') {
+  if (state.phase === 'lobby' && curlingOpen) {
+    // Curling: any phone throws the next stone, so the controls stay open.
+    if (!turnOverlay.hidden) {
+      play.resetAim();
+      play.showStatus('Curling! Aim, then swing to throw the stone.');
+    }
+    turnOverlay.hidden = true;
+    return;
+  } else if (state.phase === 'lobby') {
     title = "You're in!";
     text = leader ? 'Start the game when everyone has joined.' : `Waiting for ${nameOf(state.leaderId)} or the big screen to start the game…`;
     button = leader ? 'Start game' : null;
@@ -394,6 +404,10 @@ function connect(): void {
       case 'lab_state':
         labOpen = msg.on;
         renderLab();
+        break;
+      case 'curling_state':
+        curlingOpen = msg.on;
+        renderTurn();
         break;
       case 'clock_pong':
         lab.onClockPong(msg.t, msg.server);

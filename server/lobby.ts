@@ -71,6 +71,8 @@ export class Lobby {
   private course: CourseId = 'short';
   /** Whether the Badminton Swing Lab is open (phones then show the swing test). */
   private lab = false;
+  /** Whether Curling is open (phones then show the swing screen instead of "waiting for the game"). */
+  private curling = false;
   /** Called for every badminton swing, so the server can save it for tuning. */
   onBadmintonSwing: ((entry: object) => void) | null = null;
   /** Called with how the host judged each badminton swing (saved to the outcome log). */
@@ -98,11 +100,13 @@ export class Lobby {
     this.seats.clear();
     this.match.end();
     this.lab = false;
+    this.curling = false;
     this.room = room;
     this.setHostInfo(info);
     this.broadcastLobby();
     this.broadcastGame();
     for (const ws of this.hosts) send(ws, { type: 'lab_state', on: false });
+    for (const ws of this.hosts) send(ws, { type: 'curling_state', on: false });
   }
 
   handle(ws: WebSocket, msg: ClientMessage): void {
@@ -113,6 +117,7 @@ export class Lobby {
         send(ws, this.lobbyState());
         send(ws, this.gameState());
         send(ws, { type: 'lab_state', on: this.lab });
+        send(ws, { type: 'curling_state', on: this.curling });
         return;
       case 'rejoin':
         if (!this.checkRoom(ws, msg.room)) return;
@@ -184,7 +189,7 @@ export class Lobby {
       case 'start_game': {
         const fromLeader = this.seatOf(ws)?.id === this.leaderId();
         if (!this.hosts.has(ws) && !fromLeader) return;
-        if (!this.match.canStart) return;
+        if (!this.match.canStart || this.curling) return;
         const players = [...this.seats.values()].filter((s) => s.socket).map((s) => s.id);
         if (players.length === 0) return;
         // The course chosen on the big screen; a start from the leader's phone (no course) plays the last one again.
@@ -212,8 +217,13 @@ export class Lobby {
         this.match.ballResult(msg.result, this.isConnected);
         this.broadcastGame();
         return;
+      case 'curling_mode':
+        if (!this.hosts.has(ws) || this.match.playing || this.lab) return;
+        this.curling = msg.on === true;
+        for (const socket of [...this.hosts, ...this.phones]) send(socket, { type: 'curling_state', on: this.curling });
+        return;
       case 'lab_mode':
-        if (!this.hosts.has(ws) || this.match.playing) return;
+        if (!this.hosts.has(ws) || this.match.playing || this.curling) return;
         this.lab = msg.on === true;
         for (const socket of [...this.hosts, ...this.phones]) send(socket, { type: 'lab_state', on: this.lab });
         return;
@@ -359,6 +369,7 @@ export class Lobby {
     seat.socket = ws;
     send(ws, { type: 'joined', player: toInfo(seat) });
     send(ws, { type: 'lab_state', on: this.lab });
+    send(ws, { type: 'curling_state', on: this.curling });
     this.broadcastLobby();
     this.broadcastGame(); // the leader may have changed
   }

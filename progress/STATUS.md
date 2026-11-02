@@ -700,9 +700,19 @@ body, round mitten hands, sturdier legs, chunky shoes).
 - Turf brightness/tint can still be tuned (`turfTint`, `bumperTint`, `islandGrassTint`).
 
 ## Next action
-- **Curling (user, 2026-11-02): chosen as the next sport** (SPEC §14, draft). Decided: frozen pond, sweeping by
-  shaking the phone, Quick/Normal/Long. Waiting for the user's OK on the proposed rules, then C1 graybox.
-  Idea for later: boxing, two phones vs CPU.
+- **Curling (user, 2026-11-02): chosen as the next sport** (SPEC §14). Decided: frozen pond, sweeping by
+  shaking the phone, Quick/Normal/Long; the user OK'd the proposed rules ("realistic": aim only before the throw,
+  sweeping only changes distance and curl; arcade steering maybe later). Idea for later: boxing, two phones vs CPU.
+  - **C1 graybox — built, waiting for the user's phone test.** Curling side of the cube (top side, was mystery-1;
+    snowy pond diorama, stone icon) → Play/Enter → server `curling_mode` → `curling_state` to everyone: phones hide
+    the "You're in!" overlay and show the minigolf aim+swing screen; any phone's stroke throws the next stone
+    (`host/curling/Curling.ts`, tuning `TUNING.curling`). Own simple 2D physics (no Rapier): steady friction,
+    curl from the swing twist (`curveFromTwist` sign, more curl as the stone slows), equal-mass bounces; out off
+    the sides / past the back line / short of the far hog line untouched. 8 stones per end, then the ice clears.
+    Camera behind the thrower → follows the stone → above the house for 2.5 s. Mac keys: ← → aim, hold Space,
+    A/S/D curl, R clears, Esc back. Minigolf start is blocked while curling is open (and lab vs curling).
+    Tested in the browser with a fake socket: 66 % power stops on the button (~5.8 s slide), 40 % is taken off.
+    No curling music yet (lobby music plays).
 Summary of what is left, given to the user on 2026-10-31 (waiting for them to pick what comes first):
 - **Badminton:** B4 2 v 2 built but NOT TESTED (waiting for 3–4 phones); phone test of the coach (then tune from `logs/badminton-outcomes.jsonl`); beach venue steps 2–4
   (beach outfits, shuttle look with 2 options, rackets); B4 2v2; sounds/music; intro + results screen (K4);

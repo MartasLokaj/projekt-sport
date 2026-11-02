@@ -183,6 +183,8 @@ export type ClientMessage =
   | { type: 'reset_room' }
   /** From the host: open or close the Badminton Swing Lab (phones switch to the swing test). */
   | { type: 'lab_mode'; on: boolean }
+  /** From the host: open or close Curling (phones then show the swing screen, and any phone may throw). */
+  | { type: 'curling_mode'; on: boolean }
   /** From a phone: what time is it on the server? t = the phone's clock when sent. */
   | { type: 'clock_ping'; t: number }
   | ({ type: 'badminton_swing' } & BadmintonSwing)
@@ -209,6 +211,8 @@ export type ServerMessage =
   | ({ type: 'game_state' } & GameState)
   /** To everyone: whether the Badminton Swing Lab is open. */
   | { type: 'lab_state'; on: boolean }
+  /** To everyone: whether Curling is open. */
+  | { type: 'curling_state'; on: boolean }
   /** Answer to clock_ping: t = the phone's time it sent, server = the server's clock. */
   | { type: 'clock_pong'; t: number; server: number }
   /** Forwarded to the host page. receivedAt = server clock when it arrived (to show the delay). */

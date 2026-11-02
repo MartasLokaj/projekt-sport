@@ -71,6 +71,8 @@ v minigolfu, obrazovky s výsledky, dotažení editoru postavičky, nastavení a
 
 ## 3. Co čeká na tvůj test (postaveno, ale nevyzkoušeno)
 
+0. **Curling C1** (2. 11.): strana Curling na kostce → Play. Telefonem zamíříš a švihneš, kámen klouže a zatáčí.
+
 1. Badminton — trenér (coach): zahraj si s telefonem aspoň 20 úderů, pak ho doladím podle záznamu.
 2. Badminton — 2 v 2 (potřebuje 3–4 telefony).
 3. Míření v badmintonu na iPhonu vs. Androidu (jestli vlevo/vpravo nefunguje obráceně).

@@ -98,6 +98,18 @@
       }
       #badminton-divider { display: none; position: absolute; top: 0; bottom: 0; left: 50%; width: 6px; transform: translateX(-50%); background: #ffffff; }
       #badminton-screen.split #badminton-divider { display: block; }
+      #curling-screen { position: fixed; inset: 0; }
+      #curling-canvas { position: absolute; inset: 0; }
+      #curling-info {
+        position: absolute; z-index: 2; top: 18px; left: 50%; transform: translateX(-50%); background: rgba(255, 255, 255, 0.9);
+        border-radius: 18px; padding: 8px 22px; font-size: 22px; font-weight: 800; white-space: nowrap;
+      }
+      #curling-power {
+        position: absolute; z-index: 2; bottom: 60px; left: 50%; transform: translateX(-50%); width: 320px; height: 22px;
+        background: rgba(255, 255, 255, 0.85); border-radius: 11px; overflow: hidden;
+      }
+      #curling-power-fill { height: 100%; width: 0; background: linear-gradient(90deg, #5cc8ff, #ff5b6e); }
+      #curling-keys { position: absolute; bottom: 14px; left: 20px; font-size: 16px; font-weight: 600; color: #3a4a5c; }
       #badminton-keys { position: absolute; bottom: 14px; left: 20px; font-size: 16px; font-weight: 600; color: var(--soft); }
       #hud-scores {
         position: absolute; top: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px;
@@ -314,6 +326,13 @@
       <div id="badminton-rally-near" class="badminton-rally" hidden></div>
       <div id="badminton-rally-far" class="badminton-rally" hidden></div>
       <div id="badminton-keys">Prototype · swing your phone when the shuttle reaches you · Mac: Space swings (hold ← → to aim, W weak, Shift short), ↑ swings for player 2 · 1 2 3 computer level · Esc back to the cube</div>
+    </div>
+
+    <div id="curling-screen" hidden>
+      <div id="curling-canvas"></div>
+      <div id="curling-info"></div>
+      <div id="curling-power" hidden><div id="curling-power-fill"></div></div>
+      <div id="curling-keys">Prototype · aim on the phone, swing to throw (twist to curl) · Mac: ← → aim, hold Space and let go to throw, A / S / D curl left / none / right, R clears the ice · Esc back to the cube</div>
     </div>
 
     <div id="game-screen" hidden>

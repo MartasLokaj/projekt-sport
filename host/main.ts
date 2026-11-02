@@ -4,6 +4,7 @@ import { Game } from './game/Game.ts';
 import { Hub } from './hub/Hub.ts';
 import { LobbyUi } from './hub/lobbyUi.ts';
 import { Badminton } from './badminton/Badminton.ts';
+import { Curling } from './curling/Curling.ts';
 import { Lab } from './lab/Lab.ts';
 import { Flash } from './ui/transition.ts';
 import { sound, type MusicName } from './audio/sound.ts';
@@ -95,7 +96,7 @@ function enterGame(id: string, show: () => void | Promise<void>): void {
   transition(async () => {
     hub?.select(id);
     sound.play('ui-play');
-    sound.playMusic(id as MusicName);
+    sound.playMusic(id === 'curling' ? 'lobby' : (id as MusicName)); // (no curling music yet)
     lobbyScreen.classList.add('diving');
     const dive = hub?.diveIn();
     // The flash starts while the camera is still flying, so the dive ends in white without stopping.
@@ -278,6 +279,36 @@ function showLab(on: boolean): void {
   }
 }
 
+// Curling (phase C1): the Curling side of the cube → Enter. Phones show the swing screen (the server's curling
+// mode) and any phone throws the next stone; Esc goes back to the cube.
+const curlingScreen = document.getElementById('curling-screen')!;
+let curling: Curling | null = null;
+let curlingOpen = false;
+
+function showCurling(on: boolean): void {
+  if (on === curlingOpen) return;
+  curlingOpen = on;
+  if (on) {
+    enterGame('curling', () => {
+      lobbyScreen.hidden = true;
+      curlingScreen.hidden = false;
+      curling ??= new Curling(document.getElementById('curling-canvas')!, {
+        info: document.getElementById('curling-info')!,
+        power: document.getElementById('curling-power')!,
+        powerFill: document.getElementById('curling-power-fill')!,
+      });
+      if (import.meta.env.DEV) Object.assign(window, { curling }); // for debugging in the browser console
+      curling.start();
+      curling.swoopIn();
+    });
+  } else {
+    leaveGame('curling', () => {
+      curling?.stop();
+      curlingScreen.hidden = true;
+    });
+  }
+}
+
 function showHostInfo(msg: Extract<ServerMessage, { type: 'host_info' }>): void {
   lobbyUi.setRoom(msg.room, msg.qrDataUrl, msg.joinUrl);
   document.getElementById('lab-room')!.textContent = msg.room;
@@ -295,6 +326,10 @@ function startSelected(): void {
   lobbyUi.pressPlay();
   if (hub?.selected?.id === 'badminton') {
     openBadminton('game');
+    return;
+  }
+  if (hub?.selected?.id === 'curling') {
+    send({ type: 'curling_mode', on: true });
     return;
   }
   send({ type: 'start_game', firstHole: firstHoleForTesting(), course: lobbyUi.course });
@@ -335,14 +370,17 @@ function connect(): void {
     else if (msg.type === 'player_look_saved') hub?.waveHello(msg.playerId);
     else if (msg.type === 'player_aim') {
       if (playing) game?.onPhoneAim(msg.angle);
+      else if (curlingOpen) curling?.onPhoneAim(msg.angle);
     } else if (msg.type === 'player_stroke') {
       if (playing) game?.onPhoneStroke(msg.power, msg.angle, msg.twist);
+      else if (curlingOpen) curling?.onPhoneStroke(msg.power, msg.angle, msg.twist);
       else hub?.showHit(msg.playerId, msg.power);
     } else if (msg.type === 'player_practice') {
       if (playing) game?.onPhonePractice(msg.power, msg.angle, msg.twist);
     } else if (msg.type === 'player_swing_progress') {
       if (playing) game?.onPhoneSwingProgress(msg);
     } else if (msg.type === 'lab_state') showLab(msg.on);
+    else if (msg.type === 'curling_state') showCurling(msg.on);
     else if (msg.type === 'player_badminton_swing') {
       if (!badmintonScreen.hidden) {
         const seat = badmintonIds.indexOf(msg.playerId);
@@ -499,6 +537,11 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   const phase = lastState?.phase ?? 'lobby';
+  if (curlingOpen) {
+    // The other keys (aim, throw, curl) belong to the curling game itself.
+    if (e.key === 'Escape') send({ type: 'curling_mode', on: false });
+    return;
+  }
   if (onTitle && !playing && !labOpen) {
     if (!howTo.hidden) {
       if (e.key === 'Escape' || e.key === 'Enter') showHowTo(false);
