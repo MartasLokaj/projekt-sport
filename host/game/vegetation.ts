@@ -16,6 +16,9 @@ const GRASS = ['Grass_1_B', 'Grass_2_B'];
 /** Bigger tufts (more triangles), used for one tuft in five. */
 const BIG_GRASS = ['Grass_1_C', 'Grass_2_C'];
 
+/** Wind clock for the swaying plants; the game moves it on every frame (TUNING.minigolfFx.windSpeed). */
+export const windTime = { value: 0 };
+
 export type Forest = { geometries: Map<string, THREE.BufferGeometry>; material: THREE.MeshStandardMaterial };
 
 export async function loadForest(): Promise<Forest> {
@@ -38,6 +41,7 @@ export async function loadForest(): Promise<Forest> {
   const [r, g, b] = TUNING.vegetation.tint;
   shared.color.setRGB(r, g, b);
   shared.roughness = 0.85;
+  addWind(shared);
   return { geometries, material: shared };
 }
 
@@ -191,4 +195,32 @@ export function plantIsland(planter: Planter, island: IslandInfo, random: () => 
       place(pick(random() < 0.2 ? BIG_GRASS : GRASS), x, z, range(v.grassScale));
     }
   }
+}
+
+/**
+ * Wind: the plants' tops sway a little (the higher a vertex, the more it moves), each plant at its own phase,
+ * in gusts. Bent in the model's own coordinates, so a big tree sways as much, in proportion, as a grass tuft.
+ */
+function addWind(material: THREE.MeshStandardMaterial): void {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.windTime = windTime;
+    shader.uniforms.windSway = { value: TUNING.minigolfFx.windSway };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform float windTime;\nuniform float windSway;')
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        #ifdef USE_INSTANCING
+          vec2 plant = instanceMatrix[3].xz;
+        #else
+          vec2 plant = vec2(0.0);
+        #endif
+        float phase = plant.x * 0.6 + plant.y * 0.45;
+        float gust = 0.6 + 0.4 * sin(windTime * 0.37 + phase * 0.2);
+        float height = max(position.y, 0.0);
+        transformed.x += sin(windTime + phase) * windSway * height * gust;
+        transformed.z += cos(windTime * 0.8 + phase) * windSway * 0.5 * height * gust;`,
+      );
+  };
+  material.customProgramCacheKey = () => 'vegetation-wind';
 }

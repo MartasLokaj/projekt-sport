@@ -363,7 +363,13 @@ function connect(): void {
         if (!screens.editor.hidden) editor.setTaken(otherPlayers.map((p) => p.colour));
         renderTurn();
         break;
-      case 'game_state':
+      case 'game_state': {
+        // My ball just dropped in: a happy buzz (a longer one for a hole in one). Android only; iPhone cannot vibrate.
+        const before = gameState?.players.find((p) => p.id === profile.playerId);
+        const now = msg.players.find((p) => p.id === profile.playerId);
+        if (now?.done === 'holed' && before?.done !== 'holed' && msg.hole === gameState?.hole && 'vibrate' in navigator) {
+          navigator.vibrate(now.strokes === 1 ? [120, 60, 120, 60, 120, 60, 400] : [80, 60, 200]);
+        }
         gameState = msg;
         // The game started while this player was still editing: keep the look and go to the controls.
         if (!screens.editor.hidden && !inLobby()) {
@@ -372,6 +378,7 @@ function connect(): void {
         }
         renderTurn();
         break;
+      }
       case 'join_error':
         handleJoinError(msg.reason);
         break;

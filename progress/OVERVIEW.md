@@ -5,7 +5,7 @@ Podrobný deník pro Clauda zůstává v `progress/STATUS.md`, zadání v `SPEC.
 
 ---
 
-## 1. Celkem hotovo: zhruba **78 %**
+## 1. Celkem hotovo: zhruba **82 %**
 
 Obě hry jsou hratelné, se zvuky, s hudbou a s přechodem z kostky do hry. Chybí hlavně efekty a oslavy
 v minigolfu, obrazovky s výsledky, dotažení editoru postavičky, nastavení a test s kamarády.
@@ -15,7 +15,7 @@ v minigolfu, obrazovky s výsledky, dotažení editoru postavičky, nastavení a
 | Základ (server, připojení telefonů, QR, znovupřipojení) | **100 %** | Schváleno na telefonech. |
 | Minigolf – hratelnost (míček, tahy, skóre, postavičky, levák/pravák) | **100 %** | Schváleno. |
 | Minigolf – vzhled a jamky | **100 %** | 9 jamek schváleno, volba 3 náhodné / 9 jamek schválena. |
-| Minigolf – efekty a oslavy (4c: úvod jamky, konfety, stopa míčku, stupně vítězů) | **20 %** | Zvuky hotové, zbytek chybí. |
+| Minigolf – efekty a oslavy (4c) | **90 %** | Úvod jamky, konfety, hole-in-one, stopa, zatřesení, vibrace, vítr, zvuky, stupně vítězů. Čeká na tvůj pohled. |
 | Badminton – hratelnost, běhání, kamera | **95 %** | Schváleno. Trenér (coach) čeká na test z telefonu. |
 | Badminton – 2 v 2 | **70 %** | Postaveno, **nevyzkoušeno** (chybí 3–4 telefony). |
 | Badminton – pláž, oblečení, košík, rakety | **90 %** | Hotovo, grafiku ještě vylepšíme. |
@@ -84,8 +84,7 @@ v minigolfu, obrazovky s výsledky, dotažení editoru postavičky, nastavení a
 **A. Aby se to dalo ukázat kamarádům**
 - ~~Stupně vítězů s oslavou~~ — hotovo a vyzkoušeno. Zbývá úvod zápasu (hráči vedle sebe,
   odpočet 3-2-1).
-- **Minigolf efekty (4c):** úvodní průlet jamkou „Hole N · Par P“, konfety při trefě, velká oslava hole-in-one,
-  stopa za míčkem, malé zatřesení kamerou při ráně, vibrace telefonu, vítr v trávě a stromech.
+- ~~Minigolf efekty (4c)~~ — postaveno 2. 11. (čeká na tvůj pohled).
 - **Měření plynulosti** na MacBooku Air.
 
 **B. Dotažení**

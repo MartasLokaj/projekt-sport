@@ -10,7 +10,7 @@ import { sound } from '../audio/sound.ts';
 import { TUNING } from '../../shared/tuning.ts';
 import { buildRacket } from '../badminton/court.ts';
 import { Character, lookOf } from '../game/character.ts';
-import { loadForest } from '../game/vegetation.ts';
+import { loadForest, windTime } from '../game/vegetation.ts';
 import { FaceSign } from './sign.ts';
 import { Confetti } from './confetti.ts';
 import { buildFace, canvasTexture, FACES, seededRandom, type FaceInfo, type FaceKit, type Tick } from './faces.ts';
@@ -369,6 +369,7 @@ export class Hub {
     this.planet.position.y = Math.sin(this.time * c.bobSpeed) * c.bobHeight + hop;
     this.halo.position.copy(this.planet.position).add(new THREE.Vector3(0, 0, -c.cubeSize));
 
+    windTime.value += dt * TUNING.minigolfFx.windSpeed; // the trees on the minigolf side sway too
     // The little worlds move; the chosen side's frame glows in its game's colour, and so does the halo.
     for (const face of this.faces) (face.userData.tick as Tick | undefined)?.(this.time, dt);
     this.frames.forEach((frame, i) => {

@@ -8,6 +8,9 @@ type Piece = { position: THREE.Vector3; velocity: THREE.Vector3; spin: THREE.Vec
 
 const PALETTE = ['#ffd84d', '#ff6b81', '#4da8ff', '#3ddc84', '#b9a6ff', '#ffffff'];
 
+/** Size of the pieces and how they fly; the default is the hub's (TUNING.hub). */
+export type ConfettiStyle = { pieces: number; size: number; speed: number; spread: number; seconds: number };
+
 export class Confetti {
   readonly mesh: THREE.InstancedMesh;
   private readonly pieces: Piece[] = [];
@@ -17,10 +20,14 @@ export class Confetti {
   private readonly scale = new THREE.Vector3();
   private active = 0;
 
-  constructor() {
-    const count = TUNING.hub.confettiPieces * 3;
+  private readonly style: ConfettiStyle;
+
+  constructor(style: Partial<ConfettiStyle> = {}) {
+    const c = TUNING.hub;
+    this.style = { pieces: c.confettiPieces, size: 0.14, speed: c.confettiSpeed, spread: c.confettiSpread, seconds: c.confettiSeconds, ...style };
+    const count = this.style.pieces * 3;
     this.mesh = new THREE.InstancedMesh(
-      new THREE.PlaneGeometry(0.14, 0.2),
+      new THREE.PlaneGeometry(this.style.size, this.style.size * 1.43),
       new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, toneMapped: false }),
       count,
     );
@@ -33,8 +40,8 @@ export class Confetti {
   }
 
   /** A burst at a point in the world, mostly in `colour` with some party colours mixed in. */
-  burst(at: THREE.Vector3, colour: string, up: THREE.Vector3, pieces: number = TUNING.hub.confettiPieces): void {
-    const c = TUNING.hub;
+  burst(at: THREE.Vector3, colour: string, up: THREE.Vector3, pieces: number = this.style.pieces): void {
+    const c = this.style;
     const side = new THREE.Vector3().crossVectors(up, Math.abs(up.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0)).normalize();
     const side2 = new THREE.Vector3().crossVectors(up, side);
     const tint = new THREE.Color();
@@ -43,17 +50,17 @@ export class Confetti {
       this.next = (this.next + 1) % this.pieces.length;
       const p = this.pieces[index];
       const angle = Math.random() * Math.PI * 2;
-      const out = Math.random() * c.confettiSpread;
+      const out = Math.random() * c.spread;
       p.position.copy(at);
       p.velocity
         .copy(up)
-        .multiplyScalar(c.confettiSpeed * (0.6 + Math.random() * 0.6))
+        .multiplyScalar(c.speed * (0.6 + Math.random() * 0.6))
         .addScaledVector(side, Math.cos(angle) * out)
         .addScaledVector(side2, Math.sin(angle) * out);
       p.spin.set(Math.random() * 12 - 6, Math.random() * 12 - 6, Math.random() * 12 - 6);
       p.rotation.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
       p.age = 0;
-      p.life = c.confettiSeconds * (0.7 + Math.random() * 0.5);
+      p.life = c.seconds * (0.7 + Math.random() * 0.5);
       this.mesh.setColorAt(index, tint.set(Math.random() < 0.5 ? colour : PALETTE[Math.floor(Math.random() * PALETTE.length)]));
     }
     this.mesh.instanceColor!.needsUpdate = true;

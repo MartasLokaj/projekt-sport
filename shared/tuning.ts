@@ -497,6 +497,41 @@ export const TUNING = {
     waves: { everyMs: [3500, 7000], level: 0.35, rate: [0.85, 1.05] },
   },
 
+  /** Minigolf juice (host/game/Game.ts): hole intro, confetti, ball trail, camera nudge, wind. */
+  minigolfFx: {
+    /**
+     * Hole intro: the camera starts high above the cup and flies over the hole to its spot behind the tee (seconds),
+     * curving up to `arcHeight` above the hole; the "Hole 2/3 · Par 3" banner shows meanwhile. Any aim or swing
+     * ends it at once.
+     */
+    introSeconds: 2.6,
+    introStartHeight: 5,
+    introStartBack: 3.5,
+    introArcHeight: 8,
+    bannerMs: 2600,
+    /** Confetti when a ball drops in: pieces per burst, size of a piece (m), speed up (m/s), spread, life (s). */
+    confettiPieces: 70,
+    confettiSize: 0.1,
+    confettiSpeed: 3.2,
+    confettiSpread: 1.6,
+    confettiSeconds: 1.6,
+    /** A hole in one: this many bursts, one every holeInOneEveryMs, round the cup. */
+    holeInOneBursts: 6,
+    holeInOneEveryMs: 280,
+    /** A faint white streak behind a ball rolling faster than trailSpeed (m/s): width (m), length (ms). */
+    trailSpeed: 1.2,
+    trailWidth: 0.07,
+    trailMs: 320,
+    trailColour: '#ffffff',
+    /** The camera gives a little shake on the hit: strength (m) for a soft and a full-power shot, how long (ms). */
+    nudgeSoft: 0.01,
+    nudgeHard: 0.05,
+    nudgeMs: 180,
+    /** Wind in the trees, bushes and grass: how far the tops sway (share of the height) and how fast. */
+    windSway: 0.035,
+    windSpeed: 1.6,
+  },
+
   /** The podium after a match (host/results/Podium.ts): steps, characters, camera and the celebration. */
   podium: {
     /** Characters are drawn this much bigger than in the games. */

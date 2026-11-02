@@ -554,6 +554,25 @@ body, round mitten hands, sturdier legs, chunky shoes).
 - Checked in the dev browser: all files decode, every event fires in play (minigolf and CPU-vs-CPU badminton), mute.
   Not done: phone sounds, a volume slider (only levels in tuning + M).
 
+### Minigolf juice (phase 4c) — built 2026-11-02 (user: "pusť se do efektů v minigolfu"), waiting for the user's look
+- All values in `TUNING.minigolfFx`.
+- **Hole intro**: every new hole the camera starts high above the cup (`introStartHeight` 5, `introStartBack` 3.5)
+  and flies in an arc (`introArcHeight` 8 over the middle) to its spot behind the tee in `introSeconds` 2.6 (eased);
+  banner "Hole 2/3 · Par 3" (`#hole-banner`, CSS in `theme.css`). Any aim / swing / Mac arrow or Space ends it at
+  once (the camera settles from where it is). It replaces the swoop from the cube on the first hole. Measured: the
+  camera stays ≥ 3.2 m from every flag pole on all 9 holes (it flew through the flag before the heights were raised).
+- **Confetti** in the player's colour from the cup on every hole-in (`Confetti` in `host/hub/confetti.ts` now takes a
+  style: size/speed/spread/life); **hole in one**: 6 bursts round the cup (gold + colour, sparkle sounds) and the
+  message turns gold and bounces (`#hud-message.hole-in-one`).
+- **Ball trail**: faint white streak (badminton's `Trail`) while the ball rolls faster than `trailSpeed` 1.2 m/s.
+- **Camera nudge** on the hit: 0.01–0.05 m shake for `nudgeMs` 180 (by power), removed again each frame.
+- **Phone vibration** when my ball drops in (Android; iPhone cannot): `controller/main.ts` watches `game_state`
+  (done → holed), longer pattern for a hole in one. No server change.
+- **Wind**: the KayKit plants sway (vertex shader via `onBeforeCompile` in `vegetation.ts`, `windTime` uniform moved by
+  the game and the hub; `windSway` 0.035 of the height, per-plant phase, gusts). Shadows do not sway.
+- Checked in the dev browser: intro on all holes, banner text, hole in one (confetti, gold message), trail on a
+  80 % shot, nudge, wind clock and shader compiled. Not checked: vibration on a real Android phone; fps on the MacBook Air.
+
 ### Podium after a match (both games) — built 2026-11-01, tested by the user 2026-11-02 ("vyzkoušeno", no complaints)
 - `host/results/Podium.ts` (own WebGL canvas, `#podium-screen` styles in `theme.css`, tuning `TUNING.podium`):
   1st step in the middle (highest), 2nd left, 3rd right, numbers on the fronts; shared places stand together on one

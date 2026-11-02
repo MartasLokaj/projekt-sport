@@ -12,7 +12,9 @@ import { ADDRESS_DISTANCE, Character, lookOf } from './character.ts';
 import { buildHole, HOLES, isInCup, loadKit, type BuiltHole, type Kit } from './course.ts';
 import { DistancePreview } from './preview.ts';
 import { Scenery } from './scenery.ts';
-import { loadForest, type Forest } from './vegetation.ts';
+import { loadForest, windTime, type Forest } from './vegetation.ts';
+import { Confetti } from '../hub/confetti.ts';
+import { Trail } from '../badminton/effects.ts';
 
 // Three holes built from the Kenney kit, for 1–4 players. The host owns the ball physics; the server decides
 // whose turn it is and counts strokes (see syncState). Each player has their own ball: the current
@@ -57,6 +59,7 @@ export type GameHud = {
 };
 
 const UP = new THREE.Vector3(0, 1, 0);
+const CONFETTI_GRAVITY = new THREE.Vector3(0, -5, 0);
 
 export class Game {
   private readonly renderer: THREE.WebGLRenderer;
@@ -122,6 +125,27 @@ export class Game {
   private swoop = 1;
   /** The ball's velocity one physics step ago, to hear it bounce off a border. */
   private readonly lastVel = new THREE.Vector3();
+  /** Hole intro: the camera flies from above the cup over the hole to the tee (0..1; 1 = done). */
+  private intro = 1;
+  private readonly introFrom = new THREE.Vector3();
+  private readonly introArc = new THREE.Vector3();
+  private readonly introLook = new THREE.Vector3();
+  /** "Hole 2/3 · Par 3", shown while the camera flies in. */
+  private readonly banner = document.createElement('div');
+  private bannerTimer: number | undefined;
+  /** Confetti when a ball drops in, and a streak behind a fast ball. */
+  private readonly confetti = new Confetti({
+    pieces: TUNING.minigolfFx.confettiPieces,
+    size: TUNING.minigolfFx.confettiSize,
+    speed: TUNING.minigolfFx.confettiSpeed,
+    spread: TUNING.minigolfFx.confettiSpread,
+    seconds: TUNING.minigolfFx.confettiSeconds,
+  });
+  private readonly trail = new Trail(36, TUNING.minigolfFx.trailWidth);
+  /** The little camera shake on the hit: until when (ms), how strong (m), and the offset applied last frame. */
+  private nudgeUntil = 0;
+  private nudgeStrength = 0;
+  private readonly nudgeOffset = new THREE.Vector3();
   private readonly followDir = new THREE.Vector3(0, 0, 1);
 
   static async create(container: HTMLElement, hud: GameHud): Promise<Game> {
@@ -188,7 +212,10 @@ export class Game {
     const dot = new THREE.Mesh(new THREE.SphereGeometry(b.radius * 0.3, 12, 8), new THREE.MeshStandardMaterial({ color: '#ff5a5f' }));
     dot.position.set(0, 0, b.radius * 0.85);
     this.ballMesh.add(dot);
-    this.scene.add(this.ballMesh);
+    this.scene.add(this.ballMesh, this.confetti.mesh, this.trail.mesh);
+    this.banner.id = 'hole-banner';
+    this.banner.hidden = true;
+    container.parentElement?.append(this.banner);
 
     // White aim line: a strip from the ball straight ahead, laid on the ground every frame (so it climbs ramps).
     const stripGeometry = new THREE.BufferGeometry();
@@ -225,6 +252,7 @@ export class Game {
     this.followDir.set(Math.sin(this.baseYaw), 0, Math.cos(this.baseYaw));
     this.state = 'waiting';
     this.snapCamera();
+    this.startIntro();
     // Everyone appears next to the tee.
     let i = 0;
     for (const player of this.players.values()) {
@@ -430,12 +458,14 @@ export class Game {
   }
 
   onPhoneAim(angle: number): void {
+    this.endIntro();
     this.phoneAngle = angle;
   }
 
   /** The phone is in the middle of a swing: move the gauge and the line's length live. */
   onPhoneSwingProgress(progress: SwingProgress): void {
     if (this.state !== 'aiming') return;
+    this.endIntro();
     this.golfer()?.setSwing(progress.phase === 'swinging' ? progress.backswing : 0);
     if (progress.phase === 'cancelled') {
       this.showPracticeResult();
@@ -512,6 +542,10 @@ export class Game {
     this.ball.setLinvel({ x: Math.sin(yaw) * speed, y: 0, z: Math.cos(yaw) * speed }, true);
     this.followDir.set(Math.sin(yaw), 0, Math.cos(yaw));
     sound.play('golf-putt', 0.4 + 0.6 * Math.min(1, power / 100), 1.1 - 0.2 * Math.min(1, power / 100));
+    this.endIntro();
+    const fx = TUNING.minigolfFx;
+    this.nudgeUntil = performance.now() + fx.nudgeMs;
+    this.nudgeStrength = fx.nudgeSoft + (fx.nudgeHard - fx.nudgeSoft) * Math.min(1, power / 100);
     this.lastVel.set(Math.sin(yaw) * speed, 0, Math.cos(yaw) * speed);
     this.curve = curve;
     const player = this.active ? this.players.get(this.active) : undefined;
@@ -585,6 +619,7 @@ export class Game {
     const strokes = player?.strokes ?? 0;
     sound.play('golf-cup');
     window.setTimeout(() => sound.play(strokes === 1 ? 'jingle-hole-in-one' : 'jingle-hole-in'), 250);
+    this.celebrate(player?.colour ?? '#ffd84d', strokes === 1);
     const diff = strokes - this.hole.def.par;
     const name =
       strokes === 1 ? 'HOLE IN ONE!' : ({ [-2]: 'Eagle!', [-1]: 'Birdie!', 0: 'Par', 1: 'Bogey' } as Record<number, string>)[diff];
@@ -655,6 +690,12 @@ export class Game {
     this.updateCharacters(dt);
     this.updateOccluders(dt);
     this.scenery.update(dt, this.camera);
+    const fx = TUNING.minigolfFx;
+    const v = this.ball.linvel();
+    const fast = this.state === 'rolling' && Math.hypot(v.x, v.y, v.z) > fx.trailSpeed;
+    this.trail.update(this.ballMesh.position, performance.now(), fast, fx.trailColour, fx.trailMs);
+    this.confetti.update(dt, CONFETTI_GRAVITY);
+    windTime.value += dt * fx.windSpeed;
     this.updateCamera(dt);
     this.composer.render(dt);
   }
@@ -771,7 +812,18 @@ export class Game {
   }
 
   private updateCamera(dt: number): void {
+    this.camera.position.sub(this.nudgeOffset); // last frame's shake
+    this.nudgeOffset.set(0, 0, 0);
     const { position, look } = this.desiredCamera();
+    if (this.intro < 1) {
+      this.flyIntro(dt, position, look);
+      return;
+    }
+    const left = (this.nudgeUntil - performance.now()) / TUNING.minigolfFx.nudgeMs;
+    if (left > 0) {
+      const s = this.nudgeStrength * left;
+      this.nudgeOffset.set((Math.random() - 0.5) * s, (Math.random() - 0.5) * s, (Math.random() - 0.5) * s);
+    }
     if (this.swoop < 1) {
       const s = TUNING.transition;
       this.swoop = Math.min(1, this.swoop + dt / s.swoopSeconds);
@@ -786,6 +838,66 @@ export class Game {
     this.camera.position.lerp(position, k);
     this.cameraTarget.lerp(look, k);
     this.camera.lookAt(this.cameraTarget);
+    this.camera.position.add(this.nudgeOffset);
+  }
+
+  /** A new hole: the camera starts high above the cup and the banner shows the hole number and par. */
+  private startIntro(): void {
+    const fx = TUNING.minigolfFx;
+    const cup = this.hole.cup.clone();
+    const tee = this.teePosition();
+    const away = cup.clone().sub(tee).setY(0).normalize();
+    this.introFrom.copy(cup).addScaledVector(away, fx.introStartBack).add(new THREE.Vector3(0, fx.introStartHeight, 0));
+    this.introArc.copy(cup).add(tee).multiplyScalar(0.5).add(new THREE.Vector3(0, fx.introArcHeight, 0));
+    this.introLook.copy(cup);
+    this.intro = 0;
+    this.swoop = 1; // the intro is the way in now
+    this.banner.innerHTML = '<b></b><span></span>';
+    this.banner.querySelector('b')!.textContent = `Hole ${this.coursePos + 1}/${this.courseLength}`;
+    this.banner.querySelector('span')!.textContent = `Par ${this.hole.def.par}`;
+    this.banner.hidden = false;
+    this.banner.classList.remove('show');
+    void this.banner.offsetWidth; // restart the CSS animation
+    this.banner.classList.add('show');
+    clearTimeout(this.bannerTimer);
+    this.bannerTimer = window.setTimeout(() => (this.banner.hidden = true), fx.bannerMs);
+  }
+
+  /** Any aim or swing: the camera stops flying and settles behind the ball from where it is. */
+  private endIntro(): void {
+    if (this.intro >= 1) return;
+    this.intro = 1;
+  }
+
+  /** Over the hole along a curve (from above the cup, up over the middle, down to behind the tee), eased. */
+  private flyIntro(dt: number, position: THREE.Vector3, look: THREE.Vector3): void {
+    this.intro = Math.min(1, this.intro + dt / TUNING.minigolfFx.introSeconds);
+    const t = this.intro;
+    const e = t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2; // ease in and out
+    const a = this.introFrom.clone().lerp(this.introArc, e);
+    const b = this.introArc.clone().lerp(position, e);
+    this.camera.position.copy(a.lerp(b, e));
+    this.cameraTarget.copy(this.introLook).lerp(look, e);
+    this.camera.lookAt(this.cameraTarget);
+  }
+
+  /** Confetti from the cup in the player's colour; a hole in one gets a whole series of bursts round it. */
+  private celebrate(colour: string, holeInOne: boolean): void {
+    const fx = TUNING.minigolfFx;
+    const up = new THREE.Vector3(0, 1, 0);
+    const cup = this.hole.cup.clone();
+    this.confetti.burst(cup, colour, up);
+    if (!holeInOne) return;
+    for (let i = 1; i < fx.holeInOneBursts; i++) {
+      window.setTimeout(() => {
+        const angle = Math.random() * Math.PI * 2;
+        const at = cup.clone().add(new THREE.Vector3(Math.cos(angle) * 0.8, 0.2, Math.sin(angle) * 0.8));
+        this.confetti.burst(at, i % 2 ? '#ffd84d' : colour, up);
+        sound.play('sparkle', 0.6, 1 + i * 0.08);
+      }, i * fx.holeInOneEveryMs);
+    }
+    this.hud.message.classList.add('hole-in-one');
+    window.setTimeout(() => this.hud.message.classList.remove('hole-in-one'), TUNING.rules.holedPauseMs);
   }
 
   private snapCamera(): void {
@@ -831,6 +943,7 @@ export class Game {
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {
     if (e.repeat) return;
+    if (['ArrowLeft', 'ArrowRight', ' ', 'p', 'P'].includes(e.key)) this.endIntro();
     if (e.key === 'ArrowLeft') this.keysTurning = -1;
     else if (e.key === 'ArrowRight') this.keysTurning = 1;
     else if ((e.key === ' ' || e.key === 'p' || e.key === 'P') && this.state === 'aiming') {
