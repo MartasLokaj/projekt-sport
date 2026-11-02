@@ -198,3 +198,43 @@ Status: decisions so far are recorded here. Do not start building Badminton unti
 - B3: split screen 1v1, scoring to 11.
 - B4: 2v2.
 - B5: art and juice, plus the Badminton face on the Cube World hub.
+
+## 14. Curling (next game) — DRAFT, still being designed with the user
+
+Status: the user chose Curling as the next sport (2026-11-02), because it reuses the most from Minigolf (turns, a
+stone that slides and curls like the ball, scores, characters). Open questions are marked **OPEN**.
+
+**Decided (user, 2026-11-02)**
+- **Setting: a frozen pond** on a snowy island, with little trees and snow around, in the same soft art style as the
+  minigolf islands.
+- **Sweeping by shaking the phone:** while the stone slides, the thrower shakes the phone back and forth; the faster
+  the shaking, the harder the character sweeps in front of the stone, so it slides further and curls less.
+- **Match length is a choice** on the lobby card: Quick / Normal / Long (like Badminton, `matchLengths`).
+
+**Proposed (to confirm with the user)**
+- **Throw = the Minigolf swing:** aim by tilting the phone, then swing forward like a putter; the swing speed is the
+  stone's speed. Reuse the Minigolf phone screen and swing detection as they are for the first prototype.
+- **Curl:** the twist of the swing decides which way the stone curls (left/right), like the ball's curve in Minigolf.
+- **Teams:** two teams (red and yellow) take turns, one stone each. 1 phone = vs CPU, 2 phones = 1 v 1,
+  3–4 phones = 2 v 2 (teammates alternate stones; the computer fills an empty seat).
+- **Lengths:** Quick = 2 ends, Normal = 4 ends, Long = 6 ends; 4 stones per team per end (real curling: 8 stones,
+  8–10 ends).
+- **Scoring (real curling rules):** after each end, only the team with the stone closest to the centre of the target
+  (the "house") scores: one point for each of its stones closer than the other team's best stone. Most points wins.
+- **Ice sheet** shorter than a real one, so the stone reaches the house in a few seconds.
+- **Camera:** behind the thrower during the throw, follows the stone, then looks down on the house when it stops.
+- **No texts over the game** while playing (like Badminton): score and stones left only; feedback from visuals and
+  the phone.
+
+**OPEN**
+- Exact feel of the throw and the sweeping, after testing on real phones.
+
+**Phase plan**
+- C1: graybox: one ice sheet with a house, one player throws stones with the phone; the stone slides, curls and
+  knocks other stones away. Mac keys for testing.
+- C2: sweeping by shaking the phone.
+- C3: rules: ends, scoring, two teams, turns, vs CPU, 1 v 1, 2 v 2, match lengths, scoreboard and podium.
+- C4: art and juice (the frozen pond, characters with brooms, sounds) and the Curling side of the cube.
+
+## Ideas for later (user, 2026-11-02)
+- **Boxing, two phones against the CPU** (punch with the phone). Not now; after Curling.
