@@ -554,6 +554,22 @@ body, round mitten hands, sturdier legs, chunky shoes).
 - Checked in the dev browser: all files decode, every event fires in play (minigolf and CPU-vs-CPU badminton), mute.
   Not done: phone sounds, a volume slider (only levels in tuning + M).
 
+### Network change + New room (user, 2026-11-02: "why couldn't my phone connect with the hotspot?") — built, waiting for the user's test
+- Cause: the server looked up the Mac's address only at start (2026-11-01 09:22, home Wi-Fi 192.168.1.131). On the
+  phone's hotspot the Mac got another address (iPhone: 172.20.10.x), but the QR code / address still showed the old
+  one. Mobile data never helps: phones talk to the Mac over the local network only.
+- `server/index.ts`: every `TUNING.network.addressCheckMs` (4 s) `followNetwork()` compares `getLanAddresses()`; on a
+  change: `ensureCertificate` (now keeps up to 8 earlier addresses, so switching back needs no new certificate; a new
+  network still means one new security warning on the phones), `server.setSecureContext`, new `host_info` (address
+  + QR) to every big screen (`Lobby.setHostInfo`), printed in the terminal. Room and players stay.
+- **New room** button in the join panel (`#new-room`, `LobbyUi.onNewRoom`; first click asks "Everyone joins again ·
+  click again", a second within 3.5 s does it) → `reset_room` → network looked up again, new room code
+  (`Lobby.resetRoom`: seats cleared, match ended, lab off), phones get `join_error: room_reset` → room-code form
+  "The big screen started a new room…" (`controller/main.ts`).
+- Checked with a copy of the project on port 8444 and a fake network move (Node preload): address/QR changed, same
+  room, certificate covers both addresses; reset → phone told, new code, old code refused, joining with the new code
+  works. Button checked in the dev browser. **Server code changed → restart needed** (done in the "game server" tab).
+
 ### Minigolf juice (phase 4c) — built 2026-11-02 (user: "pusť se do efektů v minigolfu"), waiting for the user's look
 - All values in `TUNING.minigolfFx`.
 - **Hole intro**: every new hole the camera starts high above the cup (`introStartHeight` 5, `introStartBack` 3.5)

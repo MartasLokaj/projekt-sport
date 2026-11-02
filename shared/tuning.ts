@@ -10,6 +10,8 @@ export const TUNING = {
      * A phone that misses one check is marked as disconnected.
      */
     heartbeatIntervalMs: 3000,
+    /** How often the server looks whether the Mac moved to another network (e.g. a phone's hotspot), ms. */
+    addressCheckMs: 4000,
     /** The server ignores a second stroke from the same phone within this time (milliseconds). */
     minStrokeIntervalMs: 800,
   },

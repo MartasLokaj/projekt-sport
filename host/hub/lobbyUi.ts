@@ -42,6 +42,8 @@ export class LobbyUi {
   onChoose: (id: string) => void = () => {};
   /** The host confirmed kicking this player. */
   onKick: (playerId: string) => void = () => {};
+  /** "New room" was clicked twice: a new code, everyone joins again. */
+  onNewRoom: () => void = () => {};
   /** The computer's difficulty for the next match against it (Easy / Normal / Pro in the mode row, or keys 1 2 3). */
   cpuLevel: CpuLevel = 'normal';
   /** The match length for the next match (Quick / Normal / Long in the card's Match row). */
@@ -62,6 +64,26 @@ export class LobbyUi {
   private kickId: string | null = null;
 
   constructor() {
+    // New room: the first click asks (everyone will have to join again), a second click within a few seconds does it.
+    const newRoom = this.$('new-room');
+    let asking = 0;
+    newRoom.addEventListener('click', () => {
+      if (asking) {
+        window.clearTimeout(asking);
+        asking = 0;
+        newRoom.classList.remove('is-asking');
+        newRoom.textContent = '↻ New room';
+        this.onNewRoom();
+        return;
+      }
+      newRoom.classList.add('is-asking');
+      newRoom.textContent = 'Everyone joins again · click again';
+      asking = window.setTimeout(() => {
+        asking = 0;
+        newRoom.classList.remove('is-asking');
+        newRoom.textContent = '↻ New room';
+      }, 3500);
+    });
     this.$('kick-yes').addEventListener('click', () => this.answerKick(true));
     this.$('kick-cancel').addEventListener('click', () => this.answerKick(false));
     this.kickDialog.addEventListener('click', (e) => {

@@ -17,12 +17,17 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 type CertMeta = { addresses: string[]; expires: string };
 
+/** A new certificate also keeps up to this many addresses the Mac had before (home Wi-Fi, a hotspot…). */
+const KEEP_ADDRESSES = 8;
+
 export async function ensureCertificate(lanAddresses: string[]): Promise<{ key: string; cert: string }> {
-  const addresses = ['127.0.0.1', ...lanAddresses];
+  let addresses = ['127.0.0.1', ...lanAddresses];
 
   if (existsSync(KEY_FILE) && existsSync(CERT_FILE) && existsSync(META_FILE)) {
     const meta = JSON.parse(readFileSync(META_FILE, 'utf8')) as CertMeta;
     const coversAll = addresses.every((a) => meta.addresses.includes(a));
+    // Switching between networks: the new certificate still covers the earlier ones, so going back needs no new one.
+    addresses = [...new Set([...addresses, ...meta.addresses])].slice(0, KEEP_ADDRESSES + 1);
     const fresh = new Date(meta.expires).getTime() - Date.now() > RENEW_BEFORE_DAYS * DAY_MS;
     if (coversAll && fresh) {
       return { key: readFileSync(KEY_FILE, 'utf8'), cert: readFileSync(CERT_FILE, 'utf8') };

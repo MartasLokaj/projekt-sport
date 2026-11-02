@@ -77,10 +77,33 @@ export class Lobby {
   onBadmintonOutcome: ((entry: object) => void) | null = null;
   private readonly isConnected = (id: string): boolean => this.seats.get(id)?.socket != null;
 
+  /** Called when the big screen asks for a new room (host/main.ts → reset_room); index.ts makes the new code. */
+  onResetRoom: (() => void) | null = null;
+
   constructor(
-    readonly room: string,
+    private room: string,
     private hostInfo: ServerMessage,
   ) {}
+
+  /** New address or QR code (the Mac moved to another network, or a new room): every big screen gets it. */
+  setHostInfo(info: ServerMessage): void {
+    this.hostInfo = info;
+    for (const ws of this.hosts) send(ws, info);
+  }
+
+  /** A fresh room: new code, no seats, no match. Phones are told to join again with the new code. */
+  resetRoom(room: string, info: ServerMessage): void {
+    for (const ws of this.phones) refuse(ws, 'room_reset');
+    this.phones.clear();
+    this.seats.clear();
+    this.match.end();
+    this.lab = false;
+    this.room = room;
+    this.setHostInfo(info);
+    this.broadcastLobby();
+    this.broadcastGame();
+    for (const ws of this.hosts) send(ws, { type: 'lab_state', on: false });
+  }
 
   handle(ws: WebSocket, msg: ClientMessage): void {
     switch (msg.type) {
@@ -218,6 +241,9 @@ export class Lobby {
         this.onBadmintonOutcome?.(msg.outcome);
         return;
       }
+      case 'reset_room':
+        if (this.hosts.has(ws)) this.onResetRoom?.();
+        return;
       case 'kick_player': {
         if (!this.hosts.has(ws) || this.match.playing || typeof msg.playerId !== 'string') return;
         const seat = this.seats.get(msg.playerId);

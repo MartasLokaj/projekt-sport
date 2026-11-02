@@ -79,6 +79,7 @@
   #join.is-compact:not(:hover) .join-step,
   #join.is-compact:not(:hover) #join-url,
   #join.is-compact:not(:hover) #help,
+  #join.is-compact:not(:hover) #new-room,
   #join.is-compact:not(:hover) #link-status {
     display: none;
   }
@@ -960,4 +961,23 @@
   opacity: 0 !important;
   pointer-events: none;
   transition: opacity 0.3s ease;
+}
+
+/* "New room" under the join help: small and quiet; the first click asks, the second one does it. */
+.new-room {
+  align-self: flex-start;
+  font: inherit;
+  font-size: var(--cw-fs-small);
+  font-weight: 800;
+  color: var(--cw-text-3);
+  background: none;
+  border: none;
+  padding: 2px 0;
+  cursor: pointer;
+}
+.new-room:hover {
+  color: var(--cw-text);
+}
+.new-room.is-asking {
+  color: #ffb4b4;
 }

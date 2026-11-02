@@ -134,7 +134,8 @@ export type JoinError =
   | 'colour_taken'
   | 'invalid'
   | 'replaced' // the same player opened the game in another tab
-  | 'kicked'; // the big screen removed this player (they may join again)
+  | 'kicked' // the big screen removed this player (they may join again)
+  | 'room_reset'; // the big screen started a new room: scan the new QR code or type the new code
 
 /** Sent by the host page or a phone. */
 export type ClientMessage =
@@ -178,6 +179,8 @@ export type ClientMessage =
   | { type: 'host_stroke' }
   /** From the host, in the lobby: remove this player (their phone is told and may join again). */
   | { type: 'kick_player'; playerId: string }
+  /** From the host: start a new room (new code, everyone joins again; the network address is looked up again). */
+  | { type: 'reset_room' }
   /** From the host: open or close the Badminton Swing Lab (phones switch to the swing test). */
   | { type: 'lab_mode'; on: boolean }
   /** From a phone: what time is it on the server? t = the phone's clock when sent. */

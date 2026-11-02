@@ -308,6 +308,12 @@ function handleJoinError(reason: JoinError): void {
     case 'game_full':
       showMessage('The game is full', 'Up to 4 players can join. Wait for the next game.');
       break;
+    case 'room_reset':
+      // The big screen started a new room: type its new code (the name and character are kept on this phone).
+      play.cancel();
+      gameState = null;
+      showRoomForm('The big screen started a new room. Type the new code, or scan the new QR code.');
+      break;
     case 'kicked':
       joined = false;
       lab.setOpen(false);

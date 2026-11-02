@@ -19,6 +19,7 @@ Then read progress/STATUS.md: where the project is, what the user decided, and w
 - `npm run check` – TypeScript type check.
 - Page code (host/, controller/) reloads by itself. Server code (server/) needs a restart: Ctrl+C, then `npm run dev`. Every restart makes a new room code.
 - The self-signed certificate is created in `certs/` (not in git); delete that folder to force a new one.
+- The server follows network changes by itself (new address, QR and certificate every few seconds, `followNetwork` in `server/index.ts`). "↻ New room" in the join panel (click twice) starts a fresh room code; everyone joins again.
 - Server: `server/lobby.ts` (seats, room code, message routing), `server/match.ts` (turns, strokes, scores).
 - Tuning values: `shared/tuning.ts` (aim, swing detection, ball curve, scenery and look, gauge, slingshot). WebSocket messages: `shared/protocol.ts`. Swing detection logic: `controller/swing.ts`.
 - Lobby (host): Cube World hub — `host/hub/Hub.ts` (cube scene, turning, characters and name tags, stars), `host/hub/faces.ts` (game registry: the games on the cube's sides, their card info and their animated little worlds), `host/hub/lobbyUi.ts` (join panel, game card, toasts). Look of all page UI: design tokens and shared pieces in `host/ui/theme.css`, lobby layout in `host/ui/lobby.css`. The page opens on a title menu (Play / How to Play); Esc on the cube with no game chosen goes back to it. In the lobby: drag the cube with the mouse to spin it, scroll or pinch to zoom, click a side (or ← →) to choose that game, Enter plays it, Esc lets go.

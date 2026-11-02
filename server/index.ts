@@ -3,7 +3,7 @@ import { createServer } from 'node:https';
 import QRCode from 'qrcode';
 import { createServer as createViteServer } from 'vite';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { WS_PATH, type ClientMessage } from '../shared/protocol.ts';
+import { WS_PATH, type ClientMessage, type ServerMessage } from '../shared/protocol.ts';
 import { TUNING } from '../shared/tuning.ts';
 import { ensureCertificate } from './cert.ts';
 import { Lobby, makeRoomCode } from './lobby.ts';
@@ -11,7 +11,7 @@ import { getLanAddresses } from './network.ts';
 
 const PORT = Number(process.env.PORT ?? 8443);
 
-const lanAddresses = getLanAddresses();
+let lanAddresses = getLanAddresses();
 const { key, cert } = await ensureCertificate(lanAddresses);
 const server = createServer({ key, cert });
 
@@ -35,10 +35,52 @@ server.on('request', (req, res) => {
 });
 
 // Every game gets a room code, so an old phone tab cannot join the wrong game.
-const room = makeRoomCode();
-const joinUrl = lanAddresses.length > 0 ? `https://${lanAddresses[0]}:${PORT}/play?room=${room}` : null;
-const qrDataUrl = joinUrl ? await QRCode.toDataURL(joinUrl, { margin: 1, width: 512 }) : null;
-const lobby = new Lobby(room, { type: 'host_info', room, joinUrl, qrDataUrl });
+let room = makeRoomCode();
+
+/** The address and QR code the phones need, for this room on the Mac's current network. */
+async function hostInfo(): Promise<ServerMessage> {
+  const joinUrl = lanAddresses.length > 0 ? `https://${lanAddresses[0]}:${PORT}/play?room=${room}` : null;
+  const qrDataUrl = joinUrl ? await QRCode.toDataURL(joinUrl, { margin: 1, width: 512 }) : null;
+  return { type: 'host_info', room, joinUrl, qrDataUrl };
+}
+
+const lobby = new Lobby(room, await hostInfo());
+
+function printAddresses(): void {
+  if (lanAddresses.length === 0) {
+    console.log('  No Wi-Fi network found, so phones cannot connect. Join a Wi-Fi network (or a phone hotspot).');
+  } else {
+    console.log(`  Phones (or scan the QR code):   https://${lanAddresses[0]}:${PORT}/play?room=${room}`);
+  }
+  console.log(`  Room code:                      ${room}`);
+}
+
+/**
+ * The Mac moved to another network (e.g. a phone's hotspot) or got a new address: a certificate that covers it,
+ * and the new address and QR code on the big screen. The room and the players stay.
+ */
+async function followNetwork(): Promise<boolean> {
+  const now = getLanAddresses();
+  if (now.join() === lanAddresses.join()) return false;
+  lanAddresses = now;
+  server.setSecureContext(await ensureCertificate(now));
+  lobby.setHostInfo(await hostInfo());
+  console.log(`\nThe network changed: ${now.length > 0 ? now.join(', ') : 'none'}`);
+  printAddresses();
+  return true;
+}
+setInterval(() => void followNetwork().catch((err) => console.error('Network check failed:', err)), TUNING.network.addressCheckMs);
+
+// "New room" on the big screen: a fresh code (and the network looked up again), everyone joins again.
+lobby.onResetRoom = () => {
+  void (async () => {
+    await followNetwork();
+    room = makeRoomCode();
+    lobby.resetRoom(room, await hostInfo());
+    console.log('\nNew room started from the big screen.');
+    printAddresses();
+  })().catch((err) => console.error('New room failed:', err));
+};
 
 // Badminton Swing Lab: every swing is saved (one JSON line each) for tuning the detection.
 const SWING_LOG = 'logs/badminton-swings.jsonl';
@@ -105,12 +147,6 @@ server.on('error', (err: NodeJS.ErrnoException) => {
 server.listen(PORT, '0.0.0.0', () => {
   console.log('\nMinigolf Party is running!\n');
   console.log(`  Big screen (open on this Mac):  https://localhost:${PORT}/`);
-  if (lanAddresses.length === 0) {
-    console.log('  No Wi-Fi network found, so phones cannot connect. Join a Wi-Fi network and restart.');
-  }
-  if (joinUrl) {
-    console.log(`  Phones (or scan the QR code):   ${joinUrl}`);
-  }
-  console.log(`  Room code:                      ${room}`);
+  printAddresses();
   console.log('\nPress Ctrl+C to stop.\n');
 });
