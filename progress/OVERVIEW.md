@@ -5,7 +5,7 @@ Podrobný deník pro Clauda zůstává v `progress/STATUS.md`, zadání v `SPEC.
 
 ---
 
-## 1. Celkem hotovo: zhruba **75 %**
+## 1. Celkem hotovo: zhruba **78 %**
 
 Obě hry jsou hratelné, se zvuky, s hudbou a s přechodem z kostky do hry. Chybí hlavně efekty a oslavy
 v minigolfu, obrazovky s výsledky, dotažení editoru postavičky, nastavení a test s kamarády.
@@ -19,7 +19,7 @@ v minigolfu, obrazovky s výsledky, dotažení editoru postavičky, nastavení a
 | Badminton – hratelnost, běhání, kamera | **95 %** | Schváleno. Trenér (coach) čeká na test z telefonu. |
 | Badminton – 2 v 2 | **70 %** | Postaveno, **nevyzkoušeno** (chybí 3–4 telefony). |
 | Badminton – pláž, oblečení, košík, rakety | **90 %** | Hotovo, grafiku ještě vylepšíme. |
-| Kostka (lobby) | **75 %** | Vzhled, zvuky, hudba a přechod do hry hotové. Chybí výsledky po zápase a lobby na telefonu. |
+| Kostka (lobby) | **85 %** | Vzhled, zvuky, hudba, přechod do hry a stupně vítězů hotové. Chybí úvod zápasu a lobby na telefonu. |
 | Editor postavičky na telefonu (fáze 5) | **60 %** | Kroky 1–2 fungují (živé úpravy, ukládání). Chybí kroky 3–4. |
 | Doladění (fáze 6: nastavení, návod, test s přáteli) | **10 %** | Titulní menu, návod a ztlumení (M) jsou, zbytek ne. |
 | Ověření 60 snímků/s na MacBooku Air | **0 %** | Nikdy neměřeno na skutečném MacBooku Air. |
@@ -82,7 +82,7 @@ v minigolfu, obrazovky s výsledky, dotažení editoru postavičky, nastavení a
 ## 4. Co ještě chybí (seřazeno podle důležitosti)
 
 **A. Aby se to dalo ukázat kamarádům**
-- ~~Stupně vítězů s oslavou~~ — postaveno 1. 11. (čeká na tvůj pohled). Zbývá úvod zápasu (hráči vedle sebe,
+- ~~Stupně vítězů s oslavou~~ — hotovo a vyzkoušeno. Zbývá úvod zápasu (hráči vedle sebe,
   odpočet 3-2-1).
 - **Minigolf efekty (4c):** úvodní průlet jamkou „Hole N · Par P“, konfety při trefě, velká oslava hole-in-one,
   stopa za míčkem, malé zatřesení kamerou při ráně, vibrace telefonu, vítr v trávě a stromech.

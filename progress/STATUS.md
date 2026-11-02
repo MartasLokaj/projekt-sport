@@ -554,7 +554,7 @@ body, round mitten hands, sturdier legs, chunky shoes).
 - Checked in the dev browser: all files decode, every event fires in play (minigolf and CPU-vs-CPU badminton), mute.
   Not done: phone sounds, a volume slider (only levels in tuning + M).
 
-### Podium after a match (both games) — built 2026-11-01 (user: "pusťme se do stupňů vítězů a oslavy"), waiting for the user's look
+### Podium after a match (both games) — built 2026-11-01, tested by the user 2026-11-02 ("vyzkoušeno", no complaints)
 - `host/results/Podium.ts` (own WebGL canvas, `#podium-screen` styles in `theme.css`, tuning `TUNING.podium`):
   1st step in the middle (highest), 2nd left, 3rd right, numbers on the fronts; shared places stand together on one
   step, 4th and lower beside it on the ground; one name tag per place ("Martas & Tom · 1st · 4 points", 👑 for
