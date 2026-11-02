@@ -395,6 +395,11 @@ up to date too.
   `TUNING.course`); checked with the physics debug view.
 
 ### Kick players from the lobby (2026-10-31, user request)
+- **2026-11-02 (user): a kicked player must type the code again, not just tap "Join again".** The phone now forgets the
+  room code (`room = null`, URL back to `/play`, empty code box) and shows the room form "You were removed from the
+  game. To play again, type the room code from the big screen."; the server also drops that socket from `phones`, so it
+  gets no more lobby updates. Checked on a test server (kicked → 0 updates; joining with the code works again) and the
+  phone page in the dev browser. Server changed → restarted.
 - **Built, waiting for the user's test.** Hover a player's face under Play → red × (`.face-kick` in
   `host/hub/lobbyUi.ts`, styles in `host/ui/lobby.css`) → dialog "Kick Eva?" (`#kick-confirm` in `host/index.html`;
   Enter kicks, Esc cancels) → host sends `kick_player` → server (`server/lobby.ts`) deletes the seat (only outside a
@@ -554,7 +559,7 @@ body, round mitten hands, sturdier legs, chunky shoes).
 - Checked in the dev browser: all files decode, every event fires in play (minigolf and CPU-vs-CPU badminton), mute.
   Not done: phone sounds, a volume slider (only levels in tuning + M).
 
-### Network change + New room (user, 2026-11-02: "why couldn't my phone connect with the hotspot?") — built, waiting for the user's test
+### Network change + New room (user, 2026-11-02: "why couldn't my phone connect with the hotspot?") — approved ("jeee funguje a je to mega")
 - Cause: the server looked up the Mac's address only at start (2026-11-01 09:22, home Wi-Fi 192.168.1.131). On the
   phone's hotspot the Mac got another address (iPhone: 172.20.10.x), but the QR code / address still showed the old
   one. Mobile data never helps: phones talk to the Mac over the local network only.

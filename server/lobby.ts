@@ -249,8 +249,11 @@ export class Lobby {
         const seat = this.seats.get(msg.playerId);
         if (!seat) return;
         this.seats.delete(seat.id);
-        // The phone stays connected (it knows the room code), so it can join again from the join form.
-        if (seat.socket) refuse(seat.socket, 'kicked');
+        // The phone forgets the room code: to come back it must type the code (or scan the QR) again.
+        if (seat.socket) {
+          refuse(seat.socket, 'kicked');
+          this.phones.delete(seat.socket);
+        }
         this.broadcastLobby();
         this.broadcastGame(); // the leader may have changed
         return;

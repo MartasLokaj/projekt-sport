@@ -315,10 +315,13 @@ function handleJoinError(reason: JoinError): void {
       showRoomForm('The big screen started a new room. Type the new code, or scan the new QR code.');
       break;
     case 'kicked':
-      joined = false;
-      lab.setOpen(false);
+      // Removed by the big screen: this phone forgets the room code, so coming back means typing it (or scanning) again.
       play.cancel();
-      showMessage('You were removed from the game', 'The big screen took you out of this game. You can join again.', true);
+      gameState = null;
+      room = null;
+      roomInput.value = '';
+      history.replaceState(null, '', '/play');
+      showRoomForm('You were removed from the game. To play again, type the room code from the big screen.');
       break;
     default:
       showJoinForm(JOIN_ERROR_TEXT[reason]);
