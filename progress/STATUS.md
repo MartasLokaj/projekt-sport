@@ -1,6 +1,6 @@
 # Project status — read this first in a new chat
 
-Last updated: 2026-10-31. Read `CLAUDE.md` and `SPEC.md` too (SPEC is the source of truth; this file is the
+Last updated: 2026-11-03. Read `CLAUDE.md` and `SPEC.md` too (SPEC is the source of truth; this file is the
 running log of where we are, what the user decided, and what comes next).
 Short overview for the user (in Czech: % done, what is missing, optimisation ideas): `progress/OVERVIEW.md` — keep it
 up to date too.
@@ -98,6 +98,23 @@ up to date too.
   playful open-licence font stored locally (e.g. Fredoka, OFL — ask before download).
 - **Done when (SPEC):** looks good enough to show friends and runs at 60 fps on the MacBook Air (**fps on the real
   MacBook Air not verified yet**; in the dev browser a frame takes < 1–3 ms of CPU).
+
+### Minigolf fixes after a real phone game (2026-11-03) — done, waiting for the user's phone test
+User reported three problems; fixed in three commits:
+1. **Swing fired with no/tiny motion** (`controller/swing.ts`): hand shake (startAngle 2°, reverseSpeed 15°/s,
+   3° backswing was enough) and gyroscope drift counted as strokes. Now a stroke needs `minHitBackswing` 8° and
+   `minHitSpeed` 40°/s at the start point; the start point re-locks while the phone is held still (`driftRate`);
+   `startAngle` 5°, `reverseSpeed` 30°/s. Power curve unchanged (`minBackswing` 3 is still the power deadzone).
+   A too-small swing shows "Too small…" and waits for a real one. Simulated: tremor/micro/slow wander → no hit,
+   10° gentle putt → ~3 %. If real gentle putts get ignored, lower `minHitBackswing` / `minHitSpeed`.
+2. **Waiting players in the view** (`Game.updateCharacters`): they now stand beside the ball at ball level on the
+   side away from the golfer (`spectatorSide` 1.5, `spectatorBehind`, `spectatorSideStep`), line up by the aim
+   (follow it after > `spectatorFollowAim` 25°) and step out if within `spectatorClearance` of the camera→ball→aim
+   line. (Over water on the bridge hole they may still float beside the bridge, as before.)
+3. **Trees blocking the view** (`vegetation.ts` `Planter.fadeBlocking`, called from `Game.updateOccluders`): trees and
+   bushes between the camera and the ball / aim line middle / aim end dissolve into a fine dot pattern (shader
+   discard, per-instance `instanceFade` attribute; grass never fades) and come back. `TUNING.vegetation.fadeAmount/
+   fadeReach/fadeSpeed`. Boulders do not fade (they are kept away from the lane).
 
 ### Cube World hub (SPEC §12) — started 2026-10-30, before 4c
 - The user added SPEC §12: the lobby becomes a floating rounded cube, one small world per face (Minigolf playable,
