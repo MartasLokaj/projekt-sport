@@ -314,6 +314,15 @@ export const TUNING = {
     maxReach: 0.8,
     /** Colour boost on the pack's colours (1 = as made). */
     tint: [1.15, 1.22, 1.05],
+    /**
+     * Trees and bushes between the camera and the ball (or the aim line) turn see-through: this much of them
+     * disappears (0..1, 1 = invisible)...
+     */
+    fadeAmount: 0.75,
+    /** ...when the view line passes closer than this part of the plant's size (1 = its whole round outline)... */
+    fadeReach: 0.8,
+    /** ...and this fast (bigger = quicker fade in and out). */
+    fadeSpeed: 8,
   },
 
   character: {
@@ -332,11 +341,12 @@ export const TUNING = {
     /**
      * Waiting players stand this far to the side of the ball (on the side away from the golfer) and this far behind
      * it, in a row going back and a little further out (`spectatorSpacing` back, `spectatorSideStep` out per player).
+     * Closer to the camera they would fill the side of the picture.
      */
-    spectatorSide: 1.1,
-    spectatorBehind: 0.4,
-    spectatorSpacing: 0.55,
-    spectatorSideStep: 0.2,
+    spectatorSide: 1.5,
+    spectatorBehind: 0,
+    spectatorSpacing: 0.5,
+    spectatorSideStep: 0.3,
     /** They keep at least this far from the view line (camera → ball → aim), stepping further out if needed. */
     spectatorClearance: 0.7,
     /** They move along when the aim turns more than this (degrees) from where they lined up. */

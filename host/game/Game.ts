@@ -759,16 +759,18 @@ export class Game {
     return hit ? fromY - hit.timeOfImpact : null;
   }
 
-  /** Fades out big pieces (the windmill) while they stand between the camera and the ball or the aim. */
+  /** Fades out big pieces (the windmill), trees and bushes while they stand between the camera and the ball or the aim. */
   private updateOccluders(dt: number): void {
-    const occluders = this.hole.occluders;
-    if (occluders.length === 0) return;
     const targets = [this.ballMesh.position.clone()];
     if (this.state === 'aiming') {
       const yaw = this.aimYaw();
       const reach = Math.max(1.5, this.estimate ?? TUNING.aimLine.length);
-      targets.push(this.ballMesh.position.clone().add(new THREE.Vector3(Math.sin(yaw) * reach, 0, Math.cos(yaw) * reach)));
+      const end = this.ballMesh.position.clone().add(new THREE.Vector3(Math.sin(yaw) * reach, 0, Math.cos(yaw) * reach));
+      // The middle of the aim line too, so a tree beside it but in front of the camera is caught.
+      targets.push(end, this.ballMesh.position.clone().lerp(end, 0.5));
     }
+    this.scenery.fadeBlocking(this.camera.position, targets, dt);
+    const occluders = this.hole.occluders;
     const raycaster = new THREE.Raycaster();
     for (const occluder of occluders) {
       const blocking = targets.some((target) => {

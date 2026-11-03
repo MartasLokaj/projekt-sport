@@ -44,6 +44,11 @@ export class Scenery {
   }
 
   /** Call every frame: the sky follows the camera, waves roll, clouds drift. */
+  /** Fades trees and bushes that stand between the camera and the ball or the aim. */
+  fadeBlocking(camera: THREE.Vector3, targets: THREE.Vector3[], dt: number): void {
+    this.planter.fadeBlocking(camera, targets, dt);
+  }
+
   update(dt: number, camera: THREE.Camera): void {
     this.sky.position.copy(camera.position);
     this.seaMaterial.uniforms.time.value += dt;

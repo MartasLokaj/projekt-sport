@@ -45,9 +45,13 @@ export async function loadForest(): Promise<Forest> {
   return { geometries, material: shared };
 }
 
+/** A tree or bush that fades out while it hides the ball: one instance of an instanced mesh. */
+type Fadeable = { mesh: THREE.InstancedMesh; index: number; centre: THREE.Vector3; radius: number; fade: number };
+
 /** Collects where every plant goes, then makes one instanced mesh per model. */
 export class Planter {
   private readonly spots = new Map<string, THREE.Matrix4[]>();
+  private readonly fadeables: Fadeable[] = [];
 
   constructor(private readonly forest: Forest) {}
 
@@ -63,15 +67,65 @@ export class Planter {
 
   build(): THREE.InstancedMesh[] {
     return [...this.spots].map(([name, matrices]) => {
-      const mesh = new THREE.InstancedMesh(this.forest.geometries.get(name)!, this.forest.material, matrices.length);
+      const source = this.forest.geometries.get(name)!;
+      const isGrass = name.startsWith('Grass');
+      // Trees and bushes get their own "fade" value per plant; the geometry is a light copy sharing the model's data.
+      const geometry = isGrass ? source : shareGeometry(source);
+      const mesh = new THREE.InstancedMesh(geometry, this.forest.material, matrices.length);
       matrices.forEach((m, i) => mesh.setMatrixAt(i, m));
       mesh.computeBoundingSphere();
       // Grass tufts are too small to need shadows of their own.
-      mesh.castShadow = !name.startsWith('Grass');
+      mesh.castShadow = !isGrass;
       mesh.receiveShadow = true;
+      if (!isGrass) {
+        geometry.setAttribute('instanceFade', new THREE.InstancedBufferAttribute(new Float32Array(matrices.length), 1));
+        source.computeBoundingSphere();
+        const sphere = source.boundingSphere!;
+        matrices.forEach((m, index) => {
+          const centre = sphere.center.clone().applyMatrix4(m);
+          this.fadeables.push({ mesh, index, centre, radius: sphere.radius * m.getMaxScaleOnAxis(), fade: 0 });
+        });
+      }
       return mesh;
     });
   }
+
+  /**
+   * Trees and bushes standing between the camera and any of the `targets` (the ball, the end of the aim line)
+   * dissolve into a see-through dot pattern, and come back once they are out of the way.
+   */
+  fadeBlocking(camera: THREE.Vector3, targets: THREE.Vector3[], dt: number): void {
+    const v = TUNING.vegetation;
+    const step = Math.min(1, dt * v.fadeSpeed);
+    const changed = new Set<THREE.InstancedMesh>();
+    const segment = new THREE.Line3();
+    const closest = new THREE.Vector3();
+    for (const plant of this.fadeables) {
+      const blocking = targets.some((target) => {
+        segment.set(camera, target);
+        // Not when the plant is right at the target (it is beside the ball, not in front of it).
+        if (plant.centre.distanceTo(target) < plant.radius) return false;
+        segment.closestPointToPoint(plant.centre, true, closest);
+        return closest.distanceTo(plant.centre) < plant.radius * v.fadeReach;
+      });
+      const goal = blocking ? v.fadeAmount : 0;
+      if (Math.abs(goal - plant.fade) < 0.002) {
+        if (plant.fade === goal) continue;
+        plant.fade = goal;
+      } else plant.fade += (goal - plant.fade) * step;
+      (plant.mesh.geometry.getAttribute('instanceFade') as THREE.InstancedBufferAttribute).setX(plant.index, plant.fade);
+      changed.add(plant.mesh);
+    }
+    for (const mesh of changed) mesh.geometry.getAttribute('instanceFade').needsUpdate = true;
+  }
+}
+
+/** A new geometry that shares the model's vertex data, so it can get attributes of its own. */
+function shareGeometry(source: THREE.BufferGeometry): THREE.BufferGeometry {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setIndex(source.index);
+  for (const [name, attribute] of Object.entries(source.attributes)) geometry.setAttribute(name, attribute);
+  return geometry;
 }
 
 export type IslandInfo = {
@@ -205,11 +259,17 @@ function addWind(material: THREE.MeshStandardMaterial): void {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.windTime = windTime;
     shader.uniforms.windSway = { value: TUNING.minigolfFx.windSway };
+    // Fading (Planter.fadeBlocking): 0 = solid. Grass has no such attribute and reads 0, so it stays solid.
+    // A faded plant drops pixels in a fine 4×4 pattern: see-through without sorting transparent plants.
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform float windTime;\nuniform float windSway;')
+      .replace(
+        '#include <common>',
+        '#include <common>\nuniform float windTime;\nuniform float windSway;\nattribute float instanceFade;\nvarying float vFade;',
+      )
       .replace(
         '#include <begin_vertex>',
         `#include <begin_vertex>
+        vFade = instanceFade;
         #ifdef USE_INSTANCING
           vec2 plant = instanceMatrix[3].xz;
         #else
@@ -220,6 +280,18 @@ function addWind(material: THREE.MeshStandardMaterial): void {
         float height = max(position.y, 0.0);
         transformed.x += sin(windTime + phase) * windSway * height * gust;
         transformed.z += cos(windTime * 0.8 + phase) * windSway * 0.5 * height * gust;`,
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vFade;')
+      .replace(
+        '#include <clipping_planes_fragment>',
+        `#include <clipping_planes_fragment>
+        if (vFade > 0.001) {
+          ivec2 cell = ivec2(mod(gl_FragCoord.xy, 4.0));
+          int i = cell.x + cell.y * 4;
+          float bayer[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
+          if ((bayer[i] + 0.5) / 16.0 < vFade) discard;
+        }`,
       );
   };
   material.customProgramCacheKey = () => 'vegetation-wind';
