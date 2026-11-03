@@ -88,7 +88,7 @@ export class Game {
   /** Which hole of this game's course we are on (from 0) and how many it has (a 3-hole game plays 3 of HOLES). */
   private coursePos = 0;
   private courseLength = HOLE_COUNT;
-  /** Where the current turn's ball started, and the direction straight ahead then (for placing the watchers). */
+  /** Where the current turn's ball started, and the aim direction the watchers line up by. */
   private readonly turnStart = new THREE.Vector3();
   private turnYaw = 0;
   /** Where the golfer stands while the ball rolls (frozen at the stroke). */
@@ -406,16 +406,29 @@ export class Game {
       }
     }
 
-    // Watchers line up beside and a little ahead of the ball, on the side away from the golfer, facing the ball.
+    // Watchers stand beside and a little behind the ball, on the side away from the golfer, facing the ball,
+    // so they are never between the camera and the ball or in the line of the shot. They follow the aim, but only
+    // once it has turned clearly (so they do not shuffle at every small aim change).
     const c = TUNING.character;
+    if (this.state === 'aiming') {
+      const aim = this.aimYaw();
+      const turned = Math.abs(Math.atan2(Math.sin(aim - this.turnYaw), Math.cos(aim - this.turnYaw)));
+      if (turned > THREE.MathUtils.degToRad(c.spectatorFollowAim)) this.turnYaw = aim;
+    }
     const ahead = new THREE.Vector3(Math.sin(this.turnYaw), 0, Math.cos(this.turnYaw));
     const awayFromGolfer = new THREE.Vector3(-Math.cos(this.turnYaw), 0, Math.sin(this.turnYaw));
     if (activePlayer?.handedness === 'left') awayFromGolfer.negate();
+    // The view to keep free: from the camera behind the ball, past the ball, along the aim.
+    const viewFrom = this.turnStart.clone().addScaledVector(ahead, -TUNING.camera.aimDistance - 0.5);
+    const viewTo = this.turnStart.clone().addScaledVector(ahead, Math.max(1.5, this.estimate ?? TUNING.aimLine.length));
     watchers.forEach((player, i) => {
       const spot = this.turnStart
         .clone()
-        .addScaledVector(awayFromGolfer, c.spectatorSide)
-        .addScaledVector(ahead, c.spectatorAhead + i * c.spectatorSpacing);
+        .addScaledVector(awayFromGolfer, c.spectatorSide + i * c.spectatorSideStep)
+        .addScaledVector(ahead, -c.spectatorBehind - i * c.spectatorSpacing);
+      for (let k = 0; k < 8 && distanceToSegmentXZ(spot, viewFrom, viewTo) < c.spectatorClearance; k++) {
+        spot.addScaledVector(awayFromGolfer, 0.25);
+      }
       const look = this.state === 'rolling' || this.state === 'holed' ? this.ballMesh.position : this.turnStart;
       player.character.setTarget(spot, Math.atan2(look.x - spot.x, look.z - spot.z));
     });
@@ -967,4 +980,12 @@ export class Game {
       }
     }
   };
+}
+
+/** Distance from `p` to the segment a–b, looking from above (heights ignored). */
+function distanceToSegmentXZ(p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3): number {
+  const abx = b.x - a.x;
+  const abz = b.z - a.z;
+  const t = THREE.MathUtils.clamp(((p.x - a.x) * abx + (p.z - a.z) * abz) / (abx * abx + abz * abz || 1), 0, 1);
+  return Math.hypot(p.x - a.x - abx * t, p.z - a.z - abz * t);
 }

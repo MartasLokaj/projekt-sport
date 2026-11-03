@@ -329,10 +329,18 @@ export const TUNING = {
     hopSpeed: 2.2,
     hopsPerSecond: 3,
     hopHeight: 0.12,
-    /** Waiting players stand this far to the side of the ball and this far ahead of it, in a row going forward. */
-    spectatorSide: 0.75,
-    spectatorAhead: 0.6,
+    /**
+     * Waiting players stand this far to the side of the ball (on the side away from the golfer) and this far behind
+     * it, in a row going back and a little further out (`spectatorSpacing` back, `spectatorSideStep` out per player).
+     */
+    spectatorSide: 1.1,
+    spectatorBehind: 0.4,
     spectatorSpacing: 0.55,
+    spectatorSideStep: 0.2,
+    /** They keep at least this far from the view line (camera → ball → aim), stepping further out if needed. */
+    spectatorClearance: 0.7,
+    /** They move along when the aim turns more than this (degrees) from where they lined up. */
+    spectatorFollowAim: 25,
     /** A shot that stops this close to the cup gets a little cheer. */
     goodShotDistance: 1.0,
   },
