@@ -8,7 +8,9 @@ import { TUNING } from '../shared/tuning.ts';
 //    The backswing sets the swing direction, so it does not matter how the phone is held
 //    or which hand holds it.
 // 3. The stroke fires when the phone swings forward through the start point again,
-//    like a putter meeting the ball. Power = backswing length combined with the speed there.
+//    like a putter meeting the ball. Hand shake, gyroscope drift and tiny twitches do not count:
+//    a stroke needs a clear backswing and a real forward swing (TUNING.swing.minHit*).
+//    Power = backswing length combined with the speed there.
 // 4. A real putt swings the whole arm, so the phone travels on a wide arc. The accelerometer
 //    tells how wide (the arc's radius); a flick of the wrist turns the phone almost on the spot
 //    and does not count.
@@ -108,6 +110,12 @@ export class SwingDetector {
     for (let i = 0; i < 3; i++) this.total[i] += r[i] * dt;
 
     if (this.state === 'ready') {
+      // Held still at the ball: lock the start point again, so slow gyroscope drift never adds up to a swing.
+      this.stillTime = length(r) < cfg.driftRate ? this.stillTime + dt : 0;
+      if (this.stillTime * 1000 >= cfg.stillMs) {
+        this.stillTime = 0;
+        this.total = [0, 0, 0];
+      }
       if (length(this.total) < cfg.startAngle) return null;
       this.state = 'backswing';
     }
@@ -131,8 +139,9 @@ export class SwingDetector {
     }
     if (angle > 0) return null;
 
-    if (this.maxBack < cfg.minBackswing) {
-      // Only a small twitch (e.g. a little forward press before the real backswing). Start again from here.
+    if (this.maxBack < cfg.minHitBackswing || this.lastForwardSpeed < cfg.minHitSpeed) {
+      // Only a small twitch or a slow drift back (hand shake, a little forward press before the real backswing).
+      // Not a stroke: start again from here.
       this.restartFromHere();
       return null;
     }
@@ -147,6 +156,7 @@ export class SwingDetector {
 
   private restartFromHere(): void {
     this.state = 'ready';
+    this.stillTime = 0;
     this.total = [0, 0, 0];
     this.maxBack = 0;
     this.lastForwardSpeed = 0;

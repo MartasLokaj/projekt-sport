@@ -195,6 +195,12 @@ export function initPlayScreen(send: (msg: ClientMessage) => void): PlayScreen {
       sendProgress('ready', true);
       if ('vibrate' in navigator) navigator.vibrate(15);
     }
+    if (phase === 'ready' && (lastPhase === 'backswing' || lastPhase === 'forward')) {
+      // Too small or too slow to be a stroke: still waiting for a real swing.
+      setMeter(0);
+      statusEl.textContent = 'Too small. Swing back, then forward through this point.';
+      sendProgress('ready', true);
+    }
     lastPhase = phase;
 
     if (result?.type === 'wrist') {

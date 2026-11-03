@@ -48,11 +48,20 @@ export const TUNING = {
     /** A tapped swing is cancelled if nothing happens for this long (milliseconds). */
     armTimeoutMs: 8000,
     /** The phone must turn this far from the start point before it counts as a swing (ignores hand shake). */
-    startAngle: 2,
+    startAngle: 5,
+    /**
+     * While the phone is held at the ball and turns slower than this (degrees per second) for `stillMs`, the start
+     * point is locked again right there. The gyroscope slowly drifts; without this the drift adds up to a "swing".
+     */
+    driftRate: 8,
     /** Turning back towards the start point faster than this starts the forward swing. */
-    reverseSpeed: 15,
-    /** Backswings shorter than this do not hit (the deadzone). Small = tiny taps are possible. */
+    reverseSpeed: 30,
+    /** Backswings shorter than this give no power (the deadzone of the power curve). */
     minBackswing: 3,
+    /** A stroke needs at least this much backswing (degrees)... */
+    minHitBackswing: 8,
+    /** ...and must pass the start point at least this fast (degrees per second). Smaller twitches are ignored. */
+    minHitSpeed: 40,
     /** Backswing that gives the full backswing share of the power. */
     maxBackswing: 60,
     /** Speed at the start point that gives the full speed share of the power. */
