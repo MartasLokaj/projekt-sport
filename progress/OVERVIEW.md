@@ -1,4 +1,4 @@
-# Projekt-sport — celkový přehled (stav k 1. 11. 2026)
+# Projekt-sport — celkový přehled (stav k 9. 11. 2026)
 
 Jeden soubor, kde je všechno pohromadě: kolik je hotovo, co jsme udělali, co chybí a nápady na zlepšení.
 Podrobný deník pro Clauda zůstává v `progress/STATUS.md`, zadání v `SPEC.md`.
@@ -71,6 +71,8 @@ v minigolfu, obrazovky s výsledky, dotažení editoru postavičky, nastavení a
 
 ## 3. Co čeká na tvůj test (postaveno, ale nevyzkoušeno)
 
+0. **Minigolf opravy** (3. 11.): úder se už nespustí sám ani při drobném pohybu; čekající hráči stojí
+   stranou u kraje obrazu; stromy a keře před kamerou zprůsvitní.
 0. **Curling C1** (2. 11.): strana Curling na kostce → Play. Telefonem zamíříš a švihneš, kámen klouže a zatáčí.
 
 1. Badminton — trenér (coach): zahraj si s telefonem aspoň 20 úderů, pak ho doladím podle záznamu.
@@ -104,7 +106,7 @@ v minigolfu, obrazovky s výsledky, dotažení editoru postavičky, nastavení a
 - Velké vylepšení grafiky obou her a postaviček.
 
 **E. Drobnosti a později**
-- Oranžové bočnice pod mlýnem, strom občas zakryje kameru v zatáčce, finální název hry.
+- Oranžové bočnice pod mlýnem, finální název hry. (Strom před kamerou — opraveno 3. 11., čeká na test.)
 - Případně jiná hudba (výměna je snadná).
 - Další prostředí pro badminton, další hry na kostce (tenis, box, bowling, curling…).
 
