@@ -689,7 +689,15 @@ body, round mitten hands, sturdier legs, chunky shoes).
   - **Not verified on real phones:** whether right tilt = right turn (if mirrored: flip the sign in `WheelSteer.roll`),
     the feel (dead zone / 40° / curve / `headingResponse`), the turned text direction with the rotation lock on, iPhone
     permission from the Ready tap. Real fps on the MacBook Air not measured.
-  - Next: user's phone test → tune `TUNING.ski` from their words and the log → their OK → push → plan S2 (race).
+  - **S1 approved by the user on a real phone (2026-11-10): "zatáčení funguje top!"** No tuning changes needed.
+  - **Reference screenshots arrived (2026-11-10, 4 frames from the trailer the user likes; inspiration only, never
+    name it in code or game text).** What they show, for S3/S4: low chase camera right behind the skier, sometimes
+    beside another racer; a narrow valley run between big warm-orange faceted cliffs and dark rocks in cool blue
+    shadow; dense snowy firs on the sides; jagged peaks far away; sunlit snow creamy, shadowed snow deep blue; long
+    tree shadows across the run; two deep ski grooves + a pale spray trail; short white speed streaks on the snow;
+    floating sparkles; strong low sun glare/bloom when facing the sun; skiers crouched with poles out, chunky
+    proportions, bright outfits (helmet or beanie, goggles); edge motion blur at speed.
+  - Next: plan S2 (race), wait for the user's OK.
 
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.
