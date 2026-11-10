@@ -777,8 +777,17 @@ body, round mitten hands, sturdier legs, chunky shoes).
     rocks with snow caps, big cliffs on the valley walls every ~18 m (visual only), colours via `applyLook`.
     Screenshots of A/B/C in `logs/ski-look-*.jpg` (not in git). ~3 ms work per frame in the dev browser.
     Known: sunlit snow in A is a little lavender (blue sky light adds to the sun) — tune after the choice.
-  - Next (S3): user picks A/B/C → tune it → ski outfits (jacket, trousers, helmet/beanie, goggles, poles) → haze /
-    sun glare polish. Then S4 juice (tracks, spray, speed lines, sparkles, sounds).
+  - **User chose A · Golden morning (2026-11-10).** Tuned: sun `#ffe3c2` × 4.2, sky light 1.7, exposure 0.85 →
+    sunlit snow creamy instead of lavender, shadows still saturated blue. B and C stay in tuning (L cycles).
+  - **S3 step 2 — ski outfits, built, waiting for the user's look.** `Outfit` in `host/game/character.ts` got optional
+    fields (defaults = old look, minigolf/badminton unchanged): `top: 'jacket'` (whole arm in the player's colour),
+    `gloves`, `shoeColour`, `helmet` (helmet in the player's colour + goggles pushed up on it; replaces the avatar's
+    hat/glasses, face stays visible); `freeArmPose` + `freeArm` for the left arm. `Racer.setLook` dresses every skier:
+    jacket, darker trousers (`TUNING.ski.outfit`), dark gloves and boots, helmet, two poles from the hands; arms out
+    with the poles, hands together in a tuck, arms wide in the air. Screenshot `logs/ski-look-A-outfits.jpg`.
+    The podium still shows the players in their normal clothes.
+  - Next: user's look at S3 → fixes → S4 juice (ski tracks, spray, speed lines, sparkles, sun glare, camera shake,
+    sounds/music — ask before any download). Still open: 2+ phones test, friends' feedback on the run.
 
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.

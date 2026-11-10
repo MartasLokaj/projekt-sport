@@ -1298,6 +1298,12 @@ export const TUNING = {
     cpuSkins: ['#f3c79a', '#dba571', '#ffe0c7', '#b67b4c'],
 
     /**
+     * Ski clothes: jacket in the player's colour, trousers = that colour mixed this much (0..1) towards trousersBase,
+     * gloves, boots, helmet with goggles; poles this long (m, at the character's own 0.9 size) and this colour.
+     */
+    outfit: { trousersBase: '#1c2238', trousersShade: 0.62, gloves: '#2a2f3d', boots: '#39424f', poleLength: 0.42, poleColour: '#e8e8ee' },
+
+    /**
      * The look (phase S3): which lighting preset is used (L on the Mac cycles them live) and the presets.
      * Warm sun against cool shadows: the sun lights the snow and rocks warmly, everything in shadow only gets the
      * sky light (hemiSky), which is a saturated blue. sunElevation = how high the sun stands (degrees), sunAzimuth =
@@ -1310,8 +1316,8 @@ export const TUNING = {
       presets: {
         golden: {
           label: 'A · Golden morning', skyTop: '#4f9be3', skyHorizon: '#cfe7f6', fog: '#c6ddef', fogNear: 120, fogFar: 520,
-          sun: '#ffd09a', sunIntensity: 2.8, sunElevation: 28, sunAzimuth: 60, hemiSky: '#4d8dff', hemiGround: '#dfe9ff', hemiIntensity: 2.3,
-          exposure: 1.0, snow: '#fff6ea', rock: '#d4823f', foliage: '#2e6a47', trunk: '#6b4a32', mountain: '#8fa9c9', mountainSnow: '#f4f1ec',
+          sun: '#ffe3c2', sunIntensity: 4.2, sunElevation: 28, sunAzimuth: 60, hemiSky: '#4d8dff', hemiGround: '#dfe9ff', hemiIntensity: 1.7,
+          exposure: 0.85, snow: '#fff6ea', rock: '#d4823f', foliage: '#2e6a47', trunk: '#6b4a32', mountain: '#8fa9c9', mountainSnow: '#f4f1ec',
         },
         crisp: {
           label: 'B · Crisp midday', skyTop: '#2f86e0', skyHorizon: '#dbefff', fog: '#d6e9fa', fogNear: 140, fogFar: 600,

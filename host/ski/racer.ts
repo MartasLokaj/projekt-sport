@@ -236,6 +236,21 @@ export class Racer {
       this.skis.push(ski);
       this.tumble.add(ski);
     }
+    // Poles: from each hand down and backwards, with a little basket near the tip.
+    const poleMaterial = new THREE.MeshStandardMaterial({ color: TUNING.ski.outfit.poleColour, roughness: 0.4, metalness: 0.5 });
+    const length = TUNING.ski.outfit.poleLength;
+    for (const arm of [this.character.handArm, this.character.freeArm]) {
+      const pole = new THREE.Group();
+      pole.position.set(0, -0.17, 0);
+      pole.rotation.x = -1.0; // (the arm reaches forwards; the pole trails back to the snow)
+      const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.006, length, 6), poleMaterial);
+      stick.position.y = -length / 2 + 0.04;
+      const basket = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.006, 10), poleMaterial);
+      basket.position.y = -length + 0.09;
+      stick.castShadow = true;
+      pole.add(stick, basket);
+      arm.add(pole);
+    }
     this.posture.add(this.character.root);
     this.tumble.add(this.posture);
     this.leaner.add(this.tumble);
@@ -248,8 +263,12 @@ export class Racer {
     const key = look ? JSON.stringify(look) : '';
     if (key === this.lookKey) return;
     this.lookKey = key;
-    this.character.setLook(look ? { ...look, handedness: 'right' } : DEFAULT_LOOK);
-    this.character.root.traverse((o) => (o.castShadow = true));
+    const dressed = look ? { ...look, handedness: 'right' as const } : DEFAULT_LOOK;
+    this.character.setLook(dressed);
+    const o = TUNING.ski.outfit;
+    const trousers = new THREE.Color(dressed.shirt).lerp(new THREE.Color(o.trousersBase), o.trousersShade);
+    this.character.setOutfit({ top: 'jacket', bottoms: 'pants', bottomsColour: `#${trousers.getHexString()}`, feet: 'shoes', shoeColour: o.boots, gloves: o.gloves, helmet: true });
+    this.character.root.traverse((part) => (part.castShadow = true));
   }
 
   /** Puts the drawing where the physics is, with the right pose. */
@@ -273,7 +292,9 @@ export class Racer {
     const lean = b.tuck ? -0.55 : -0.18 - 0.15 * crouch;
     this.posture.rotation.x += (lean - this.posture.rotation.x) * (1 - Math.exp(-10 * dt));
     this.character.legPose = b.air ? { left: -0.7, right: -0.7 } : { left: -0.25, right: -0.25 };
-    this.character.armPose = b.tuck ? { x: -1.3, z: 0.15 } : { x: -0.5, z: 0.35 };
+    // Arms: out and forwards with the poles; tucked = hands together in front, poles under the arms.
+    this.character.armPose = b.tuck ? { x: -1.5, z: 0.1 } : b.air ? { x: -0.3, z: -0.9 } : { x: -0.55, z: -0.4 };
+    this.character.freeArmPose = b.tuck ? { x: -1.5, z: -0.1 } : b.air ? { x: -0.3, z: 0.9 } : { x: -0.55, z: 0.4 };
 
     // Crash: tumble round, then stand up again.
     if (b.crashLeft > 0) {

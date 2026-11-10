@@ -28,13 +28,20 @@ export type Mood = 'idle' | 'cheer' | 'jump' | 'slump' | 'scratch' | 'clap' | 'w
  * badminton beach look: tank top, shorts, bare feet, a sports headband.
  */
 export type Outfit = {
-  top: 'tee' | 'tank';
+  /** jacket = long sleeves (the whole arm in the player's colour). */
+  top: 'tee' | 'tank' | 'jacket';
   bottoms: 'pants' | 'shorts';
   /** Colour of the trousers or shorts (default: dark blue). */
   bottomsColour?: string;
   feet: 'shoes' | 'bare';
   /** A sports headband in this colour, or none. */
   headband?: string | null;
+  /** Gloves in this colour (default: bare hands). */
+  gloves?: string | null;
+  /** Colour of the shoes (default: white). */
+  shoeColour?: string;
+  /** A ski helmet in the player's colour with goggles pushed up on it (replaces the avatar's hat and glasses). */
+  helmet?: boolean;
 };
 export const DEFAULT_OUTFIT: Outfit = { top: 'tee', bottoms: 'pants', feet: 'shoes' };
 
@@ -59,6 +66,12 @@ export class Character {
   private readonly shoeMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.6 });
   /** Outfit pieces: sleeves (every arm), leg capsules, feet and their soles, the shorts/trousers top, the headband. */
   private readonly sleeves: THREE.Mesh[] = [];
+  private readonly forearms: THREE.Mesh[] = [];
+  private readonly hands: THREE.Mesh[] = [];
+  private readonly gloveMaterial = new THREE.MeshStandardMaterial({ roughness: 0.8 });
+  /** Whether the outfit has a helmet, and the avatar the head parts were last built for. */
+  private helmet = false;
+  private avatar: AvatarLook = DEFAULT_LOOK;
   private readonly legMeshes: THREE.Mesh[] = [];
   private readonly feet: THREE.Mesh[] = [];
   private readonly soles: THREE.Mesh[] = [];
@@ -77,6 +90,8 @@ export class Character {
    * x = forwards/backwards (negative = forwards), z = out to the side. null = the usual animation.
    */
   armPose: { x: number; z: number } | null = null;
+  /** The same for the other (left) arm; there z is positive out to the side. */
+  freeArmPose: { x: number; z: number } | null = null;
 
   /**
    * Overrides the legs: turn around each hip in radians (negative = foot forwards, positive = backwards).
@@ -128,6 +143,7 @@ export class Character {
     const key = JSON.stringify(avatar);
     if (key !== this.partsKey) {
       this.partsKey = key;
+      this.avatar = avatar;
       this.buildParts(avatar);
     }
     this.applyScale();
@@ -137,6 +153,14 @@ export class Character {
   setOutfit(outfit: Outfit): void {
     const shorts = outfit.bottoms === 'shorts';
     for (const sleeve of this.sleeves) sleeve.material = outfit.top === 'tank' ? this.skinMaterial : this.shirtMaterial;
+    for (const forearm of this.forearms) forearm.material = outfit.top === 'jacket' ? this.shirtMaterial : this.skinMaterial;
+    if (outfit.gloves) this.gloveMaterial.color.set(outfit.gloves);
+    for (const hand of this.hands) hand.material = outfit.gloves ? this.gloveMaterial : this.skinMaterial;
+    this.shoeMaterial.color.set(outfit.shoeColour ?? '#ffffff');
+    if ((outfit.helmet ?? false) !== this.helmet) {
+      this.helmet = outfit.helmet ?? false;
+      this.buildParts(this.avatar);
+    }
     this.pantsMaterial.color.set(outfit.bottomsColour ?? PANTS);
     // Shorts: bare legs and a longer, wider shorts top.
     for (const leg of this.legMeshes) leg.material = shorts ? this.skinMaterial : this.pantsMaterial;
@@ -170,6 +194,11 @@ export class Character {
   /** The arm whose hand holds the putter (the character's right arm). Its hand is at (0, -0.17, 0). */
   get handArm(): THREE.Group {
     return this.standArms[1];
+  }
+
+  /** The other (left) arm; its hand is at (0, -0.17, 0) too. */
+  get freeArm(): THREE.Group {
+    return this.standArms[0];
   }
 
   /** Puts the character somewhere right away (no hopping). */
@@ -319,6 +348,7 @@ export class Character {
         break;
     }
     if (this.armPose) right.rotation.set(this.armPose.x, 0, this.armPose.z);
+    if (this.freeArmPose) left.rotation.set(this.freeArmPose.x, 0, this.freeArmPose.z);
     this.body.position.y = Math.max(this.body.position.y, jump);
     if (this.mood !== 'idle' && t > MOOD_SECONDS[this.mood]) this.mood = 'idle';
   }
@@ -407,12 +437,15 @@ export class Character {
     });
     this.parts = new THREE.Group();
     // A cap or a beanie covers the top of the head: spikes, top curls and a bun are left out under it.
-    const covered = a.hat === 'cap' || a.hat === 'beanie';
+    const covered = a.hat === 'cap' || a.hat === 'beanie' || this.helmet;
     this.parts.add(makeHair(a.hairStyle, covered, this.hairMaterial, this.hatMaterial));
     this.parts.add(makeEyes(a.eyes), makeMouth(a.mouth));
     if (a.blush) this.parts.add(makeBlush());
-    if (a.hat !== 'none') this.parts.add(makeHat(a.hat, this.hatMaterial));
-    if (a.glasses !== 'none') this.parts.add(makeGlasses(a.glasses));
+    if (this.helmet) this.parts.add(makeHelmet(this.hatMaterial));
+    else {
+      if (a.hat !== 'none') this.parts.add(makeHat(a.hat, this.hatMaterial));
+      if (a.glasses !== 'none') this.parts.add(makeGlasses(a.glasses));
+    }
     this.parts.traverse((o) => (o.castShadow = true));
     this.head.add(this.parts);
   }
@@ -433,6 +466,8 @@ export class Character {
     hand.name = 'hand';
     const thumb = new THREE.Mesh(new THREE.SphereGeometry(0.019, 10, 8), this.skinMaterial);
     thumb.position.set(-side * 0.012, -0.152, 0.036);
+    this.forearms.push(forearm);
+    this.hands.push(hand, thumb);
     arm.add(sleeve, forearm, hand, thumb);
     return arm;
   }
@@ -491,6 +526,7 @@ const mouthInside = new THREE.MeshStandardMaterial({ color: MOUTH_INSIDE, roughn
 const cheek = new THREE.MeshBasicMaterial({ color: '#ff8f9c', transparent: true, opacity: 0.55 });
 const knit = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.95 });
 const darkLens = new THREE.MeshStandardMaterial({ color: '#141824', roughness: 0.15, metalness: 0.4 });
+const goggleLens = new THREE.MeshStandardMaterial({ color: '#ff9a3d', roughness: 0.1, metalness: 0.6 });
 
 function mesh(geometry: THREE.BufferGeometry, material: THREE.Material, x = 0, y = 0, z = 0): THREE.Mesh {
   const m = new THREE.Mesh(geometry, material);
@@ -692,6 +728,27 @@ function makeHat(hat: AvatarLook['hat'], colour: THREE.Material): THREE.Group {
     tilted.add(cuff, mesh(new THREE.SphereGeometry(0.055, 14, 10), knit, 0, 0.25, 0));
     g.add(tilted);
   }
+  return g;
+}
+
+/** A ski helmet (in the player's colour) with goggles pushed up onto its front. */
+function makeHelmet(colour: THREE.Material): THREE.Group {
+  const g = new THREE.Group();
+  const tilted = new THREE.Group();
+  tilted.position.y = SKULL_Y;
+  tilted.rotation.x = -0.22; // open at the face, down over the back of the head
+  tilted.add(mesh(new THREE.SphereGeometry(0.25, 28, 14, 0, Math.PI * 2, 0, 1.5), colour));
+  const rim = mesh(new THREE.TorusGeometry(0.249, 0.016, 8, 32), ink, 0, 0.018, 0);
+  rim.rotation.x = Math.PI / 2;
+  // Goggles: a strap round the helmet and a wide tinted lens in a white frame at the front.
+  const strap = mesh(new THREE.TorusGeometry(0.238, 0.02, 8, 32), ink, 0, 0.085, 0);
+  strap.rotation.x = Math.PI / 2;
+  const frame = mesh(new THREE.SphereGeometry(0.1, 18, 12), knit, 0, 0.095, 0.2);
+  frame.scale.set(1.25, 0.55, 0.5);
+  const lens = mesh(new THREE.SphereGeometry(0.1, 18, 12), goggleLens, 0, 0.095, 0.212);
+  lens.scale.set(1.1, 0.42, 0.45);
+  tilted.add(rim, strap, frame, lens);
+  g.add(tilted);
   return g;
 }
 
