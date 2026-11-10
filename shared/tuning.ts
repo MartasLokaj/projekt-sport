@@ -1325,9 +1325,9 @@ export const TUNING = {
           exposure: 1.0, snow: '#ffffff', rock: '#c58a58', foliage: '#2f7550', trunk: '#6b4a32', mountain: '#7f9cc4', mountainSnow: '#ffffff',
         },
         sunset: {
-          label: 'C · Late sun', skyTop: '#5f86d6', skyHorizon: '#ffd3ae', fog: '#efcdbd', fogNear: 110, fogFar: 480,
-          sun: '#ffa262', sunIntensity: 3.2, sunElevation: 16, sunAzimuth: 25, hemiSky: '#6a5cf0', hemiGround: '#f3dcec', hemiIntensity: 2.0,
-          exposure: 1.05, snow: '#ffeee2', rock: '#e0743c', foliage: '#2b5e48', trunk: '#5e3b2a', mountain: '#9a8fbf', mountainSnow: '#ffe8da',
+          label: 'C · Late sun', skyTop: '#6f86d8', skyHorizon: '#ffcf9f', fog: '#f0c9b4', fogNear: 110, fogFar: 480,
+          sun: '#ffc890', sunIntensity: 4.2, sunElevation: 14, sunAzimuth: 40, hemiSky: '#5578f0', hemiGround: '#e9d9f2', hemiIntensity: 1.95,
+          exposure: 0.85, snow: '#fff2e6', rock: '#e0743c', foliage: '#2b5e48', trunk: '#5e3b2a', mountain: '#b9a8dc', mountainSnow: '#ffe9d8',
         },
       },
       /** Far mountains: how many, how far (m), how high (m). Big rocks (cliffs) on the valley walls: every cliffEvery m. */

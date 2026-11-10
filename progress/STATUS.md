@@ -786,6 +786,9 @@ body, round mitten hands, sturdier legs, chunky shoes).
     jacket, darker trousers (`TUNING.ski.outfit`), dark gloves and boots, helmet, two poles from the hands; arms out
     with the poles, hands together in a tuck, arms wide in the air. Screenshot `logs/ski-look-A-outfits.jpg`.
     The podium still shows the players in their normal clothes.
+  - User (2026-11-10): "tune Late sun too" → preset C retuned the same way (sun `#ffc890` × 4.2 at 14° from
+    ahead-right, blue-violet sky light 1.95, exposure 0.85): peach-gold sunlit snow, deep blue shadows, orange horizon.
+    Default stays A (`look.preset`); if the user prefers C, change that one value.
   - Next: user's look at S3 → fixes → S4 juice (ski tracks, spray, speed lines, sparkles, sun glare, camera shake,
     sounds/music — ask before any download). Still open: 2+ phones test, friends' feedback on the run.
 
