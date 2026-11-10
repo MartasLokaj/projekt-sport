@@ -1,30 +1,53 @@
 import * as THREE from 'three';
-import type { PlayerInfo, SkiCue } from '../../shared/protocol.ts';
+import { SHIRT_COLOURS, type PlayerInfo, type SkiCue } from '../../shared/protocol.ts';
 import { TUNING } from '../../shared/tuning.ts';
-import { lookOf } from '../game/character.ts';
+import { lookOf, type CharacterLook } from '../game/character.ts';
+import type { CpuLevel } from '../hub/lobbyUi.ts';
+import type { PodiumShow } from '../results/Podium.ts';
 import { Course } from './course.ts';
+import { CpuDriver } from './cpu.ts';
 import { Racer, type RacerEvent, type RacerInput } from './racer.ts';
 
-// Skiing, phase S2a (SKI.md): one racer on a real run. The phone is a steering wheel (S1, approved) with TUCK and
-// JUMP buttons. Start gate with a 3-2-1 countdown, a winding run with rollers, kickers, gates, tree islands and
-// rocks, crashes, the finish line and the time (best time per player while the page is open).
-// The race starts when the steering phone has pressed Ready (or a Mac key is pressed). Graybox look until S3.
-// Mac keyboard for testing: ← → steer, ↓ tuck, hold Space and let go to jump, Enter races again, R restarts.
+// Skiing race (SKI.md, phases S2a–S2b). Up to 4 racers: every connected phone (in join order) steers one, the
+// computer fills the rest (level from the lobby card). Phones are steering wheels (S1) with TUCK and JUMP.
+// The race starts when every phone has pressed Ready (or a Mac key is pressed): 3-2-1-GO, then down the run
+// with its forks, gates, kickers and obstacles. One shared camera follows the leading player; whoever falls far
+// behind gets a push, and much further back (or out of sight too long) is put back just behind the leader, so
+// nobody is out of the race for long. Computer racers far ahead of the players are held back a little.
+// When every player has crossed the line the results come, then the podium (host/main.ts).
+// Graybox look until S3. Mac keyboard for testing (steers racer 1): ← → steer, ↓ tuck, hold Space and let go to
+// jump, Enter shows the results after the finish, R restarts, D shows/hides the readout.
 
 export type SkiHud = {
   info: HTMLElement;
   debug: HTMLElement;
   timer: HTMLElement;
   big: HTMLElement;
+  standings: HTMLElement;
+  tags: HTMLElement;
 };
 
 /** The last steering a phone sent. */
-type Wheel = { playerId: string; steer: number; roll: number; ready: boolean; tuck: boolean; jump: boolean; at: number };
-type Phase = 'waiting' | 'countdown' | 'racing' | 'finished';
+type Wheel = { steer: number; roll: number; ready: boolean; tuck: boolean; jump: boolean; at: number };
+type Phase = 'waiting' | 'countdown' | 'racing' | 'finished' | 'over';
+
+type Entry = {
+  racer: Racer;
+  /** The phone's player, or null for the computer (or the Mac keyboard when no phone plays). */
+  playerId: string | null;
+  name: string;
+  look: CharacterLook;
+  cpu: CpuDriver | null;
+  /** Seconds this racer has been far behind (for putting it back). */
+  lostFor: number;
+  lastCarveCue: number;
+  tag: HTMLElement;
+};
 
 const STEP = 1 / 120;
-/** The racer waits this far above the start gate. */
+/** The racers wait this far above the start gate. */
 const START_D = -6;
+const PLACE_TEXT = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'];
 
 /** 72.4 → "1:12.4". */
 export function formatTime(seconds: number): string {
@@ -39,7 +62,7 @@ class Puffs {
   private readonly items: { mesh: THREE.Mesh; velocity: THREE.Vector3; life: number; size: number }[] = [];
   private next = 0;
 
-  constructor(scene: THREE.Scene, count = 48) {
+  constructor(scene: THREE.Scene, count = 64) {
     const geometry = new THREE.IcosahedronGeometry(0.5, 1);
     for (let i = 0; i < count; i++) {
       const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, depthWrite: false }));
@@ -81,36 +104,38 @@ export class Ski {
   private readonly clock = new THREE.Clock();
   private readonly sun = new THREE.DirectionalLight('#fff4e0', 2.4);
   private readonly course = new Course();
-  private readonly racer = new Racer();
   private readonly puffs: Puffs;
+  private entries: Entry[] = [];
+  /** The racer the camera follows (the leading player). */
+  private focus: Entry | null = null;
 
   private phase: Phase = 'waiting';
-  /** Countdown seconds left, then race seconds since GO. */
+  /** Countdown seconds left, race seconds since GO, seconds until the results. */
   private countdown = 0;
   private raceTime = 0;
+  private overIn = 0;
   private goShownFor = 0;
   private accumulator = 0;
   private keySteer = 0;
-  private wheel: Wheel | null = null;
-  private players: PlayerInfo[] = [];
-  /** Best time per player name (while the page is open). */
-  private readonly best = new Map<string, number>();
-  private lastResult = '';
-  private crashes = 0;
-  private lastCarveCue = 0;
+  private readonly wheels = new Map<string, Wheel>();
+  private level: CpuLevel = 'normal';
   private readonly keys = new Set<string>();
-  /** Camera: smoothed direction (degrees) and height. */
+  /** Camera: smoothed direction (degrees), height, and how far it has pulled back to show players behind (0..1). */
   private cameraYaw = 0;
   private cameraY = 0;
+  private cameraWide = 0;
   private readonly cameraLook = new THREE.Vector3();
   private introLeft = 0;
   private running = false;
+  private showDebug = true;
   private frameMs = 16.7;
   private workMs = 0;
   private lastHud = 0;
 
-  /** A cue for the steering player's phone (vibration, "GO!", the finish time). */
-  onCue: ((playerId: string, cue: SkiCue, time?: number) => void) | null = null;
+  /** A cue for a player's phone (vibration, "GO!", the finish time and place). */
+  onCue: ((playerId: string, cue: SkiCue, time?: number, place?: number) => void) | null = null;
+  /** Every player is through and the results are ready: host/main.ts shows the podium. */
+  onRaceOver: (() => void) | null = null;
 
   constructor(
     private readonly container: HTMLElement,
@@ -131,20 +156,25 @@ export class Ski {
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     const shadow = this.sun.shadow.camera;
-    shadow.left = shadow.bottom = -32;
-    shadow.right = shadow.top = 32;
+    shadow.left = shadow.bottom = -40;
+    shadow.right = shadow.top = 40;
     shadow.near = 1;
     shadow.far = 200;
     this.scene.add(this.sun, this.sun.target);
 
-    this.scene.add(this.course.build(this.renderer), this.racer.group);
+    this.scene.add(this.course.build(this.renderer));
     this.puffs = new Puffs(this.scene);
   }
 
   // ---------- Public ----------
 
-  /** Opens the race: the racer waits at the start gate. */
-  start(): void {
+  /**
+   * A new race: these phones' players race (first 4), the computer fills up to TUNING.ski.racers at `level`.
+   * With no phone, racer 1 is steered with the Mac keyboard.
+   */
+  start(players: PlayerInfo[], level: CpuLevel): void {
+    this.level = level;
+    this.setup(players.slice(0, TUNING.ski.racers));
     this.reset();
     if (this.running) return;
     this.running = true;
@@ -168,43 +198,90 @@ export class Ski {
     window.removeEventListener('resize', this.onResize);
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
+    for (const entry of this.entries) entry.tag.hidden = true;
   }
 
+  /** New names or looks (a player edited their character): the racers follow. */
   setPlayers(players: PlayerInfo[]): void {
-    this.players = players;
+    for (const entry of this.entries) {
+      const player = players.find((p) => p.id === entry.playerId);
+      if (!player) continue;
+      entry.name = entry.tag.textContent = player.name;
+      entry.look = lookOf(player);
+      entry.racer.setLook(entry.look);
+    }
   }
 
-  /**
-   * A phone's steering (about 30 a second). One phone steers at a time: the one steering keeps the skier
-   * until it goes silent, or until another phone is ready while this one is not.
-   */
+  /** A phone's steering (about 30 a second). */
   onPhoneSteer(playerId: string, steer: number, roll: number, ready: boolean, tuck: boolean, jump: boolean): void {
-    const now = performance.now();
-    const current = this.wheel;
-    const free = !current || current.playerId === playerId || now - current.at > TUNING.ski.silentMs || (ready && !current.ready);
-    if (free) this.wheel = { playerId, steer, roll, ready, tuck, jump, at: now };
+    this.wheels.set(playerId, { steer, roll, ready, tuck, jump, at: performance.now() });
   }
 
-  /** "Race again" on a phone (only after the finish). */
-  again(playerId: string): void {
-    if (this.phase === 'finished' && this.wheel?.playerId === playerId) this.reset();
+  /** The results for the podium: by finish time (racers still on the run get an estimated time). */
+  podium(): PodiumShow {
+    const ranked = this.ranking();
+    const players = this.humans().length;
+    return {
+      game: 'ski',
+      title: `${ranked[0].name} wins!`,
+      subtitle: `Skiing · ${players} player${players === 1 ? '' : 's'} · CPU ${this.level}`,
+      entries: ranked.map((e, i) => ({ name: e.name, look: e.look, place: i + 1, detail: formatTime(this.timeOf(e)) })),
+    };
   }
 
   // ---------- Race ----------
 
+  private setup(players: PlayerInfo[]): void {
+    for (const entry of this.entries) {
+      this.scene.remove(entry.racer.group);
+      entry.tag.remove();
+    }
+    this.entries = [];
+    const taken = new Set(players.map((p) => p.colour));
+    const free = SHIRT_COLOURS.filter((colour) => !taken.has(colour));
+    const skins = TUNING.ski.cpuSkins;
+    const make = (playerId: string | null, name: string, look: CharacterLook, cpu: CpuDriver | null): void => {
+      const racer = new Racer();
+      racer.setLook(look);
+      this.scene.add(racer.group);
+      const tag = document.createElement('div');
+      tag.className = 'ski-tag';
+      tag.textContent = name;
+      tag.style.borderColor = look.shirt;
+      this.hud.tags.append(tag);
+      this.entries.push({ racer, playerId, name, look, cpu, lostFor: 0, lastCarveCue: 0, tag });
+    };
+    for (const player of players) make(player.id, player.name, lookOf(player), null);
+    // With no phone the Mac keyboard steers racer 1.
+    if (players.length === 0) make(null, 'You', { shirt: free.shift() ?? '#ff8a3d', skin: '#f3c79a', handedness: 'right' }, null);
+    for (let n = 1; this.entries.length < TUNING.ski.racers; n++) {
+      const look = { shirt: free.shift() ?? '#8d97a3', skin: skins[n % skins.length], handedness: 'right' as const };
+      make(null, `CPU ${n}`, look, new CpuDriver(this.level));
+    }
+  }
+
+  /** Everyone back at the start gate, side by side. */
   private reset(): void {
-    this.racer.body.reset(this.course, START_D);
+    const c = TUNING.ski;
+    const n = this.entries.length;
+    this.entries.forEach((e, i) => {
+      const x = this.course.centre(START_D) + (i - (n - 1) / 2) * c.startSpacing;
+      e.racer.body.reset(this.course, START_D, x);
+      e.lostFor = 0;
+      if (e.cpu) e.cpu = new CpuDriver(this.level);
+      e.racer.update(0, this.course);
+    });
     this.phase = 'waiting';
     this.raceTime = 0;
     this.goShownFor = 0;
-    this.crashes = 0;
     this.accumulator = 0;
-    this.lastResult = '';
+    this.overIn = 0;
     this.hud.big.hidden = true;
     for (const gate of this.course.gates) if (gate.flags) (gate.flags.userData.flag as THREE.MeshStandardMaterial).emissiveIntensity = 0;
-    this.racer.update(0, this.course);
+    this.focus = this.entries[0] ?? null;
     this.cameraYaw = this.course.direction(START_D);
-    this.cameraY = this.racer.body.y + TUNING.ski.camera.height;
+    this.cameraY = (this.focus?.racer.body.y ?? 0) + c.camera.height;
+    this.cameraWide = 0;
     this.placeCamera(true, 0);
   }
 
@@ -214,19 +291,30 @@ export class Ski {
     this.countdown = TUNING.ski.countdownSeconds;
   }
 
-  private cue(cue: SkiCue, time?: number): void {
-    const id = this.activeWheel()?.playerId;
-    if (id) this.onCue?.(id, cue, time);
+  /** Players (phones, or the Mac keyboard's racer). */
+  private humans(): Entry[] {
+    return this.entries.filter((e) => !e.cpu);
   }
 
-  private input(): RacerInput {
-    const wheel = this.activeWheel();
+  private wheelOf(e: Entry): Wheel | null {
+    if (!e.playerId) return null;
+    const wheel = this.wheels.get(e.playerId);
+    return wheel && performance.now() - wheel.at <= TUNING.ski.silentMs ? wheel : null;
+  }
+
+  private cue(e: Entry, cue: SkiCue, time?: number, place?: number): void {
+    if (e.playerId) this.onCue?.(e.playerId, cue, time, place);
+  }
+
+  /** A player's controls; the Mac keyboard also steers racer 1 while a key is held (or still easing back). */
+  private input(e: Entry, index: number): RacerInput {
+    const wheel = this.wheelOf(e);
     const key = (this.keys.has('ArrowRight') ? 1 : 0) - (this.keys.has('ArrowLeft') ? 1 : 0);
-    const keyed = key !== 0 || this.keySteer !== 0;
+    const keyed = index === 0 && (key !== 0 || this.keySteer !== 0);
     return {
       steer: keyed ? this.keySteer : wheel?.ready ? wheel.steer : 0,
-      tuck: this.keys.has('ArrowDown') || (wheel?.tuck ?? false),
-      jump: this.keys.has(' ') || (wheel?.jump ?? false),
+      tuck: (index === 0 && this.keys.has('ArrowDown')) || (wheel?.tuck ?? false),
+      jump: (index === 0 && this.keys.has(' ')) || (wheel?.jump ?? false),
     };
   }
 
@@ -239,90 +327,192 @@ export class Ski {
 
     const key = (this.keys.has('ArrowRight') ? 1 : 0) - (this.keys.has('ArrowLeft') ? 1 : 0);
     this.keySteer = moveTowards(this.keySteer, key, dt / c.keySeconds);
-    const wheel = this.activeWheel();
-    const player = wheel ? this.players.find((p) => p.id === wheel.playerId) : undefined;
-    this.racer.setLook(player ? lookOf(player) : null);
 
-    if (this.phase === 'waiting' && wheel?.ready && this.introLeft <= 0) this.startCountdown();
+    // Start when every phone in the race is ready (a race of only the Mac keyboard waits for a key).
+    const phones = this.entries.filter((e) => e.playerId);
+    if (this.phase === 'waiting' && this.introLeft <= 0 && phones.length > 0 && phones.every((e) => this.wheelOf(e)?.ready)) this.startCountdown();
     if (this.phase === 'countdown') {
       this.countdown -= dt;
       if (this.countdown <= 0) {
         this.phase = 'racing';
         this.goShownFor = 0.8;
-        this.cue('go');
+        for (const e of this.entries) this.cue(e, 'go');
       }
     }
 
-    const events: RacerEvent[] = [];
-    if (this.phase === 'racing' || this.phase === 'finished') {
-      const input = this.input();
+    const events = new Map<Entry, RacerEvent[]>(this.entries.map((e) => [e, []]));
+    if (this.phase === 'racing' || this.phase === 'finished' || this.phase === 'over') {
       this.accumulator += dt;
+      const inputs = this.entries.map((e, i) => (e.cpu ? null : this.input(e, i)));
       while (this.accumulator >= STEP) {
-        this.racer.body.step(STEP, input, this.course, this.raceTime, events);
+        this.focus = this.pickFocus();
+        this.entries.forEach((e, i) => {
+          const input = e.cpu ? e.cpu.input(e.racer.body, this.course, STEP) : { ...inputs[i]! };
+          input.push = (input.push ?? 0) + this.catchUp(e);
+          e.racer.body.step(STEP, input, this.course, this.raceTime, events.get(e)!);
+        });
+        this.bump();
         if (this.phase === 'racing') this.raceTime += STEP;
         this.accumulator -= STEP;
       }
+      this.keepTogether(dt);
     } else {
-      // Waiting at the gate: the skis still turn with the steering, so the player sees it works.
-      this.racer.body.steer = this.input().steer;
+      // Waiting at the gate: the skis still turn with the steering, so each player sees it works.
+      this.entries.forEach((e, i) => {
+        if (!e.cpu) e.racer.body.steer = this.input(e, i).steer;
+      });
     }
-    this.handleEvents(events);
+    for (const [e, list] of events) this.handleEvents(e, list);
     this.goShownFor = Math.max(0, this.goShownFor - dt);
 
-    this.racer.update(dt, this.course);
-    this.course.showAround(this.racer.body.d);
+    // Every player through: the results come a moment later.
+    if (this.phase === 'racing' && this.humans().every((e) => e.racer.body.finished)) {
+      this.phase = 'finished';
+      this.overIn = c.resultsDelay;
+    }
+    if (this.phase === 'finished') {
+      this.overIn -= dt;
+      if (this.overIn <= 0) this.endRace();
+    }
+
+    for (const e of this.entries) e.racer.update(dt, this.course);
+    this.course.showAround(this.focus?.racer.body.d ?? 0);
     this.puffs.update(dt);
     this.fadeGates(dt);
     this.placeSun();
     this.placeCamera(false, dt);
     this.renderer.render(this.scene, this.camera);
+    this.placeTags();
     this.workMs += (performance.now() - started - this.workMs) * 0.05;
-    this.renderHud(wheel, player?.name ?? null);
+    this.renderHud();
   }
 
-  private handleEvents(events: RacerEvent[]): void {
-    const b = this.racer.body;
-    const feet = this.racer.group.position;
+  private endRace(): void {
+    if (this.phase === 'over') return;
+    this.phase = 'over';
+    this.onRaceOver?.();
+  }
+
+  /** The leading player still racing (or the leading player once all are through). */
+  private pickFocus(): Entry | null {
+    const humans = this.humans();
+    const racing = humans.filter((e) => !e.racer.body.finished);
+    const pool = racing.length ? racing : humans.length ? humans : this.entries;
+    return pool.reduce<Entry | null>((best, e) => (!best || e.racer.body.d > best.racer.body.d ? e : best), null);
+  }
+
+  /** Extra push (m/s²): catching up when far behind the leading player, held back when a CPU runs away. */
+  private catchUp(e: Entry): number {
+    const c = TUNING.ski;
+    const focus = this.focus;
+    if (!focus || e === focus || this.phase !== 'racing' || e.racer.body.finished) return 0;
+    const gap = focus.racer.body.d - e.racer.body.d;
+    if (gap > c.catchUpFrom) return Math.min(1, (gap - c.catchUpFrom) / (c.catchUpFull - c.catchUpFrom)) * c.catchUpPush;
+    if (e.cpu && -gap > c.cpuLeadMax) return -Math.min(1, (-gap - c.cpuLeadMax) / c.cpuLeadMax) * c.cpuHoldBack;
+    return 0;
+  }
+
+  /** Racers far behind (or a while out of sight behind) are put back just behind the leader, on the leader's way. */
+  private keepTogether(dt: number): void {
+    const c = TUNING.ski;
+    const focus = this.focus;
+    if (!focus || this.phase !== 'racing') return;
+    const lead = focus.racer.body;
+    for (const e of this.entries) {
+      const b = e.racer.body;
+      if (e === focus || b.finished || b.crashLeft > 0) {
+        e.lostFor = 0;
+        continue;
+      }
+      const gap = lead.d - b.d;
+      e.lostFor = gap > c.respawnGap * 0.5 ? e.lostFor + dt : 0;
+      if (gap <= c.respawnGap && e.lostFor < c.respawnSeconds) continue;
+      const d = Math.max(0, lead.d - c.respawnBehind);
+      const lanes = this.course.lanes(d);
+      const lane = lanes[this.course.laneIndex(lead.x, d)] ?? lanes[0];
+      const speed = lead.speed * 0.9;
+      b.reset(this.course, d, lane.c + (Math.random() * 2 - 1) * lane.hw * 0.5);
+      b.speed = speed;
+      b.ghostLeft = 1.5;
+      e.lostFor = 0;
+      e.racer.update(0, this.course);
+      this.puffs.burst(e.racer.group.position, 10, 1.2, 2.5);
+      this.cue(e, 'respawn');
+    }
+  }
+
+  /** Racers bump each other apart (no crash). */
+  private bump(): void {
+    const reach = TUNING.ski.bumpDistance;
+    for (let i = 0; i < this.entries.length; i++) {
+      for (let j = i + 1; j < this.entries.length; j++) {
+        const a = this.entries[i].racer.body;
+        const b = this.entries[j].racer.body;
+        if (a.ghostLeft > 0 || b.ghostLeft > 0 || Math.abs(a.y - b.y) > 1) continue;
+        const dx = b.x - a.x;
+        const dd = b.d - a.d;
+        const distance = Math.hypot(dx, dd);
+        if (distance >= reach || distance < 1e-4) continue;
+        const push = (reach - distance) / 2;
+        a.x -= (dx / distance) * push;
+        a.d -= (dd / distance) * push;
+        b.x += (dx / distance) * push;
+        b.d += (dd / distance) * push;
+        const mean = (a.speed + b.speed) / 2;
+        a.speed += (mean - a.speed) * 0.2;
+        b.speed += (mean - b.speed) * 0.2;
+      }
+    }
+  }
+
+  private handleEvents(e: Entry, events: RacerEvent[]): void {
+    const b = e.racer.body;
+    const feet = e.racer.group.position;
     for (const event of events) {
       if (event === 'crash') {
-        this.crashes++;
         this.puffs.burst(feet, 14, 1.4, 4);
-        this.cue('crash');
+        this.cue(e, 'crash');
       } else if (event === 'land_big') {
         this.puffs.burst(feet, 10, 1.1, 3);
-        this.cue('land_big');
+        this.cue(e, 'land_big');
       } else if (event === 'land') {
         this.puffs.burst(feet, 4, 0.7, 2);
       } else if (event === 'jump') {
         this.puffs.burst(feet, 4, 0.6, 1.5);
       } else if (event === 'gate') {
-        const gate = this.course.gates.filter((g) => g.d <= b.d).at(-1);
+        const gate = this.course.gates.filter((g) => g.d <= b.d && Math.abs(g.x - b.x) < g.width).at(-1);
         if (gate?.flags) (gate.flags.userData.flag as THREE.MeshStandardMaterial).emissiveIntensity = 1;
-        this.cue('gate');
-      } else if (event === 'finish') this.finish();
+        this.cue(e, 'gate');
+      } else if (event === 'finish') {
+        const time = b.finishTime ?? this.raceTime;
+        const place = this.entries.filter((o) => o.racer.body.finishTime !== null && o.racer.body.finishTime <= time).length;
+        this.cue(e, 'finish', Math.round(time * 1000), place);
+      }
     }
     const now = performance.now();
-    if (this.phase === 'racing' && !b.air && b.turnRate > TUNING.ski.carveCueRate && now - this.lastCarveCue > TUNING.ski.carveCueMs) {
-      this.lastCarveCue = now;
-      this.cue('carve');
+    if (this.phase === 'racing' && !b.air && b.turnRate > TUNING.ski.carveCueRate && now - e.lastCarveCue > TUNING.ski.carveCueMs) {
+      e.lastCarveCue = now;
+      this.cue(e, 'carve');
     }
   }
 
-  private finish(): void {
-    const time = this.racer.body.finishTime ?? this.raceTime;
-    this.phase = 'finished';
-    const name = this.activeWheel() ? (this.players.find((p) => p.id === this.activeWheel()!.playerId)?.name ?? 'Phone') : 'Mac';
-    const before = this.best.get(name);
-    const record = before === undefined || time < before;
-    if (record) this.best.set(name, time);
-    this.lastResult = before === undefined ? `Finished! ${formatTime(time)}` : record ? `New best! ${formatTime(time)}` : `${formatTime(time)} · Best ${formatTime(before)}`;
-    this.cue('finish', Math.round(time * 1000));
+  /** A racer's time: the finish time, or an estimate for one still on the run. */
+  private timeOf(e: Entry): number {
+    const b = e.racer.body;
+    if (b.finishTime !== null) return b.finishTime;
+    return this.raceTime + Math.max(0, this.course.length - b.d) / Math.max(10, b.speed);
   }
 
-  /** The phone steering now, or null if none sent anything lately. */
-  private activeWheel(): Wheel | null {
-    const wheel = this.wheel;
-    return wheel && performance.now() - wheel.at <= TUNING.ski.silentMs ? wheel : null;
+  /** Finished racers by time, then the others by how far down they are (by estimated time once it is over). */
+  private ranking(): Entry[] {
+    return [...this.entries].sort((a, b) => {
+      const fa = a.racer.body.finished;
+      const fb = b.racer.body.finished;
+      if (fa && fb) return this.timeOf(a) - this.timeOf(b);
+      if (fa !== fb) return fa ? -1 : 1;
+      if (this.phase === 'over') return this.timeOf(a) - this.timeOf(b);
+      return b.racer.body.d - a.racer.body.d;
+    });
   }
 
   private fadeGates(dt: number): void {
@@ -332,25 +522,37 @@ export class Ski {
     }
   }
 
-  /** The sun (and its shadow box) follows the skier. */
+  /** The sun (and its shadow box) follows the camera's racer. */
   private placeSun(): void {
-    const at = this.racer.group.position;
+    const at = this.focus?.racer.group.position ?? new THREE.Vector3();
     this.sun.target.position.copy(at);
     this.sun.position.copy(at).add(new THREE.Vector3(40, 55, 10));
   }
 
-  /** Low behind the skier, turning between the run's direction and the skis'; further back and wider at speed. */
+  /**
+   * Low behind the leading player, turning between the run's direction and the skis'; further back and wider at
+   * speed, and further back and higher while another player is a little behind (so both are in the picture).
+   */
   private placeCamera(snap: boolean, dt: number): void {
     const cam = TUNING.ski.camera;
-    const b = this.racer.body;
-    const yaw = this.course.direction(b.d) + (b.heading - this.course.direction(b.d)) * cam.followSkis;
+    const focus = this.focus;
+    if (!focus) return;
+    const b = focus.racer.body;
+    const run = this.course.direction(b.d, b.x);
+    const yaw = run + (b.heading - run) * cam.followSkis;
     const blend = snap ? 1 : 1 - Math.exp(-cam.follow * dt);
     this.cameraYaw += (yaw - this.cameraYaw) * blend;
+    let behind = 0;
+    for (const e of this.humans()) {
+      const gap = b.d - e.racer.body.d;
+      if (e !== focus && !e.racer.body.finished && gap > 0 && gap < 40) behind = Math.max(behind, gap);
+    }
+    this.cameraWide += (Math.min(1, behind / 25) - this.cameraWide) * (snap ? 1 : 1 - Math.exp(-2 * dt));
     const a = THREE.MathUtils.degToRad(this.cameraYaw);
-    const back = cam.back + cam.backPerSpeed * b.speed;
+    const back = cam.back + cam.backPerSpeed * b.speed + this.cameraWide * 7;
     let x = b.x - Math.sin(a) * back;
     let d = b.d - Math.cos(a) * back;
-    let height = cam.height;
+    let height = cam.height + this.cameraWide * 3.5;
     if (this.introLeft > 0) {
       this.introLeft = Math.max(0, this.introLeft - dt);
       const k = this.introLeft / TUNING.transition.swoopSeconds;
@@ -368,44 +570,84 @@ export class Ski {
     const ld = b.d + Math.cos(a) * cam.lookAhead;
     this.cameraLook.set(lx, Math.min(b.y, this.course.height(lx, ld)) + 0.8, -ld);
     this.camera.lookAt(this.cameraLook);
-    const fov = cam.fov + cam.fovPerSpeed * b.speed;
+    const fov = cam.fov + cam.fovPerSpeed * b.speed + this.cameraWide * 6;
     if (Math.abs(fov - this.camera.fov) > 0.05) {
       this.camera.fov = fov;
       this.camera.updateProjectionMatrix();
     }
   }
 
-  private renderHud(wheel: Wheel | null, name: string | null): void {
+  /** Name tags above the racers (hidden when behind the camera or far away). */
+  private placeTags(): void {
+    const width = this.container.clientWidth || window.innerWidth;
+    const height = this.container.clientHeight || window.innerHeight;
+    const point = new THREE.Vector3();
+    for (const e of this.entries) {
+      point.copy(e.racer.group.position);
+      point.y += 2.4;
+      const distance = point.distanceTo(this.camera.position);
+      point.project(this.camera);
+      const shown = point.z < 1 && distance < 120 && Math.abs(point.x) < 1.1 && Math.abs(point.y) < 1.1;
+      e.tag.hidden = !shown;
+      if (!shown) continue;
+      const scale = Math.max(0.6, Math.min(1, 30 / distance));
+      e.tag.style.transform = `translate(${((point.x + 1) / 2) * width}px, ${((1 - point.y) / 2) * height}px) translate(-50%, -100%) scale(${scale})`;
+    }
+  }
+
+  private renderHud(): void {
     // The countdown and GO are shown every frame (they change quickly), the rest ten times a second.
-    const big = this.phase === 'countdown' ? String(Math.ceil(this.countdown)) : this.goShownFor > 0 ? 'GO!' : this.phase === 'finished' ? this.lastResult : '';
+    const big = this.phase === 'countdown' ? String(Math.ceil(this.countdown)) : this.goShownFor > 0 ? 'GO!' : '';
     this.hud.big.hidden = big === '';
     if (this.hud.big.textContent !== big) this.hud.big.textContent = big;
-    this.hud.big.classList.toggle('result', this.phase === 'finished');
     const now = performance.now();
     if (now - this.lastHud < 100) return;
     this.lastHud = now;
-    const b = this.racer.body;
-    this.hud.timer.textContent = formatTime(this.phase === 'finished' ? (b.finishTime ?? this.raceTime) : this.raceTime);
+    const focus = this.focus;
+    this.hud.timer.textContent = formatTime(this.raceTime);
+
+    const phones = this.entries.filter((e) => e.playerId);
+    const waiting = phones.filter((e) => !this.wheelOf(e)?.ready).map((e) => e.name);
+    const through = this.humans().filter((e) => e.racer.body.finished).length;
     this.hud.info.textContent =
       this.phase === 'waiting'
-        ? !wheel
-          ? 'Press Ready on your phone · Mac: Space'
-          : wheel.ready
-            ? `${name} is ready`
-            : `${name}: press Ready on the phone`
+        ? phones.length === 0
+          ? 'No phone: press Space to start (← → steer)'
+          : waiting.length
+            ? `Waiting for ${waiting.join(', ')} to press Ready`
+            : 'Ready!'
         : this.phase === 'countdown'
           ? 'Get ready…'
-          : this.phase === 'finished'
-            ? `Race again: Enter or the phone's button`
-            : `${name ?? 'Mac'} is racing`;
+          : this.phase === 'racing'
+            ? `${through}/${this.humans().length} player${this.humans().length === 1 ? '' : 's'} through`
+            : 'Results coming… (Enter)';
+
+    this.hud.standings.replaceChildren(
+      ...this.ranking().map((e, i) => {
+        const row = document.createElement('div');
+        row.className = 'ski-row';
+        if (e === focus) row.classList.add('focus');
+        const dot = document.createElement('span');
+        dot.className = 'ski-dot';
+        dot.style.background = e.look.shirt;
+        const time = e.racer.body.finished ? ` · ${formatTime(this.timeOf(e))}` : '';
+        row.append(`${PLACE_TEXT[i]} `, dot, ` ${e.name}${time}`);
+        return row;
+      }),
+    );
+
+    this.hud.debug.hidden = !this.showDebug;
+    const b = focus?.racer.body;
+    if (!this.showDebug || !b || !focus) return;
+    const wheel = this.wheelOf(focus);
     const signed = (n: number): string => `${n > 0 ? '+' : ''}${n}`;
     this.hud.debug.textContent = [
+      `Camera on    ${focus.name}`,
       `Speed        ${Math.round(b.speed * 3.6)} km/h`,
       `Phone tilt   ${wheel?.ready ? `${signed(Math.round(wheel.roll))}°` : '–'}`,
       `Steering     ${signed(Math.round(b.steer * 100))} %${b.tuck ? '  TUCK' : ''}${b.crouch > 0 ? '  JUMP…' : ''}`,
       `Gates        ${b.gatesPassed}/${this.course.gates.length}`,
-      `Crashes      ${this.crashes}`,
-      `Frame        ${this.frameMs.toFixed(1)} ms (work ${this.workMs.toFixed(1)} ms)`,
+      `Frame        ${this.frameMs.toFixed(1)} ms (work ${this.workMs.toFixed(1)} ms) · D hides`,
     ].join('\n');
   }
 
@@ -418,8 +660,9 @@ export class Ski {
         if (e.key === ' ') return; // (Space started the race; it is not a jump)
       }
       this.keys.add(e.key);
-    } else if (e.key === 'Enter' && this.phase === 'finished') this.reset();
+    } else if (e.key === 'Enter' && this.phase === 'finished') this.endRace();
     else if (e.key === 'r' || e.key === 'R') this.reset();
+    else if (e.key === 'd' || e.key === 'D') this.showDebug = !this.showDebug;
   };
 
   private readonly onKeyUp = (e: KeyboardEvent): void => {

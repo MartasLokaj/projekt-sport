@@ -130,6 +130,19 @@
       }
       #ski-big.result { top: 45%; font-size: 64px; background: rgba(20, 32, 50, 0.7); border-radius: 28px; padding: 12px 36px; text-shadow: none; }
       #ski-big[hidden] { display: none; }
+      #ski-standings {
+        position: absolute; z-index: 2; top: 76px; right: 20px; display: flex; flex-direction: column; gap: 4px;
+        font-size: 17px; font-weight: 800; color: #1f3247;
+      }
+      .ski-row { background: rgba(255, 255, 255, 0.88); border-radius: 12px; padding: 4px 12px; display: flex; align-items: center; gap: 2px; white-space: pre; }
+      .ski-row.focus { background: #ffffff; box-shadow: 0 0 0 3px #1971c2; }
+      .ski-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; }
+      #ski-tags { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 1; }
+      .ski-tag {
+        position: absolute; left: 0; top: 0; background: rgba(255, 255, 255, 0.92); border: 3px solid; border-radius: 12px;
+        padding: 2px 10px; font-size: 16px; font-weight: 800; color: #1f3247; white-space: nowrap; transform-origin: 50% 100%;
+      }
+      .ski-tag[hidden] { display: none; }
       #ski-keys { position: absolute; bottom: 14px; left: 20px; font-size: 16px; font-weight: 600; color: #3a4a5c; }
       #badminton-keys { position: absolute; bottom: 14px; left: 20px; font-size: 16px; font-weight: 600; color: var(--soft); }
       #hud-scores {
@@ -362,7 +375,9 @@
       <pre id="ski-debug"></pre>
       <div id="ski-timer">0:00.0</div>
       <div id="ski-big" hidden></div>
-      <div id="ski-keys">Prototype · phone like a steering wheel: tilt to steer, hold TUCK to go faster, hold JUMP and let go to jump · Mac: ← → steer, ↓ tuck, hold Space and let go to jump, Enter race again, R restart · Esc back to the cube</div>
+      <div id="ski-tags"></div>
+      <div id="ski-standings"></div>
+      <div id="ski-keys">Prototype · phone like a steering wheel: tilt to steer, hold TUCK to go faster, hold JUMP and let go to jump · Mac (racer 1): ← → steer, ↓ tuck, hold Space and let go to jump, R restart, D readout · Esc back to the cube</div>
     </div>
 
     <div id="game-screen" hidden>

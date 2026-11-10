@@ -267,7 +267,8 @@ export class Lobby {
         if (!this.hosts.has(ws) || !(SKI_CUES as readonly string[]).includes(msg.cue)) return;
         const socket = this.seats.get(msg.playerId)?.socket;
         const time = Number.isFinite(msg.time) ? Math.round(clamp(msg.time!, 0, 3_600_000)) : undefined;
-        if (socket) send(socket, { type: 'ski_cue', cue: msg.cue, time });
+        const place = Number.isFinite(msg.place) ? Math.round(clamp(msg.place!, 1, 8)) : undefined;
+        if (socket) send(socket, { type: 'ski_cue', cue: msg.cue, time, place });
         return;
       }
       case 'clock_ping':

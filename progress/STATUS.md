@@ -741,7 +741,31 @@ body, round mitten hands, sturdier legs, chunky shoes).
     friends tomorrow about small details; told them run/gameplay values stay easy to change after the look (S3)
     because the look is built on the same generator and `TUNING.ski`; only big structural ideas (forks, tunnels,
     hand-placed spots) are best decided before S3.
-  - Next: S2b (1–4 phones + CPU, pack camera, catch-up, podium) — plan first, wait for OK.
+  - **User (2026-11-10): "add the fork (rozdvojení trati), start S2b".** (Asked which: the user chose the fork, not
+    mystery boxes.)
+  - **Forks + S2b — built 2026-11-10, waiting for the user's phone test (ideally 2 phones).**
+    - Forks (`TUNING.ski.course.forks`): at 27 % and 62 % of the run, 190 m long, 50 m to split/join. `Course.lanes(d)`
+      gives one way or two ([safe, risky]); risky = straight, narrow (half width 4.5), rocks every ~16 m and its own
+      kicker; safe = wider (7), winding (`safeWiggle` 6) with the gates. Between them a forested ridge ~18 m wide and
+      ~12 m high (no view across). A FAST / SAFE signpost (×1.8) at the ridge's nose (can be hit). Forest now fills
+      everything off the run (walls and ridges); edges drawn per way; `direction(d, x)` follows the way you are on.
+    - Race (`Ski.ts`): 4 racers = connected phones in join order (max 4) + "CPU 1…" in free shirt colours; no phone →
+      racer 1 on the Mac keys. Starts when every phone pressed Ready ("Waiting for Tom to press Ready"), Mac key starts
+      at once. Camera follows the leading player still racing; pulls back/up while another player is 0–40 m behind.
+      Catch-up: >15 m behind the leading player → push up to 3 m/s² (full at 60 m); >90 m behind or >45 m for 3 s →
+      put back 12 m behind the leader on the leader's way (phone: "Back with the pack!"); CPUs >30 m ahead held back
+      up to 2.5 m/s². Racers bump apart (no crash). Name tags (seen through the ridge), standings list (place, colour,
+      name, time). All players through → 3 s → podium (snowy; places by time, unfinished CPUs by estimated time);
+      Play again = Enter or a phone's Race again; Esc / Back → cube. Phone finish text "Finished 2nd! 1:12.4".
+    - CPU (`host/ski/cpu.ts`, `TUNING.ski.cpu`): rethinks every 90–260 ms, looks 0.6–1.1 s ahead, picks the free line
+      (gates a little), wobble, tucks on straights, jumps kickers, risky fork chance 20/40/70 %, push −0.8/0/+0.5.
+      Simulated alone: easy ~105–110 s, normal ~95 s, pro ~80–98 s (they crash too; catch-up keeps them near players).
+    - Checked: type check; Node simulation; dev browser with a fake socket and 2 fake phones (waits for both Ready,
+      countdown, racing, forks with CPUs splitting, crash, finish cues with places, snowy podium, phone Race again →
+      new countdown), ~2–3.5 ms work per frame. Server changed (place in `ski_cue`) → restart.
+    - **Not verified on real phones:** whether two players can follow each other on one camera, whether catch-up /
+      respawn feel fair, CPU strength, fork sign readability.
+  - Next: user's test → tune → OK → push → S3 (look; screenshots of 2–3 lighting options first).
 
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.

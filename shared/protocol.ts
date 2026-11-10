@@ -191,7 +191,7 @@ export type ClientMessage =
   /** From a phone, after its racer finished: race again. */
   | { type: 'ski_again' }
   /** From the host: tell one player's phone something about the race (it vibrates on Android; time in ms). */
-  | { type: 'ski_cue'; playerId: string; cue: SkiCue; time?: number }
+  | { type: 'ski_cue'; playerId: string; cue: SkiCue; time?: number; place?: number }
   /** From a phone: what time is it on the server? t = the phone's clock when sent. */
   | { type: 'clock_ping'; t: number }
   | ({ type: 'badminton_swing' } & BadmintonSwing)
@@ -209,8 +209,11 @@ export type ClientMessage =
  */
 export type SkiSteer = { steer: number; roll: number; ready: boolean; tuck: boolean; jump: boolean };
 
-/** Race moments the phone shows or feels: GO, a crash, a landing, a gate, a hard carve, the finish (with the time). */
-export const SKI_CUES = ['go', 'crash', 'land', 'land_big', 'gate', 'carve', 'finish'] as const;
+/**
+ * Race moments the phone shows or feels: GO, a crash, a landing, a gate, a hard carve, put back near the others
+ * (respawn), the finish (with the time and the place).
+ */
+export const SKI_CUES = ['go', 'crash', 'land', 'land_big', 'gate', 'carve', 'respawn', 'finish'] as const;
 export type SkiCue = (typeof SKI_CUES)[number];
 
 /** Sent by the server. */
@@ -240,7 +243,7 @@ export type ServerMessage =
   /** Forwarded to the host page: this phone's player wants to race again. */
   | { type: 'player_ski_again'; playerId: string }
   /** To one phone, from the host. */
-  | { type: 'ski_cue'; cue: SkiCue; time?: number }
+  | { type: 'ski_cue'; cue: SkiCue; time?: number; place?: number }
   /** Answer to clock_ping: t = the phone's time it sent, server = the server's clock. */
   | { type: 'clock_pong'; t: number; server: number }
   /** Forwarded to the host page. receivedAt = server clock when it arrived (to show the delay). */

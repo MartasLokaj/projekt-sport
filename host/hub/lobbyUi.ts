@@ -269,7 +269,7 @@ export class LobbyUi {
     }
     if (face.id === 'ski') {
       // Works without phones too: the Mac keyboard can steer (← →).
-      return { enabled: true, label: 'Play', note: phones === 0 ? 'No phone yet: ← → steer on the Mac' : '', warn: false };
+      return { enabled: true, label: 'Play', note: phones === 0 ? 'No phone yet: ← → steer on the Mac' : phones > 4 ? 'The first four race' : '', warn: false };
     }
     if (face.id === 'badminton') {
       // Works without phones too: the Mac keyboard can swing (Space, ↑).

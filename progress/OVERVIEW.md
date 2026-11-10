@@ -22,7 +22,7 @@ v minigolfu, obrazovky s výsledky, dotažení editoru postavičky, nastavení a
 | Kostka (lobby) | **85 %** | Vzhled, zvuky, hudba, přechod do hry a stupně vítězů hotové. Chybí úvod zápasu a lobby na telefonu. |
 | Editor postavičky na telefonu (fáze 5) | **60 %** | Kroky 1–2 fungují (živé úpravy, ukládání). Chybí kroky 3–4. |
 | Doladění (fáze 6: nastavení, návod, test s přáteli) | **10 %** | Titulní menu, návod a ztlumení (M) jsou, zbytek ne. |
-| Lyžování (nová hra, SKI.md) | **30 %** | S1 řízení náklonem schváleno. S2a (jeden lyžař, skutečná trať se skokánky, branky, tuck, skok, pád, čas v cíli) postaveno, čeká na test z telefonu. Chybí závod více hráčů s počítačem (S2b), vzhled, efekty. |
+| Lyžování (nová hra, SKI.md) | **45 %** | S1 řízení a S2a trať schváleny. S2b (závod 1–4 hráčů + počítač, rozdvojení trati, dohánění, stupně vítězů) postaveno, čeká na test. Chybí vzhled (S3), efekty a zvuky (S4), strana kostky (S5). |
 | Ověření 60 snímků/s na MacBooku Air | **0 %** | Nikdy neměřeno na skutečném MacBooku Air. |
 
 ---

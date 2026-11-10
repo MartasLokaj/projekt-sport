@@ -15,7 +15,7 @@ export type SkiScreen = {
   /** The player's sensitivity in percent (100 = normal). */
   setSensitivity: (percent: number) => void;
   /** Something happened in the race (vibration on Android; iPhone cannot vibrate). time = finish time in ms. */
-  onCue: (cue: SkiCue, time?: number) => void;
+  onCue: (cue: SkiCue, time?: number, place?: number) => void;
 };
 
 /** 72400 ms → "1:12.4". */
@@ -200,7 +200,7 @@ export function initSkiScreen(send: (msg: ClientMessage) => void): SkiScreen {
     setSensitivity(percent) {
       wheel.playerSensitivity = percent / 100;
     },
-    onCue(cue, time) {
+    onCue(cue, time, place) {
       switch (cue) {
         case 'go':
           statusEl.textContent = 'GO!';
@@ -222,11 +222,18 @@ export function initSkiScreen(send: (msg: ClientMessage) => void): SkiScreen {
         case 'gate':
           buzz(15);
           break;
+        case 'respawn':
+          statusEl.textContent = 'Back with the pack!';
+          buzz([30, 30, 30]);
+          setTimeout(() => {
+            if (statusEl.textContent === 'Back with the pack!') statusEl.textContent = '';
+          }, 1500);
+          break;
         case 'carve':
           buzz(8);
           break;
         case 'finish':
-          statusEl.textContent = time === undefined ? 'Finished!' : `Finished! ${formatTime(time)}`;
+          statusEl.textContent = `Finished${place ? ` ${['1st', '2nd', '3rd'][place - 1] ?? `${place}th`}` : ''}!${time === undefined ? '' : ` ${formatTime(time)}`}`;
           againButton.hidden = false;
           buzz([80, 60, 220]);
           break;

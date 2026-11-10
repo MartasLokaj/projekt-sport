@@ -131,7 +131,7 @@ function leaveGame(id: string, hide: () => void): void {
 // The podium after a match (both games): Enter plays again, Esc goes back to the cube.
 const podium = new Podium();
 if (import.meta.env.DEV) Object.assign(window, { podium }); // for debugging in the browser console
-let podiumGame: 'minigolf' | 'badminton' | null = null;
+let podiumGame: 'minigolf' | 'badminton' | 'ski' | null = null;
 
 /** Behind the flash: `stop` pauses the game underneath, then the podium shows. */
 function showPodium(show: PodiumShow, stop: () => void): void {
@@ -163,12 +163,18 @@ podium.onPlayAgain = () => {
       badminton?.start(badmintonPlayers(), lobbyUi.cpuLevel, lobbyUi.matchLength, badmintonDoubles);
       badminton?.swoopIn();
     });
+  } else if (podiumGame === 'ski') {
+    leavePodium(() => {
+      ski?.start(skiPlayers(), lobbyUi.cpuLevel);
+      ski?.swoopIn();
+    });
   }
 };
 podium.onBack = () => {
   if (transitioning) return;
   if (podiumGame === 'minigolf') send({ type: 'end_game' });
   else if (podiumGame === 'badminton') send({ type: 'lab_mode', on: false });
+  else if (podiumGame === 'ski') send({ type: 'ski_mode', on: false });
 };
 
 /** Minigolf's podium: ranked by total strokes (fewest wins; equal totals share a place). */
@@ -316,6 +322,11 @@ const skiScreen = document.getElementById('ski-screen')!;
 let ski: Ski | null = null;
 let skiOpen = false;
 
+/** The phones that race: every connected player, in join order (the computer fills the rest). */
+function skiPlayers(): PlayerInfo[] {
+  return players.filter((p) => p.connected);
+}
+
 function showSki(on: boolean): void {
   if (on === skiOpen) return;
   skiOpen = on;
@@ -328,11 +339,15 @@ function showSki(on: boolean): void {
         debug: document.getElementById('ski-debug')!,
         timer: document.getElementById('ski-timer')!,
         big: document.getElementById('ski-big')!,
+        standings: document.getElementById('ski-standings')!,
+        tags: document.getElementById('ski-tags')!,
       });
-      ski.onCue = (playerId, cue, time) => send({ type: 'ski_cue', playerId, cue, time });
+      ski.onCue = (playerId, cue, time, place) => send({ type: 'ski_cue', playerId, cue, time, place });
+      ski.onRaceOver = () => {
+        if (!skiScreen.hidden && !podium.visible) showPodium(ski!.podium(), () => ski?.stop());
+      };
       if (import.meta.env.DEV) Object.assign(window, { ski }); // for debugging in the browser console
-      ski.setPlayers(players);
-      ski.start();
+      ski.start(skiPlayers(), lobbyUi.cpuLevel);
       ski.swoopIn();
     });
   } else {
@@ -424,7 +439,8 @@ function connect(): void {
     else if (msg.type === 'player_ski_steer') {
       if (skiOpen) ski?.onPhoneSteer(msg.playerId, msg.steer, msg.roll, msg.ready, msg.tuck, msg.jump);
     } else if (msg.type === 'player_ski_again') {
-      if (skiOpen) ski?.again(msg.playerId);
+      // Race again from a phone = Play again on the podium.
+      if (skiOpen && podium.visible && podiumGame === 'ski' && !transitioning) podium.onPlayAgain();
     }
     else if (msg.type === 'player_badminton_swing') {
       if (!badmintonScreen.hidden) {

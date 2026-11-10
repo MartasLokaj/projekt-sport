@@ -585,8 +585,8 @@ export const TUNING = {
     /** How long after the last point of a badminton match the podium comes (ms), so the reactions can play. */
     badmintonDelayMs: 1800,
     /** Background colours (top, bottom) and the ground's colour per game (the ground fades into the sky far away). */
-    sky: { minigolf: ['#7ec8ff', '#d9f3ff'], badminton: ['#ffb36b', '#ffe3b0'] },
-    ground: { minigolf: '#8fd16a', badminton: '#f1dcae' },
+    sky: { minigolf: ['#7ec8ff', '#d9f3ff'], badminton: ['#ffb36b', '#ffe3b0'], ski: ['#8cc6ff', '#eaf5ff'] },
+    ground: { minigolf: '#8fd16a', badminton: '#f1dcae', ski: '#f4f8fc' },
   },
 
   /** The way from the cube into a game and back (host/hub/Hub.ts diveIn/pullOut, host/ui/transition.ts). */
@@ -1213,6 +1213,14 @@ export const TUNING = {
       /** Tree islands inside the run (every islandEvery m, 2–4 trees) and lone rocks (every rockEvery m). */
       islandEvery: 55,
       rockEvery: 20,
+      /**
+       * Forks: the run splits into two ways and joins again. One way is short, straight and narrow with rocks and a
+       * kicker (fast but risky), the other is wider and winding with gates (safe). A forested ridge between them hides
+       * one from the other. at = where each fork starts (share of the run), length and ramp (how long the split takes) in
+       * m, separation = how far each way moves off the middle (m), the two ways' half widths, the safe way's winding (m),
+       * a rock in the risky way every riskyRockEvery m.
+       */
+      forks: { at: [0.27, 0.62], length: 190, ramp: 50, separation: 15, riskyHalfWidth: 4.5, safeHalfWidth: 7, safeWiggle: 6, riskyRockEvery: 16 },
       /** Only the part of the run this close to the skier is drawn (m). */
       drawAhead: 300,
       drawBehind: 60,
@@ -1255,6 +1263,39 @@ export const TUNING = {
 
     /** A start countdown of this many seconds (3, 2, 1, GO). */
     countdownSeconds: 3,
+    /** Racers in a race (phones first, the computer fills the rest), and how far apart they start (m). */
+    racers: 4,
+    startSpacing: 3,
+    /** After the last player crosses the line the results come this much later (s). */
+    resultsDelay: 3,
+    /**
+     * Keeping everyone together (one shared camera): a racer more than catchUpFrom m behind the leading player gets an
+     * extra push, full (catchUpPush m/s²) at catchUpFull m. Further back than respawnGap m (or out of sight for
+     * respawnSeconds) it is put back just behind the leader. Computer racers more than cpuLeadMax m ahead of the
+     * leading player are held back a little (cpuHoldBack m/s² at most).
+     */
+    catchUpFrom: 15,
+    catchUpFull: 60,
+    catchUpPush: 3,
+    respawnGap: 90,
+    respawnBehind: 12,
+    respawnSeconds: 3,
+    cpuLeadMax: 30,
+    cpuHoldBack: 2.5,
+    /** Racers bump each other apart (no crash) when closer than this (m). */
+    bumpDistance: 0.9,
+    /**
+     * Computer racers per level: how far ahead they look (seconds of travel), how often they rethink (ms), how wobbly
+     * their steering is, how likely they tuck on a straight, take the risky way at a fork, care about gates, jump
+     * kickers, and an extra push (m/s², + faster / − slower).
+     */
+    cpu: {
+      easy: { look: 0.6, reactionMs: 260, wobble: 0.25, tuck: 0.25, risky: 0.2, gates: 0.1, jump: 0.3, push: -0.8 },
+      normal: { look: 0.9, reactionMs: 160, wobble: 0.12, tuck: 0.55, risky: 0.4, gates: 0.3, jump: 0.7, push: 0 },
+      pro: { look: 1.1, reactionMs: 90, wobble: 0.05, tuck: 0.85, risky: 0.7, gates: 0.4, jump: 1, push: 0.5 },
+    },
+    /** Shirt and skin colours for computer racers (only colours no player wears are used). */
+    cpuSkins: ['#f3c79a', '#dba571', '#ffe0c7', '#b67b4c'],
     /** The phone buzzes on a carve at most this often (ms), when the skis turn faster than carveCueRate (°/s). */
     carveCueMs: 600,
     carveCueRate: 70,

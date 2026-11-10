@@ -19,7 +19,7 @@ export type PodiumEntry = {
 };
 
 export type PodiumShow = {
-  game: 'minigolf' | 'badminton';
+  game: 'minigolf' | 'badminton' | 'ski';
   title: string;
   subtitle: string;
   entries: PodiumEntry[];

@@ -6,11 +6,17 @@ import { TUNING } from '../../shared/tuning.ts';
 // d = metres down the run (0 = start gate). In the 3D world x stays x, z = -d and y is the height.
 // The run has bends, steeper and flatter parts, rollers (bumps across the run), kickers (jumps), gates (pairs of
 // flags that give a little speed), tree islands and rocks; outside its edges the ground rises into forested walls.
+// Forks (S2b): in places the run splits into two ways ("lanes") with a forested ridge between them: a short, narrow,
+// risky way with rocks and a kicker, and a wider, winding, safe way with gates. They join again further down.
 // Graybox look for now (S3 does the real look): white snow with a faint grid, green cone trees, grey rocks.
 
-export type Obstacle = { x: number; d: number; radius: number; height: number; kind: 'tree' | 'rock'; size: number; turn: number };
+export type Obstacle = { x: number; d: number; radius: number; height: number; kind: 'tree' | 'rock' | 'sign'; size: number; turn: number };
 export type Gate = { d: number; x: number; width: number; colour: string; flags: THREE.Group | null };
+/** One way down at some d: its middle (x) and half width. In a fork lane 1 is the risky way. */
+export type Lane = { c: number; hw: number };
 type Kicker = { d: number; x: number };
+/** A fork from `from` to `to`; side = which way (−1 left, +1 right) the risky lane goes. */
+export type Fork = { from: number; to: number; side: number; signAt: number };
 type Rollers = { from: number; to: number };
 
 /** Seeded random numbers 0..1 (mulberry32). */
@@ -40,6 +46,7 @@ export class Course {
   readonly gates: Gate[] = [];
   readonly kickers: Kicker[] = [];
   readonly obstacles: Obstacle[] = [];
+  readonly forks: Fork[] = [];
   private readonly rollers: Rollers[] = [];
   private readonly buckets = new Map<number, Obstacle[]>();
   /** Height of the run's middle every metre, from d = -BEFORE_START. */
@@ -64,35 +71,62 @@ export class Course {
     const zero = this.base[BEFORE_START];
     for (let i = 0; i <= count; i++) this.base[i] -= zero;
 
+    const f = c.forks;
+    for (const at of f.at) {
+      const from = Math.round(at * c.length);
+      this.forks.push({ from, to: from + f.length, side: rand() < 0.5 ? -1 : 1, signAt: from });
+    }
+    const inFork = (d: number, margin: number): boolean => this.forks.some((k) => d > k.from - margin && d < k.to + margin);
+    // The sign stands at the nose of the ridge, where the two ways are 3 m apart.
+    for (const fork of this.forks) {
+      for (let d = fork.from; d < fork.to; d += 0.5) {
+        const [a, b] = this.lanes(d);
+        if (b && Math.abs(b.c - a.c) - a.hw - b.hw > 3) {
+          fork.signAt = d;
+          break;
+        }
+      }
+    }
+
     for (let d = c.kickerFirst; d < c.length - 150; d += c.kickerEvery) {
       const at = d + (rand() - 0.5) * 40;
+      if (inFork(at, 30)) continue;
       this.kickers.push({ d: at, x: this.centre(at) + (rand() - 0.5) * 0.6 * this.halfWidth(at) });
+    }
+    // Each fork's risky way has its own kicker in the middle.
+    for (const fork of this.forks) {
+      const at = (fork.from + fork.to) / 2 - c.kickerLength / 2;
+      this.kickers.push({ d: at, x: this.lanes(at)[1]?.c ?? this.centre(at) });
     }
     for (let d = c.rollerEvery * 0.6; d < c.length - c.rollerSection - 60; d += c.rollerEvery) {
       this.rollers.push({ from: d, to: d + c.rollerSection });
     }
     const nearKicker = (d: number, margin: number): boolean => this.kickers.some((k) => d > k.d - margin && d < k.d + c.kickerLength + margin);
 
+    // Gates: alternating sides of the run; in a fork only on the safe way.
     let side = 1;
     for (let d = c.gateFirst; d < c.length - 80; d += c.gateEvery) {
       let at = d;
-      while (nearKicker(at, 18)) at += 8;
+      while (nearKicker(at, 18) && !inFork(at, 0)) at += 8;
       side = -side;
-      this.gates.push({ d: at, x: this.centre(at) + side * c.gateOffset * this.halfWidth(at), width: c.gateWidth, colour: side > 0 ? '#e5484d' : '#2f6fde', flags: null });
+      const lane = this.lanes(at)[0];
+      this.gates.push({ d: at, x: lane.c + side * c.gateOffset * lane.hw, width: c.gateWidth, colour: side > 0 ? '#e5484d' : '#2f6fde', flags: null });
     }
     const nearGate = (d: number, margin: number): boolean => this.gates.some((g) => Math.abs(g.d - d) < margin);
-    const busy = (d: number, margin: number): boolean => nearKicker(d, margin + 4) || nearGate(d, margin) || d < 60 || Math.abs(d - c.length) < 40;
+    const busy = (d: number, margin: number): boolean =>
+      nearKicker(d, margin + 4) || nearGate(d, margin) || inFork(d, 10) || d < 60 || Math.abs(d - c.length) < 40;
 
-    // The forest along both edges (bigger trees further out).
+    // The forest: everywhere off the run (on the walls and on the ridges between forked ways), bigger further out.
     for (let d = -BEFORE_START; d < this.end + 40; d += c.treeSpacing) {
-      for (const s of [-1, 1]) {
-        for (let depth = 1.6; depth < c.forestDepth; depth += c.treeSpacing) {
-          if (rand() > c.forestDensity) continue;
-          const at = d + (rand() - 0.5) * c.treeSpacing * 0.8;
-          const out = depth + (rand() - 0.5) * c.treeSpacing * 0.6;
-          const size = 0.8 + Math.min(1, out / c.forestDepth) * 0.8 + rand() * 0.4;
-          this.addObstacle({ x: this.centre(at) + s * (this.halfWidth(at) + Math.max(1.4, out)), d: at, radius: 0.55 * size, height: 4 * size, kind: 'tree', size, turn: rand() * 6.28 });
-        }
+      const { lo, hi } = this.bounds(d);
+      for (let x = lo - c.forestDepth; x < hi + c.forestDepth; x += c.treeSpacing) {
+        if (rand() > c.forestDensity) continue;
+        const at = d + (rand() - 0.5) * c.treeSpacing * 0.8;
+        const tx = x + (rand() - 0.5) * c.treeSpacing * 0.6;
+        const out = this.outside(tx, at);
+        if (out < 1.4 || out > c.forestDepth) continue;
+        const size = 0.8 + Math.min(1, out / c.forestDepth) * 0.8 + rand() * 0.4;
+        this.addObstacle({ x: tx, d: at, radius: 0.55 * size, height: 4 * size, kind: 'tree', size, turn: rand() * 6.28 });
       }
     }
     // Tree islands in the run: on one side, so the other side stays open (keep the gates' openings clear).
@@ -114,6 +148,19 @@ export class Course {
       const size = 0.6 + rand() * 0.6;
       const x = this.centre(at) + (rand() * 2 - 1) * 0.85 * this.halfWidth(at);
       this.addObstacle({ x, d: at, radius: size, height: size * 0.9, kind: 'rock', size, turn: rand() * 6.28 });
+    }
+    // The risky way of each fork: rocks to weave between (not on its kicker).
+    for (const fork of this.forks) {
+      for (let d = fork.signAt + 15; d < fork.to - 25; d += f.riskyRockEvery) {
+        const at = d + (rand() - 0.5) * 4;
+        if (nearKicker(at, 4)) continue;
+        const lane = this.lanes(at)[1];
+        if (!lane) continue;
+        const size = 0.5 + rand() * 0.4;
+        this.addObstacle({ x: lane.c + (rand() * 2 - 1) * 0.6 * lane.hw, d: at, radius: size, height: size * 0.9, kind: 'rock', size, turn: rand() * 6.28 });
+      }
+      // The sign at the ridge's nose (it can be hit like a tree).
+      this.addObstacle({ x: (this.lanes(fork.signAt)[0].c + this.lanes(fork.signAt)[1].c) / 2, d: fork.signAt, radius: 0.5, height: 3, kind: 'sign', size: 1, turn: 0 });
     }
   }
 
@@ -140,9 +187,69 @@ export class Course {
     return this.bendShare(d) * (c.bendSize * Math.sin(d / c.bendLength) + c.wiggleSize * Math.sin(d / c.wiggleLength + 1.3));
   }
 
-  /** Which way the run goes at d, in degrees from straight downhill (+ = to the right). */
-  direction(d: number): number {
-    return THREE.MathUtils.radToDeg(Math.atan((this.centre(d + 1) - this.centre(d - 1)) / 2));
+  /**
+   * Which way the run goes at d, in degrees from straight downhill (+ = to the right). In a fork, the way
+   * that x is on (or nearest to); without x, the main line.
+   */
+  direction(d: number, x?: number): number {
+    const lane = x === undefined ? 0 : this.laneIndex(x, d);
+    const ahead = this.lanes(d + 1);
+    const behind = this.lanes(d - 1);
+    const a = ahead[Math.min(lane, ahead.length - 1)].c;
+    const b = behind[Math.min(lane, behind.length - 1)].c;
+    return THREE.MathUtils.radToDeg(Math.atan((a - b) / 2));
+  }
+
+  /** The fork at d, and how far it has split (0 = one way, 1 = fully two ways). */
+  forkAt(d: number): { fork: Fork; share: number } | null {
+    const f = TUNING.ski.course.forks;
+    for (const fork of this.forks) {
+      if (d <= fork.from || d >= fork.to) continue;
+      return { fork, share: smoothstep(fork.from, fork.from + f.ramp, d) * (1 - smoothstep(fork.to - f.ramp, fork.to, d)) };
+    }
+    return null;
+  }
+
+  /** The ways down at d: one, or two in a fork ([safe, risky]). */
+  lanes(d: number): Lane[] {
+    const c = TUNING.ski.course.forks;
+    const centre = this.centre(d);
+    const hw = this.halfWidth(d);
+    const at = this.forkAt(d);
+    if (!at || at.share <= 0) return [{ c: centre, hw }];
+    const { fork, share } = at;
+    const u = (d - fork.from) / (fork.to - fork.from);
+    const apart = c.separation * share;
+    return [
+      { c: centre - fork.side * apart + c.safeWiggle * share * Math.sin(2 * Math.PI * u), hw: hw + (c.safeHalfWidth - hw) * share },
+      { c: centre + fork.side * apart, hw: hw + (c.riskyHalfWidth - hw) * share },
+    ];
+  }
+
+  /** Which way (lane index) x is on at d, or the nearest one. */
+  laneIndex(x: number, d: number): number {
+    const lanes = this.lanes(d);
+    let best = 0;
+    let bestOut = Infinity;
+    lanes.forEach((lane, i) => {
+      const out = Math.abs(x - lane.c) - lane.hw;
+      if (out < bestOut) {
+        bestOut = out;
+        best = i;
+      }
+    });
+    return best;
+  }
+
+  /** The leftmost and rightmost edge of the run at d (both ways of a fork together). */
+  bounds(d: number): { lo: number; hi: number } {
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (const lane of this.lanes(d)) {
+      lo = Math.min(lo, lane.c - lane.hw);
+      hi = Math.max(hi, lane.c + lane.hw);
+    }
+    return { lo, hi };
   }
 
   halfWidth(d: number): number {
@@ -157,9 +264,11 @@ export class Course {
     return this.base[i0] + (this.base[i0 + 1] - this.base[i0]) * (i - i0);
   }
 
-  /** How far past the run's edge x is at d (0 inside the run). */
+  /** How far past the run's edge x is at d (0 inside the run; in a fork, from the nearest way). */
   outside(x: number, d: number): number {
-    return Math.max(0, Math.abs(x - this.centre(d)) - this.halfWidth(d));
+    let out = Infinity;
+    for (const lane of this.lanes(d)) out = Math.min(out, Math.abs(x - lane.c) - lane.hw);
+    return Math.max(0, out);
   }
 
   /** How much of a kicker is under x, d (0..1), so the ramp can be coloured and seen from afar. */
@@ -238,7 +347,7 @@ export class Course {
       const ground = new THREE.Mesh(this.groundGeometry(from, to), snow);
       ground.receiveShadow = true;
       group.add(ground);
-      for (const s of [-1, 1]) group.add(new THREE.Mesh(this.edgeGeometry(from, to, s), edgeMaterial));
+      for (const lane of [0, 1]) for (const s of [-1, 1]) group.add(new THREE.Mesh(this.edgeGeometry(from, to, lane, s), edgeMaterial));
 
       const inChunk = this.obstacles.filter((o) => o.d >= from && o.d < to);
       const trees = inChunk.filter((o) => o.kind === 'tree');
@@ -283,6 +392,7 @@ export class Course {
       root.add(gate.flags);
     }
     root.add(this.arch(0, 'START', '#2f6fde'), this.arch(this.length, 'FINISH', '#e5484d'));
+    for (const fork of this.forks) root.add(this.forkSign(fork));
     return root;
   }
 
@@ -298,7 +408,7 @@ export class Course {
    */
   private groundGeometry(from: number, to: number): THREE.BufferGeometry {
     const c = TUNING.ski.course;
-    const columns = 84;
+    const columns = 100;
     const rows = Math.round(to - from);
     const positions: number[] = [];
     const colours: number[] = [];
@@ -310,8 +420,9 @@ export class Course {
     const colour = new THREE.Color();
     for (let r = 0; r <= rows; r++) {
       const d = from + r;
-      const centre = this.centre(d);
-      const half = this.halfWidth(d) + 2;
+      const { lo, hi } = this.bounds(d);
+      const centre = (lo + hi) / 2;
+      const half = (hi - lo) / 2 + 2;
       for (let k = 0; k <= columns; k++) {
         const t = (k / columns) * 2 - 1;
         const a = Math.abs(t);
@@ -339,21 +450,71 @@ export class Course {
     return geometry;
   }
 
-  /** A thin blue line along one edge of the run. */
-  private edgeGeometry(from: number, to: number, side: number): THREE.BufferGeometry {
+  /** A thin blue line along one edge of one way of the run (lane 1 only exists in forks; hidden inside the other way). */
+  private edgeGeometry(from: number, to: number, lane: number, side: number): THREE.BufferGeometry {
     const positions: number[] = [];
     const indices: number[] = [];
     const rows = Math.round(to - from);
+    let previous = -1;
     for (let r = 0; r <= rows; r++) {
       const d = from + r;
-      const edge = this.centre(d) + side * this.halfWidth(d);
+      const lanes = this.lanes(d);
+      const way = lanes[lane];
+      const edge = way ? way.c + side * way.hw : 0;
+      const shown = !!way && lanes.every((other, i) => i === lane || Math.abs(edge - other.c) > other.hw);
+      if (!shown) {
+        previous = -1;
+        continue;
+      }
+      const index = positions.length / 3;
       for (const w of [-0.25, 0.25]) positions.push(edge + w, this.height(edge + w, d) + 0.03, -d);
-      if (r < rows) indices.push(r * 2, r * 2 + 1, r * 2 + 2, r * 2 + 1, r * 2 + 3, r * 2 + 2);
+      if (previous >= 0) indices.push(previous, previous + 1, index, previous + 1, index + 1, index);
+      previous = index;
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geometry.setIndex(indices);
     return geometry;
+  }
+
+  /** A signpost at a fork's ridge: an arrow to the fast, risky way and one to the safe way. */
+  private forkSign(fork: Fork): THREE.Group {
+    const group = new THREE.Group();
+    const d = fork.signAt;
+    const [safe, risky] = this.lanes(d);
+    const x = (safe.c + risky.c) / 2;
+    group.position.set(x, this.height(x, d), -d);
+    group.rotation.y = -THREE.MathUtils.degToRad(this.direction(d));
+    group.scale.setScalar(1.8); // big enough to read at speed
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 3, 6), new THREE.MeshStandardMaterial({ color: '#6b4a32' }));
+    post.position.y = 1.5;
+    post.castShadow = true;
+    group.add(post);
+    const board = (text: string, colour: string, toRight: boolean, y: number): void => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 128;
+      const ctx = canvas.getContext('2d')!;
+      ctx.fillStyle = colour;
+      ctx.beginPath();
+      if (toRight) ctx.moveTo(0, 0), ctx.lineTo(448, 0), ctx.lineTo(512, 64), ctx.lineTo(448, 128), ctx.lineTo(0, 128);
+      else ctx.moveTo(512, 0), ctx.lineTo(64, 0), ctx.lineTo(0, 64), ctx.lineTo(64, 128), ctx.lineTo(512, 128);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '900 64px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, toRight ? 230 : 282, 68);
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.55), new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide }));
+      mesh.position.set(toRight ? 0.9 : -0.9, y, 0.12); // (facing uphill, towards the skiers coming down)
+      group.add(mesh);
+    };
+    const riskyRight = fork.side > 0;
+    board('FAST', '#e5484d', riskyRight, 2.6);
+    board('SAFE', '#2f6fde', !riskyRight, 1.95);
+    return group;
   }
 
   /** The start or finish arch: two posts and a banner across the whole run. */

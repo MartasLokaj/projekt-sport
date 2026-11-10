@@ -116,7 +116,7 @@ export const FACES: readonly FaceInfo[] = [
     minPlayers: 1,
     maxPlayers: 4,
     controls: 'Hold the phone sideways like a steering wheel',
-    modes: [{ label: 'Time trial', detail: 'One racer · beat your best time', players: [0, 4] }],
+    modes: [{ label: 'Race', detail: 'One to four phones · CPU fills to 4', players: [0, 4], levels: true }],
     normal: [-1, 0, 0],
     forward: [0, 0, 1],
   },

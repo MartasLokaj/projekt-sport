@@ -9,7 +9,8 @@ import type { Course } from './course.ts';
 // and air drag slow it, turning hard brakes; the ground can fall away under a fast skier (rollers, kicker lips),
 // and JUMP pops it up. Hitting a tree or rock fast is a crash: a tumble, then on again.
 
-export type RacerInput = { steer: number; tuck: boolean; jump: boolean };
+/** push: extra acceleration on the ground in m/s² (catching up, the computer's level; negative = held back). */
+export type RacerInput = { steer: number; tuck: boolean; jump: boolean; push?: number };
 export type RacerEvent = 'crash' | 'land' | 'land_big' | 'gate' | 'jump' | 'finish';
 
 /** Keeps a skier from being pushed into an obstacle again right after a crash (metres of extra clearance). */
@@ -50,7 +51,7 @@ export class RacerPhysics {
     this.x = x;
     this.d = d;
     this.y = course.height(x, d);
-    this.heading = course.direction(d) * TUNING.ski.alignToCourse;
+    this.heading = course.direction(d, x) * TUNING.ski.alignToCourse;
     this.speed = this.vy = this.airTime = this.steer = this.turnRate = this.crouch = this.crashLeft = this.ghostLeft = 0;
     this.air = this.tuck = this.finished = this.jumpHeld = false;
     this.finishTime = null;
@@ -77,7 +78,7 @@ export class RacerPhysics {
       this.vy = this.groundVy = 0;
       if (this.crashLeft <= 0) {
         this.crashLeft = 0;
-        this.heading = course.direction(this.d) * c.alignToCourse;
+        this.heading = course.direction(this.d, this.x) * c.alignToCourse;
         this.speed = p.getUpSpeed;
         this.ghostLeft = p.ghostSeconds;
       }
@@ -88,7 +89,8 @@ export class RacerPhysics {
     // Steering points the skis (a bit less when tucked, much slower in the air).
     const before = this.heading;
     const reach = c.maxHeadingDeg * (this.tuck ? p.tuckTurn : 1);
-    const target = this.finished ? course.direction(this.d) : course.direction(this.d) * c.alignToCourse + this.steer * reach;
+    const runDirection = course.direction(this.d, this.x);
+    const target = this.finished ? runDirection : runDirection * c.alignToCourse + this.steer * reach;
     const response = c.headingResponse * (this.air ? p.airTurn : 1);
     this.heading += (target - this.heading) * (1 - Math.exp(-response * dt));
     this.turnRate = Math.abs(this.heading - before) / dt;
@@ -102,7 +104,7 @@ export class RacerPhysics {
       const rise = (course.height(this.x + dx * 0.5, this.d + dd * 0.5) - course.height(this.x, this.d)) / 0.5;
       const pull = (-rise / Math.sqrt(1 + rise * rise)) * g;
       const carve = p.carveBrake * (this.turnRate / 60) * this.speed;
-      this.speed += (pull - p.friction * g - drag * this.speed * this.speed - carve) * dt;
+      this.speed += (pull - p.friction * g - drag * this.speed * this.speed - carve + (this.finished ? 0 : (input.push ?? 0))) * dt;
       if (this.finished) this.speed -= p.finishBrake * dt;
       this.speed = Math.max(this.finished ? 0 : p.minSpeed, this.speed);
     } else {
@@ -171,10 +173,10 @@ export class RacerPhysics {
     const h = THREE.MathUtils.degToRad(this.heading);
     this.x += Math.sin(h) * this.speed * dt;
     this.d = Math.min(course.end, this.d + Math.cos(h) * this.speed * dt);
-    const limit = course.halfWidth(this.d) + TUNING.ski.course.edgeLimit;
-    const off = this.x - course.centre(this.d);
-    if (Math.abs(off) > limit) {
-      this.x = course.centre(this.d) + Math.sign(off) * limit;
+    const { lo, hi } = course.bounds(this.d);
+    const limit = TUNING.ski.course.edgeLimit;
+    if (this.x < lo - limit || this.x > hi + limit) {
+      this.x = Math.min(hi + limit, Math.max(lo - limit, this.x));
       this.speed *= 0.97;
       return true;
     }

@@ -433,7 +433,7 @@ function connect(): void {
         renderSki();
         break;
       case 'ski_cue':
-        ski.onCue(msg.cue, msg.time);
+        ski.onCue(msg.cue, msg.time, msg.place);
         break;
       case 'clock_pong':
         lab.onClockPong(msg.t, msg.server);
