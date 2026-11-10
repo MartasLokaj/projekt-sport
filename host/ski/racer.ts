@@ -33,8 +33,9 @@ export class RacerPhysics {
   tuck = false;
   /** Seconds JUMP has been held on the ground (the crouch). */
   crouch = 0;
-  /** Seconds left of a crash tumble (0 = skiing). */
+  /** Seconds left of a crash tumble (0 = skiing), then seconds the skier passes through trees and rocks. */
   crashLeft = 0;
+  ghostLeft = 0;
   finished = false;
   /** Seconds since the start, at the finish line. */
   finishTime: number | null = null;
@@ -50,7 +51,7 @@ export class RacerPhysics {
     this.d = d;
     this.y = course.height(x, d);
     this.heading = course.direction(d) * TUNING.ski.alignToCourse;
-    this.speed = this.vy = this.airTime = this.steer = this.turnRate = this.crouch = this.crashLeft = 0;
+    this.speed = this.vy = this.airTime = this.steer = this.turnRate = this.crouch = this.crashLeft = this.ghostLeft = 0;
     this.air = this.tuck = this.finished = this.jumpHeld = false;
     this.finishTime = null;
     this.gatesPassed = 0;
@@ -78,6 +79,7 @@ export class RacerPhysics {
         this.crashLeft = 0;
         this.heading = course.direction(this.d) * c.alignToCourse;
         this.speed = p.getUpSpeed;
+        this.ghostLeft = p.ghostSeconds;
       }
       this.jumpHeld = input.jump;
       return;
@@ -108,7 +110,8 @@ export class RacerPhysics {
     }
 
     const beforeD = this.d;
-    this.move(dt, course);
+    const clamped = this.move(dt, course);
+    this.ghostLeft = Math.max(0, this.ghostLeft - dt);
 
     // Up and down: follow the ground, unless it falls away faster than gravity could pull the skier down.
     const ground = course.height(this.x, this.d);
@@ -126,7 +129,7 @@ export class RacerPhysics {
       }
       this.groundVy = groundVy;
     } else {
-      if (groundVy - this.groundVy < -g * dt && this.speed > 4) {
+      if (groundVy - this.groundVy < -g * dt && this.speed > 4 && !clamped) {
         this.air = true;
         this.airTime = 0;
         this.vy = this.groundVy;
@@ -147,7 +150,7 @@ export class RacerPhysics {
     if (!input.jump || this.air) this.crouch = 0;
     this.jumpHeld = input.jump;
 
-    this.hitObstacles(course, events);
+    if (this.ghostLeft <= 0) this.hitObstacles(course, events);
 
     for (const gate of course.gates) {
       if (beforeD < gate.d && this.d >= gate.d && Math.abs(this.x - gate.x) < gate.width / 2) {
@@ -163,8 +166,8 @@ export class RacerPhysics {
     }
   }
 
-  /** Moves along the skis; the run's walls stop the skier going too far out. */
-  private move(dt: number, course: Course): void {
+  /** Moves along the skis; the run's walls stop the skier going too far out (then it returns true). */
+  private move(dt: number, course: Course): boolean {
     const h = THREE.MathUtils.degToRad(this.heading);
     this.x += Math.sin(h) * this.speed * dt;
     this.d = Math.min(course.end, this.d + Math.cos(h) * this.speed * dt);
@@ -173,7 +176,9 @@ export class RacerPhysics {
     if (Math.abs(off) > limit) {
       this.x = course.centre(this.d) + Math.sign(off) * limit;
       this.speed *= 0.97;
+      return true;
     }
+    return false;
   }
 
   private hitObstacles(course: Course, events: RacerEvent[]): void {

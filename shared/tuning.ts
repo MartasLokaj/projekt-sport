@@ -1169,52 +1169,52 @@ export const TUNING = {
     course: {
       seed: 7,
       /** From the start gate to the finish line, then a flat run-out to stop in. */
-      length: 1050,
+      length: 1350,
       runOut: 90,
       /** The first metres are straight and gentle, so the start is easy. */
-      startStraight: 60,
+      startStraight: 40,
       /** Half of the run's width, and how much it widens/narrows along the way. */
-      halfWidth: 15,
-      widthChange: 5,
+      halfWidth: 9,
+      widthChange: 3,
       /** Bends: two waves side to side (amplitude m, wavelength-ish m). */
-      bendSize: 34,
-      bendLength: 95,
-      wiggleSize: 8,
-      wiggleLength: 37,
+      bendSize: 42,
+      bendLength: 55,
+      wiggleSize: 10,
+      wiggleLength: 26,
       /** Steepness (degrees): the average, how much it changes, and the run-out after the finish (negative = uphill). */
-      slopeDeg: 17,
-      slopeChange: 5,
+      slopeDeg: 23,
+      slopeChange: 6,
       runOutSlopeDeg: -3,
       /** Outside the run the ground rises into valley walls: this high over this distance (then keeps rising). */
-      wallHeight: 9,
-      wallWidth: 16,
+      wallHeight: 12,
+      wallWidth: 9,
       /** The skier cannot get further than this past the run's edge. */
-      edgeLimit: 10,
+      edgeLimit: 5,
       /** Rollers (bumps across the run): sections of this length, every rollerEvery metres, this high and long. */
       rollerEvery: 330,
       rollerSection: 90,
       rollerHeight: 0.3,
       rollerLength: 16,
       /** Kickers (jumps): every kickerEvery metres; height, run-up length and width. */
-      kickerEvery: 230,
-      kickerFirst: 260,
+      kickerEvery: 300,
+      kickerFirst: 300,
       kickerHeight: 1.6,
       kickerLength: 10,
-      kickerWidth: 9,
+      kickerWidth: 7,
       /** Gates (pairs of flags): every gateEvery metres, gateWidth wide, this far off the middle (share of half width). */
-      gateEvery: 85,
-      gateFirst: 140,
-      gateWidth: 6,
-      gateOffset: 0.4,
+      gateEvery: 32,
+      gateFirst: 80,
+      gateWidth: 5,
+      gateOffset: 0.5,
       /** Forest along the edges: tree spacing, how deep the forest goes, how many places get a tree. */
-      treeSpacing: 5.5,
+      treeSpacing: 4.2,
       forestDepth: 26,
-      forestDensity: 0.8,
-      /** Tree islands inside the run (every islandEvery m, 3–6 trees) and lone rocks (every rockEvery m). */
-      islandEvery: 110,
-      rockEvery: 45,
+      forestDensity: 0.9,
+      /** Tree islands inside the run (every islandEvery m, 2–4 trees) and lone rocks (every rockEvery m). */
+      islandEvery: 55,
+      rockEvery: 20,
       /** Only the part of the run this close to the skier is drawn (m). */
-      drawAhead: 380,
+      drawAhead: 300,
       drawBehind: 60,
     },
 
@@ -1222,15 +1222,15 @@ export const TUNING = {
     physics: {
       gravity: 9.8,
       /** Snow friction (share of gravity) and air drag (per m/s squared); tucked the drag is multiplied by tuckDrag. */
-      friction: 0.04,
-      drag: 0.005,
+      friction: 0.03,
+      drag: 0.0032,
       tuckDrag: 0.6,
       /** Tucked the skis turn this much less. */
       tuckTurn: 0.6,
       /** Turning hard brakes: at 60°/s of turning the skier loses this share of the speed per second. */
-      carveBrake: 0.35,
+      carveBrake: 0.12,
       /** The skier never stands still on the run (pushing with the poles), except after the finish. */
-      minSpeed: 3,
+      minSpeed: 5,
       /** In the air the skis turn this much slower. */
       airTurn: 0.3,
       /** Jump: holding JUMP crouches (full after crouchSeconds); letting go pops up at jumpSpeed (60–100 % by crouch). */
@@ -1240,13 +1240,15 @@ export const TUNING = {
       landKeep: 0.97,
       bigAirSeconds: 0.7,
       /** Hitting a tree or rock faster than crashSpeed is a crash: tumble for crashSeconds, then on at getUpSpeed. */
-      crashSpeed: 6,
+      crashSpeed: 8,
       crashSeconds: 1.5,
-      getUpSpeed: 6,
+      getUpSpeed: 10,
+      /** After getting up the skier passes through trees and rocks this long (no crash right after a crash). */
+      ghostSeconds: 1,
       /** How wide the skier is for hitting things (m). */
       skierRadius: 0.45,
       /** Riding between a gate's flags adds this speed. */
-      gateBoost: 2.5,
+      gateBoost: 3.5,
       /** After the finish line the skier brakes this hard (m/s²). */
       finishBrake: 6,
     },

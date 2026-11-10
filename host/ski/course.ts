@@ -76,12 +76,12 @@ export class Course {
     let side = 1;
     for (let d = c.gateFirst; d < c.length - 80; d += c.gateEvery) {
       let at = d;
-      while (nearKicker(at, 25)) at += 10;
+      while (nearKicker(at, 18)) at += 8;
       side = -side;
       this.gates.push({ d: at, x: this.centre(at) + side * c.gateOffset * this.halfWidth(at), width: c.gateWidth, colour: side > 0 ? '#e5484d' : '#2f6fde', flags: null });
     }
     const nearGate = (d: number, margin: number): boolean => this.gates.some((g) => Math.abs(g.d - d) < margin);
-    const busy = (d: number, margin: number): boolean => nearKicker(d, margin) || nearGate(d, margin) || d < 60 || Math.abs(d - c.length) < 40;
+    const busy = (d: number, margin: number): boolean => nearKicker(d, margin + 4) || nearGate(d, margin) || d < 60 || Math.abs(d - c.length) < 40;
 
     // The forest along both edges (bigger trees further out).
     for (let d = -BEFORE_START; d < this.end + 40; d += c.treeSpacing) {
@@ -95,22 +95,23 @@ export class Course {
         }
       }
     }
-    // Tree islands in the run.
-    for (let d = 150; d < c.length - 60; d += c.islandEvery) {
-      const at = d + (rand() - 0.5) * 40;
-      if (busy(at, 22)) continue;
-      const x = this.centre(at) + (rand() * 2 - 1) * 0.45 * this.halfWidth(at);
-      const trees = 3 + Math.floor(rand() * 4);
+    // Tree islands in the run: on one side, so the other side stays open (keep the gates' openings clear).
+    for (let d = 110; d < c.length - 60; d += c.islandEvery) {
+      const at = d + (rand() - 0.5) * c.islandEvery * 0.5;
+      if (busy(at, 9)) continue;
+      const hw = this.halfWidth(at);
+      const x = this.centre(at) + (rand() < 0.5 ? -1 : 1) * (0.3 + rand() * 0.3) * hw;
+      const trees = 2 + Math.floor(rand() * 3);
       for (let i = 0; i < trees; i++) {
         const size = 0.8 + rand() * 0.5;
-        this.addObstacle({ x: x + (rand() * 2 - 1) * 3.5, d: at + (rand() * 2 - 1) * 4, radius: 0.55 * size, height: 4 * size, kind: 'tree', size, turn: rand() * 6.28 });
+        this.addObstacle({ x: x + (rand() * 2 - 1) * 2.2, d: at + (rand() * 2 - 1) * 3, radius: 0.55 * size, height: 4 * size, kind: 'tree', size, turn: rand() * 6.28 });
       }
     }
     // Lone rocks.
-    for (let d = 80; d < c.length - 40; d += c.rockEvery) {
-      const at = d + (rand() - 0.5) * 20;
-      if (busy(at, 12)) continue;
-      const size = 0.6 + rand() * 0.7;
+    for (let d = 70; d < c.length - 40; d += c.rockEvery) {
+      const at = d + (rand() - 0.5) * c.rockEvery * 0.6;
+      if (busy(at, 7)) continue;
+      const size = 0.6 + rand() * 0.6;
       const x = this.centre(at) + (rand() * 2 - 1) * 0.85 * this.halfWidth(at);
       this.addObstacle({ x, d: at, radius: size, height: size * 0.9, kind: 'rock', size, turn: rand() * 6.28 });
     }

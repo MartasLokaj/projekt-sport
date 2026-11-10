@@ -725,7 +725,19 @@ body, round mitten hands, sturdier legs, chunky shoes).
       a tree with a puff, finish + cue + race again, phone pads in landscape). ~2 ms of work per frame in the dev browser.
     - **Not verified on real phones:** whether the speed, bends and the 50/50 "straight" feel right, whether the thumb
       pads are reachable while holding the phone like a wheel, vibration on Android. Server code changed → restart.
-  - Next: user's phone test of S2a → tune → their OK → push → S2b.
+  - **User's phone test of S2a (2026-11-10): "too slow, too few obstacles and too little that makes me turn; more
+    flags, more trees; a narrower run that bends more to the sides, into places where you can't see far."**
+    Done (same day): run 1350 m, half width 9 ±3 m (was 15 ±5), bends up to ~49° every ~55 m (`bendSize` 42,
+    `bendLength` 55, `wiggleSize` 10, `wiggleLength` 26), steeper (23° ±6), steep valley walls (12 m over 9 m) with a
+    denser forest right at the edge (spacing 4.2, density 0.9) → blind corners; 38 gates (every 32 m, alternating
+    sides at half the half width, 5 m wide, +3.5 m/s); tree islands every ~55 m on one side of the run (2–4 trees, the
+    other side stays open), rocks every ~20 m, nothing in a gate's opening; 3 kickers (7 m wide). Physics: friction
+    0.03, drag 0.0032, carving brake 0.12, min speed 5, crash above 8 m/s, get up at 10 m/s, then `ghostSeconds` 1 s
+    passing through obstacles (no crash loops); wall clamp no longer causes false take-offs.
+    Scripted "decent player" (looks ~1 s ahead, takes the free line, goes for gates): 75–92 s, average 60–77 km/h,
+    top ~115–127 km/h, 1–8 crashes. Checked in the dev browser: valley look, gates, rocks, ~1–3 ms work per frame.
+  - **Idea for later (user): mystery boxes on the run that give a mega speed boost etc.** (fits SKI.md "items").
+  - Next: user's phone test of the faster run → tune → their OK → push → S2b.
 
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.
