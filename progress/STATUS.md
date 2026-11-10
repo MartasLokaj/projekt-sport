@@ -765,7 +765,10 @@ body, round mitten hands, sturdier legs, chunky shoes).
       new countdown), ~2–3.5 ms work per frame. Server changed (place in `ski_cue`) → restart.
     - **Not verified on real phones:** whether two players can follow each other on one camera, whether catch-up /
       respawn feel fair, CPU strength, fork sign readability.
-  - Next: user's test → tune → OK → push → S3 (look; screenshots of 2–3 lighting options first).
+  - **User (2026-11-10): "against the CPU it plays great, let's continue, the rest we tune tomorrow".** One phone vs
+    CPU approved (incl. forks). **2+ phones on one camera NOT TESTED yet (no friends around)** — check when they can;
+    tomorrow the user asks friends about details.
+  - Next: S3 (look). First step: lighting options to choose from (screenshots), then outfits.
 
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.
