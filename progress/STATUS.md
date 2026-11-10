@@ -796,6 +796,15 @@ body, round mitten hands, sturdier legs, chunky shoes).
     wide soft wake (1.7 m), grooves up to 2.3× wider when carving hard, no trail in the air / while tumbling, breaks
     on respawn, old end fades. Lambert material, receives shadows. Screenshot `logs/ski-tracks.jpg`. ~3 ms work/frame
     with 4 racers in the dev browser.
+  - **User (2026-11-10): "we tune the trail tomorrow with the boys; make a switch for it; and make nice graphics on
+    the globe (the cube) too".** Done, waiting for the user's look:
+    - **T** in the ski game switches the trails on/off ("Ski tracks on/off" in the info line; remembered in
+      localStorage `cubeworld.ski.tracks`).
+    - **Skiing side of the cube (S5 diorama)** `skiWorld` in `host/hub/faces.ts`: low-poly snowy mountain (peak at
+      the back, orange rock on steep faces), S-shaped run with banks, ~25 snowy firs, 7 red/blue slalom flags, a
+      chequered finish arch, two tiny skiers (red, blue) carving down their blue tracks every 6 s. New `ski` icon on
+      the lobby card (`ICONS` in `lobbyUi.ts`). Screenshot `logs/ski-cube-side.jpg`. Still to do for S5: match length
+      choice is not needed (one run); maybe a name sign check.
   - Next: user's look at S3 → fixes → S4 juice (ski tracks, spray, speed lines, sparkles, sun glare, camera shake,
     sounds/music — ask before any download). Still open: 2+ phones test, friends' feedback on the run.
 

@@ -387,6 +387,15 @@ const ICONS: Record<FaceInfo['icon'], string> = {
     <ellipse cx="80" cy="84" rx="40" ry="11" fill="#a9afb8"/>
     <rect x="64" y="58" width="14" height="26" rx="5" fill="#e84a4a"/><rect x="64" y="56" width="50" height="14" rx="7" fill="#e84a4a"/>
   </svg>`,
+  ski: `<svg viewBox="0 0 160 160" aria-hidden="true">
+    <ellipse cx="80" cy="134" rx="70" ry="18" fill="#dcebff"/>
+    <path d="M14 132 L66 44 L92 84 L108 62 L148 132 Z" fill="#5f86d8"/>
+    <path d="M66 44 L50 71 L60 66 L67 76 L76 64 L83 70 Z" fill="#ffffff"/>
+    <path d="M108 62 L97 78 L105 75 L111 83 L120 80 Z" fill="#ffffff"/>
+    <path d="M70 92 Q96 100 78 112 Q62 122 92 130" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round"/>
+    <rect x="103" y="100" width="4" height="30" rx="2" fill="#f3f5ff"/><path d="M107 101 L128 108 L107 115 Z" fill="#ff5b6e"/>
+    <circle cx="124" cy="36" r="12" fill="#ffc890"/>
+  </svg>`,
   mystery: `<svg viewBox="0 0 160 160" aria-hidden="true">
     <rect x="34" y="34" width="92" height="92" rx="22" fill="#5b4fd6"/><rect x="34" y="34" width="92" height="46" rx="22" fill="#6f63ee"/>
     <text x="80" y="108" text-anchor="middle" font-family="Nunito Sans, sans-serif" font-weight="900" font-size="72" fill="#ffe36b">?</text>

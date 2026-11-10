@@ -18,7 +18,8 @@ import { SkiTrack } from './tracks.ts';
 // nobody is out of the race for long. Computer racers far ahead of the players are held back a little.
 // When every player has crossed the line the results come, then the podium (host/main.ts).
 // Graybox look until S3. Mac keyboard for testing (steers racer 1): ← → steer, ↓ tuck, hold Space and let go to
-// jump, Enter shows the results after the finish, R restarts, D shows/hides the readout, L next lighting preset.
+// jump, Enter shows the results after the finish, R restarts, D shows/hides the readout, L next lighting preset,
+// T ski tracks on/off.
 
 export type SkiHud = {
   info: HTMLElement;
@@ -138,9 +139,14 @@ export class Ski {
   private introLeft = 0;
   private running = false;
   private showDebug = true;
+  /** Whether the skiers leave trails in the snow (T switches it; remembered on this Mac). */
+  private showTracks = readFlag('cubeworld.ski.tracks', true);
   private frameMs = 16.7;
   private workMs = 0;
   private lastHud = 0;
+  /** A short message in the info line (e.g. "Ski tracks off") and how long it still shows (s). */
+  private note = '';
+  private noteFor = 0;
 
   /** A cue for a player's phone (vibration, "GO!", the finish time and place). */
   onCue: ((playerId: string, cue: SkiCue, time?: number, place?: number) => void) | null = null;
@@ -283,6 +289,7 @@ export class Ski {
       this.hud.tags.append(tag);
       const track = new SkiTrack(this.course);
       track.applyLook(TUNING.ski.look.presets[this.lookName]);
+      track.mesh.visible = this.showTracks;
       this.scene.add(track.mesh);
       this.entries.push({ racer, playerId, name, look, cpu, lostFor: 0, lastCarveCue: 0, tag, track });
     };
@@ -400,6 +407,7 @@ export class Ski {
     }
     for (const [e, list] of events) this.handleEvents(e, list);
     this.goShownFor = Math.max(0, this.goShownFor - dt);
+    this.noteFor = Math.max(0, this.noteFor - dt);
 
     // Every player through: the results come a moment later.
     if (this.phase === 'racing' && this.humans().every((e) => e.racer.body.finished)) {
@@ -649,8 +657,9 @@ export class Ski {
     const phones = this.entries.filter((e) => e.playerId);
     const waiting = phones.filter((e) => !this.wheelOf(e)?.ready).map((e) => e.name);
     const through = this.humans().filter((e) => e.racer.body.finished).length;
-    this.hud.info.textContent =
-      this.phase === 'waiting'
+    this.hud.info.textContent = this.noteFor > 0
+      ? this.note
+      : this.phase === 'waiting'
         ? phones.length === 0
           ? 'No phone: press Space to start (← → steer)'
           : waiting.length
@@ -704,7 +713,13 @@ export class Ski {
     } else if (e.key === 'Enter' && this.phase === 'finished') this.endRace();
     else if (e.key === 'r' || e.key === 'R') this.reset();
     else if (e.key === 'd' || e.key === 'D') this.showDebug = !this.showDebug;
-    else if (e.key === 'l' || e.key === 'L') {
+    else if (e.key === 't' || e.key === 'T') {
+      this.showTracks = !this.showTracks;
+      writeFlag('cubeworld.ski.tracks', this.showTracks);
+      for (const entry of this.entries) entry.track.mesh.visible = this.showTracks;
+      this.note = `Ski tracks ${this.showTracks ? 'on' : 'off'}`;
+      this.noteFor = 1.5;
+    } else if (e.key === 'l' || e.key === 'L') {
       const names = Object.keys(TUNING.ski.look.presets) as (keyof typeof TUNING.ski.look.presets)[];
       this.setLook(names[(names.indexOf(this.lookName) + 1) % names.length]);
     }
@@ -721,6 +736,24 @@ export class Ski {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
   };
+}
+
+/** A yes/no setting kept in the browser (the default if nothing is stored or storage is blocked). */
+function readFlag(key: string, fallback: boolean): boolean {
+  try {
+    const stored = localStorage.getItem(key);
+    return stored === null ? fallback : stored === '1';
+  } catch {
+    return fallback;
+  }
+}
+
+function writeFlag(key: string, value: boolean): void {
+  try {
+    localStorage.setItem(key, value ? '1' : '0');
+  } catch {
+    // Storage blocked: the setting just lasts until the page reloads.
+  }
 }
 
 /** Moves a value towards a target by at most `step`. */

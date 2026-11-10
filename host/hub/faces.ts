@@ -26,7 +26,7 @@ export type FaceInfo = {
   status: FaceStatus;
   /** The game's own colour in the menu (its card, its dot, the glow on its side of the cube). */
   accent: string;
-  icon: 'golf' | 'shuttle' | 'stone' | 'mystery';
+  icon: 'golf' | 'shuttle' | 'stone' | 'ski' | 'mystery';
   minPlayers: number;
   maxPlayers: number;
   /** One line on how you play with the phone. */
@@ -106,13 +106,12 @@ export const FACES: readonly FaceInfo[] = [
     forward: [0, 0, 1],
   },
   {
-    // (Its little world is still a building site: the snowy slope comes in phase S5.)
     id: 'ski',
     title: 'Skiing',
     description: 'Race down a snowy mountain. Dodge trees, ride the gates, jump the kickers.',
     status: 'prototype',
     accent: '#7fb4ff',
-    icon: 'mystery',
+    icon: 'ski',
     minPlayers: 1,
     maxPlayers: 4,
     controls: 'Hold the phone sideways like a steering wheel',
@@ -132,6 +131,7 @@ export function buildFace(face: FaceInfo, kit: FaceKit, size: number): THREE.Gro
   if (face.id === 'minigolf') return minigolfWorld(kit, size);
   if (face.id === 'badminton') return badmintonWorld(kit, size);
   if (face.id === 'curling') return curlingWorld(size);
+  if (face.id === 'ski') return skiWorld(size);
   return constructionWorld(FACES.indexOf(face), size);
 }
 
@@ -538,6 +538,197 @@ function badmintonWorld(kit: FaceKit, size: number): THREE.Group {
     shuttle.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), next.sub(shuttle.position).normalize());
     shadow.position.set(shuttle.position.x, 0.105, shuttle.position.z);
     sway(swaying, time, phases);
+  };
+  g.userData.tick = tick;
+  return g;
+}
+
+/**
+ * The skiing side: a little snowy mountain with orange rock faces in the evening sun, firs, a slalom of flags
+ * and two tiny skiers carving down their tracks to the finish arch again and again.
+ */
+function skiWorld(size: number): THREE.Group {
+  const g = new THREE.Group();
+  const half = size / 2 - 0.4;
+  const base = new THREE.Mesh(new RoundedBoxGeometry(size - 0.6, 0.2, size - 0.6, 4, 0.1), mat('#fff2e6', 0.95));
+  base.receiveShadow = true;
+  g.add(base);
+
+  const smooth = (a: number, b: number, x: number): number => {
+    const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  };
+  /** The run's middle (x) at z: an S down the mountain, from the back (−z) to the front (+z). */
+  const runX = (z: number): number => Math.sin((z / half) * 3.3 + 0.6) * half * 0.3;
+  /** Height of the mountain: a peak at the back, a valley along the run, down to the base at the edges. */
+  const height = (x: number, z: number): number => {
+    const up = (half - z) / (2 * half); // 0 at the front, 1 at the back
+    const peak = 2.1 * up ** 1.5 * (1 - 0.3 * (x / half) ** 2);
+    const crags = 0.28 * up * Math.sin(x * 3.1 + 1) * Math.sin(z * 2.7 + 0.4);
+    const off = Math.abs(x - runX(z));
+    const banks = 0.38 * up * smooth(0.25, 0.9, off);
+    const edge = smooth(0, 0.45, half - Math.abs(x)) * smooth(0, 0.3, half + z) * smooth(0, 0.25, half - z);
+    return 0.1 + Math.max(0, peak + crags + banks) * edge;
+  };
+
+  // The mountain: flat faces; steep ones are orange rock, the rest snow (a touch blue in the valley's shade).
+  const plane = new THREE.PlaneGeometry(half * 2, half * 2, 26, 26).rotateX(-Math.PI / 2).toNonIndexed();
+  const position = plane.getAttribute('position');
+  for (let i = 0; i < position.count; i++) position.setY(i, height(position.getX(i), position.getZ(i)));
+  plane.computeVertexNormals();
+  const normal = plane.getAttribute('normal');
+  const colours = new Float32Array(position.count * 3);
+  const snowColour = new THREE.Color('#fff4ea');
+  const rockColour = new THREE.Color('#e07a3c');
+  const rockDark = new THREE.Color('#b85a30');
+  const random = seededRandom(21);
+  for (let i = 0; i < position.count; i += 3) {
+    const steep = normal.getY(i) < 0.62 && position.getY(i) > 0.3;
+    const colour = steep ? (random() < 0.5 ? rockColour : rockDark) : snowColour;
+    for (let k = 0; k < 3; k++) colours.set([colour.r, colour.g, colour.b], (i + k) * 3);
+  }
+  plane.setAttribute('color', new THREE.BufferAttribute(colours, 3));
+  const mountain = new THREE.Mesh(plane, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9 }));
+  mountain.castShadow = mountain.receiveShadow = true;
+  g.add(mountain);
+
+  // Snowy firs beside the run (three tiers each).
+  const needles = mat('#2b5e48', 0.85);
+  const white = mat('#ffffff', 0.9);
+  const trunkWood = mat('#6b4a32', 0.9);
+  for (let k = 0; k < 26; k++) {
+    const z = -half + 0.5 + random() * (half * 2 - 0.9);
+    const side = random() < 0.5 ? -1 : 1;
+    const x = runX(z) + side * (0.55 + random() * 0.9);
+    if (Math.abs(x) > half - 0.3) continue;
+    const tree = new THREE.Group();
+    const h = 0.34 + random() * 0.26;
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.035, 0.1, 6), trunkWood);
+    trunk.position.y = 0.04;
+    tree.add(trunk);
+    for (let tier = 0; tier < 3; tier++) {
+      const r = 0.17 * (1 - tier * 0.25);
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(r, h * 0.5, 7), needles);
+      cone.position.y = 0.08 + h * (0.25 + tier * 0.27);
+      const cap = new THREE.Mesh(new THREE.ConeGeometry(r * 0.62, h * 0.28, 7), white);
+      cap.position.y = cone.position.y + h * 0.13;
+      tree.add(cone, cap);
+    }
+    tree.position.set(x, height(x, z) - 0.03, z);
+    tree.rotation.y = random() * 6.28;
+    tree.traverse((o) => (o.castShadow = true));
+    g.add(tree);
+  }
+
+  // The slalom: red and blue flags in turn, on the outside of each bend.
+  const pole = mat('#f4f4f4', 0.5);
+  for (let k = 0; k < 7; k++) {
+    const z = -half + 0.9 + k * ((half * 2 - 1.7) / 6);
+    const x = runX(z) + (k % 2 ? -0.2 : 0.2);
+    const flag = new THREE.Group();
+    const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.22, 5), pole);
+    stick.position.y = 0.11;
+    const cloth = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.07), new THREE.MeshStandardMaterial({ color: k % 2 ? '#2f6fde' : '#e5484d', side: THREE.DoubleSide }));
+    cloth.position.set(0.05, 0.18, 0);
+    flag.add(stick, cloth);
+    flag.position.set(x, height(x, z), z);
+    flag.scale.setScalar(1.5);
+    g.add(flag);
+  }
+
+  // The finish arch at the bottom.
+  const archZ = half - 0.55;
+  const archX = runX(archZ);
+  for (const side of [-1, 1]) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.5, 0.05), mat('#e5484d', 0.6));
+    post.position.set(archX + side * 0.42, height(archX + side * 0.42, archZ) + 0.25, archZ);
+    post.castShadow = true;
+    g.add(post);
+  }
+  const banner = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.12, 0.03), mat('#ffffff', 0.6));
+  banner.position.set(archX, height(archX, archZ) + 0.5, archZ);
+  g.add(banner);
+  for (let k = 0; k < 6; k++) {
+    const check = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.06, 0.034), mat('#1f3247', 0.6));
+    check.position.set(archX - 0.4125 + k * 0.15 + (k % 2 ? 0 : 0.075), banner.position.y + (k % 2 ? 0.03 : -0.03), archZ);
+    g.add(check);
+  }
+
+  // Two tiny skiers on their own lines, each leaving a pair of blue tracks.
+  const startZ = -half + 0.75;
+  const endZ = half - 0.35;
+  const lineOf = (shift: number) => (t: number): THREE.Vector3 => {
+    const z = THREE.MathUtils.lerp(startZ, endZ, t);
+    const x = runX(z) + shift * Math.cos((z / half) * 3.3 + 0.6);
+    return new THREE.Vector3(x, height(x, z), z);
+  };
+  const trackMaterial = new THREE.MeshBasicMaterial({ color: '#6d8fe6', transparent: true, opacity: 0.75, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const skier = (colour: string, shift: number): { figure: THREE.Group; at: (t: number) => THREE.Vector3 } => {
+    const at = lineOf(shift);
+    // The tracks: two thin ribbons along the whole line.
+    const points: number[] = [];
+    const index: number[] = [];
+    const steps = 90;
+    for (let i = 0; i <= steps; i++) {
+      const p = at(i / steps);
+      const q = at(Math.min(1, (i + 1) / steps));
+      const along = (i < steps ? q.clone().sub(p) : p.clone().sub(at((i - 1) / steps))).setY(0).normalize();
+      const across = new THREE.Vector3(along.z, 0, -along.x);
+      for (const o of [-0.045, -0.02, 0.02, 0.045]) {
+        const x = p.x + across.x * o;
+        const z = p.z + across.z * o;
+        points.push(x, height(x, z) + 0.012, z);
+      }
+      if (i < steps) for (const k of [0, 2]) index.push(i * 4 + k, i * 4 + k + 1, i * 4 + k + 4, i * 4 + k + 1, i * 4 + k + 5, i * 4 + k + 4);
+    }
+    const ribbon = new THREE.BufferGeometry();
+    ribbon.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
+    ribbon.setIndex(index);
+    const tracks = new THREE.Mesh(ribbon, trackMaterial);
+    tracks.material.side = THREE.DoubleSide;
+    g.add(tracks);
+
+    const figure = new THREE.Group();
+    const lean = new THREE.Group();
+    const jacket = mat(colour, 0.7);
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.045, 0.06, 4, 8), jacket);
+    body.position.y = 0.11;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 10), mat('#f3c79a', 0.7));
+    head.position.y = 0.21;
+    const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.055, 12, 8, 0, Math.PI * 2, 0, 1.5), jacket);
+    helmet.position.y = 0.215;
+    lean.add(body, head, helmet);
+    for (const side of [-1, 1]) {
+      const ski = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.008, 0.2), mat('#2b3a55', 0.5));
+      ski.position.set(side * 0.03, 0.012, 0);
+      lean.add(ski);
+    }
+    lean.rotation.x = 0.25; // crouched forwards
+    figure.add(lean);
+    figure.traverse((o) => (o.castShadow = true));
+    g.add(figure);
+    return { figure, at };
+  };
+  const racers = [
+    { ...skier('#e5484d', 0.1), offset: 0 },
+    { ...skier('#00a6ed', -0.1), offset: 0.55 },
+  ];
+
+  const tick: Tick = (time) => {
+    for (const racer of racers) {
+      const lap = (time / 6 + racer.offset) % 1;
+      const t = Math.min(1, lap / 0.85); // down the run, then a short wait under the arch
+      const here = racer.at(t);
+      const ahead = racer.at(Math.min(1, t + 0.02));
+      racer.figure.position.copy(here);
+      const dx = ahead.x - here.x;
+      const dz = ahead.z - here.z;
+      if (t < 1) racer.figure.rotation.y = Math.atan2(dx, dz);
+      // Lean into the bend, and sit on the slope.
+      racer.figure.rotation.z = THREE.MathUtils.clamp(-dx * 9, -0.5, 0.5) * (t < 1 ? 1 : 0);
+      // (Drawn bigger than life, so they can be seen from the lobby's distance; they pop in and out at the ends.)
+      racer.figure.scale.setScalar(1.7 * (lap > 0.96 ? Math.max(0.001, (1 - lap) / 0.04) : Math.min(1, lap / 0.03 + 0.001)));
+    }
   };
   g.userData.tick = tick;
   return g;
