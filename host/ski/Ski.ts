@@ -4,6 +4,7 @@ import { TUNING } from '../../shared/tuning.ts';
 import { lookOf, type CharacterLook } from '../game/character.ts';
 import type { CpuLevel } from '../hub/lobbyUi.ts';
 import type { PodiumShow } from '../results/Podium.ts';
+import { Backdrop } from './backdrop.ts';
 import { Course } from './course.ts';
 import { CpuDriver } from './cpu.ts';
 import { Racer, type RacerEvent, type RacerInput } from './racer.ts';
@@ -16,7 +17,7 @@ import { Racer, type RacerEvent, type RacerInput } from './racer.ts';
 // nobody is out of the race for long. Computer racers far ahead of the players are held back a little.
 // When every player has crossed the line the results come, then the podium (host/main.ts).
 // Graybox look until S3. Mac keyboard for testing (steers racer 1): ← → steer, ↓ tuck, hold Space and let go to
-// jump, Enter shows the results after the finish, R restarts, D shows/hides the readout.
+// jump, Enter shows the results after the finish, R restarts, D shows/hides the readout, L next lighting preset.
 
 export type SkiHud = {
   info: HTMLElement;
@@ -103,6 +104,12 @@ export class Ski {
   private readonly camera: THREE.PerspectiveCamera;
   private readonly clock = new THREE.Clock();
   private readonly sun = new THREE.DirectionalLight('#fff4e0', 2.4);
+  private readonly skyLight = new THREE.HemisphereLight('#ffffff', '#9db8dd', 1.5);
+  private readonly fog = new THREE.Fog('#cfe6ff', 90, 330);
+  private readonly backdrop = new Backdrop();
+  /** From the scene towards the sun. */
+  private readonly sunDirection = new THREE.Vector3(0.5, 0.7, 0.2).normalize();
+  private lookName: keyof typeof TUNING.ski.look.presets = TUNING.ski.look.preset;
   private readonly course = new Course();
   private readonly puffs: Puffs;
   private entries: Entry[] = [];
@@ -142,17 +149,15 @@ export class Ski {
     private readonly hud: SkiHud,
   ) {
     const c = TUNING.ski;
-    this.camera = new THREE.PerspectiveCamera(c.camera.fov, 1, 0.1, 600);
+    this.camera = new THREE.PerspectiveCamera(c.camera.fov, 1, 0.1, 2500);
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, TUNING.scenery.maxPixelRatio));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.NeutralToneMapping;
     container.appendChild(this.renderer.domElement);
-    this.scene.background = new THREE.Color('#cfe6ff');
-    this.scene.fog = new THREE.Fog('#cfe6ff', 90, 330);
-
-    this.scene.add(new THREE.HemisphereLight('#ffffff', '#9db8dd', 1.5));
+    this.scene.fog = this.fog;
+    this.scene.add(this.skyLight, this.backdrop.group);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     const shadow = this.sun.shadow.camera;
@@ -164,6 +169,28 @@ export class Ski {
 
     this.scene.add(this.course.build(this.renderer));
     this.puffs = new Puffs(this.scene);
+    this.setLook(this.lookName);
+  }
+
+  /** Switches the lighting preset (TUNING.ski.look.presets; L on the Mac cycles them). */
+  setLook(name: keyof typeof TUNING.ski.look.presets): void {
+    const look = TUNING.ski.look.presets[name];
+    this.lookName = name;
+    const e = THREE.MathUtils.degToRad(look.sunElevation);
+    const a = THREE.MathUtils.degToRad(look.sunAzimuth);
+    this.sunDirection.set(Math.sin(a) * Math.cos(e), Math.sin(e), -Math.cos(a) * Math.cos(e));
+    this.sun.color.set(look.sun);
+    this.sun.intensity = look.sunIntensity;
+    this.skyLight.color.set(look.hemiSky);
+    this.skyLight.groundColor.set(look.hemiGround);
+    this.skyLight.intensity = look.hemiIntensity;
+    this.fog.color.set(look.fog);
+    this.fog.near = look.fogNear;
+    this.fog.far = look.fogFar;
+    this.scene.background = new THREE.Color(look.skyHorizon);
+    this.renderer.toneMappingExposure = look.exposure;
+    this.course.applyLook(look);
+    this.backdrop.applyLook(look, this.sunDirection);
   }
 
   // ---------- Public ----------
@@ -381,6 +408,7 @@ export class Ski {
     this.fadeGates(dt);
     this.placeSun();
     this.placeCamera(false, dt);
+    this.backdrop.follow(this.camera);
     this.renderer.render(this.scene, this.camera);
     this.placeTags();
     this.workMs += (performance.now() - started - this.workMs) * 0.05;
@@ -526,7 +554,7 @@ export class Ski {
   private placeSun(): void {
     const at = this.focus?.racer.group.position ?? new THREE.Vector3();
     this.sun.target.position.copy(at);
-    this.sun.position.copy(at).add(new THREE.Vector3(40, 55, 10));
+    this.sun.position.copy(at).addScaledVector(this.sunDirection, 90);
   }
 
   /**
@@ -647,6 +675,7 @@ export class Ski {
       `Phone tilt   ${wheel?.ready ? `${signed(Math.round(wheel.roll))}°` : '–'}`,
       `Steering     ${signed(Math.round(b.steer * 100))} %${b.tuck ? '  TUCK' : ''}${b.crouch > 0 ? '  JUMP…' : ''}`,
       `Gates        ${b.gatesPassed}/${this.course.gates.length}`,
+      `Look         ${TUNING.ski.look.presets[this.lookName].label} · L next`,
       `Frame        ${this.frameMs.toFixed(1)} ms (work ${this.workMs.toFixed(1)} ms) · D hides`,
     ].join('\n');
   }
@@ -663,6 +692,10 @@ export class Ski {
     } else if (e.key === 'Enter' && this.phase === 'finished') this.endRace();
     else if (e.key === 'r' || e.key === 'R') this.reset();
     else if (e.key === 'd' || e.key === 'D') this.showDebug = !this.showDebug;
+    else if (e.key === 'l' || e.key === 'L') {
+      const names = Object.keys(TUNING.ski.look.presets) as (keyof typeof TUNING.ski.look.presets)[];
+      this.setLook(names[(names.indexOf(this.lookName) + 1) % names.length]);
+    }
   };
 
   private readonly onKeyUp = (e: KeyboardEvent): void => {

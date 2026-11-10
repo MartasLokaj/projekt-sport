@@ -1296,6 +1296,40 @@ export const TUNING = {
     },
     /** Shirt and skin colours for computer racers (only colours no player wears are used). */
     cpuSkins: ['#f3c79a', '#dba571', '#ffe0c7', '#b67b4c'],
+
+    /**
+     * The look (phase S3): which lighting preset is used (L on the Mac cycles them live) and the presets.
+     * Warm sun against cool shadows: the sun lights the snow and rocks warmly, everything in shadow only gets the
+     * sky light (hemiSky), which is a saturated blue. sunElevation = how high the sun stands (degrees), sunAzimuth =
+     * where it comes from (0 = straight ahead down the mountain, 90 = from the right, 180 = from behind).
+     * Colours: sky (top, horizon), fog/haze, snow, rocks, fir needles, trunks, far mountains.
+     */
+    look: {
+      preset: 'golden' as 'golden' | 'crisp' | 'sunset',
+      edgeLines: false,
+      presets: {
+        golden: {
+          label: 'A · Golden morning', skyTop: '#4f9be3', skyHorizon: '#cfe7f6', fog: '#c6ddef', fogNear: 120, fogFar: 520,
+          sun: '#ffd09a', sunIntensity: 2.8, sunElevation: 28, sunAzimuth: 60, hemiSky: '#4d8dff', hemiGround: '#dfe9ff', hemiIntensity: 2.3,
+          exposure: 1.0, snow: '#fff6ea', rock: '#d4823f', foliage: '#2e6a47', trunk: '#6b4a32', mountain: '#8fa9c9', mountainSnow: '#f4f1ec',
+        },
+        crisp: {
+          label: 'B · Crisp midday', skyTop: '#2f86e0', skyHorizon: '#dbefff', fog: '#d6e9fa', fogNear: 140, fogFar: 600,
+          sun: '#fff1dc', sunIntensity: 2.4, sunElevation: 48, sunAzimuth: 35, hemiSky: '#6aa6ff', hemiGround: '#eef4ff', hemiIntensity: 2.4,
+          exposure: 1.0, snow: '#ffffff', rock: '#c58a58', foliage: '#2f7550', trunk: '#6b4a32', mountain: '#7f9cc4', mountainSnow: '#ffffff',
+        },
+        sunset: {
+          label: 'C · Late sun', skyTop: '#5f86d6', skyHorizon: '#ffd3ae', fog: '#efcdbd', fogNear: 110, fogFar: 480,
+          sun: '#ffa262', sunIntensity: 3.2, sunElevation: 16, sunAzimuth: 25, hemiSky: '#6a5cf0', hemiGround: '#f3dcec', hemiIntensity: 2.0,
+          exposure: 1.05, snow: '#ffeee2', rock: '#e0743c', foliage: '#2b5e48', trunk: '#5e3b2a', mountain: '#9a8fbf', mountainSnow: '#ffe8da',
+        },
+      },
+      /** Far mountains: how many, how far (m), how high (m). Big rocks (cliffs) on the valley walls: every cliffEvery m. */
+      mountains: 30,
+      mountainDistance: [600, 820],
+      mountainHeight: [70, 170],
+      cliffEvery: 18,
+    },
     /** The phone buzzes on a carve at most this often (ms), when the skis turn faster than carveCueRate (°/s). */
     carveCueMs: 600,
     carveCueRate: 70,

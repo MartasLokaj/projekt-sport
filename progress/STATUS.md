@@ -768,7 +768,17 @@ body, round mitten hands, sturdier legs, chunky shoes).
   - **User (2026-11-10): "against the CPU it plays great, let's continue, the rest we tune tomorrow".** One phone vs
     CPU approved (incl. forks). **2+ phones on one camera NOT TESTED yet (no friends around)** — check when they can;
     tomorrow the user asks friends about details.
-  - Next: S3 (look). First step: lighting options to choose from (screenshots), then outfits.
+  - **S3 step 1 — built 2026-11-10, waiting for the user's choice of lighting.** `TUNING.ski.look`: three presets
+    (`golden` A · Golden morning = default, `crisp` B · Crisp midday, `sunset` C · Late sun); **L on the Mac cycles them
+    live** (`Ski.setLook`), the readout shows which. Warm sun + strong saturated-blue hemisphere light = blue shadows.
+    `host/ski/backdrop.ts`: gradient sky dome with a warm haze round the sun, sun glow sprite, ring of 30 jagged far
+    mountains with snow tops (follows the camera). `course.ts`: snow texture with faint specks (grid gone, edge lines
+    hidden: `look.edgeLines`), firs with snow on most branches (two instanced shapes: needles + snow), faceted ochre
+    rocks with snow caps, big cliffs on the valley walls every ~18 m (visual only), colours via `applyLook`.
+    Screenshots of A/B/C in `logs/ski-look-*.jpg` (not in git). ~3 ms work per frame in the dev browser.
+    Known: sunlit snow in A is a little lavender (blue sky light adds to the sun) — tune after the choice.
+  - Next (S3): user picks A/B/C → tune it → ski outfits (jacket, trousers, helmet/beanie, goggles, poles) → haze /
+    sun glare polish. Then S4 juice (tracks, spray, speed lines, sparkles, sounds).
 
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.

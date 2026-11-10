@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { TUNING } from '../../shared/tuning.ts';
+import type { LookPreset } from './backdrop.ts';
 
 // The ski run (SKI.md, phase S2a): a winding valley from the start gate down to the finish, generated from a seed
 // (the same run every time). Positions on the run: x = metres across (+ = right when looking downhill),
@@ -8,7 +9,8 @@ import { TUNING } from '../../shared/tuning.ts';
 // flags that give a little speed), tree islands and rocks; outside its edges the ground rises into forested walls.
 // Forks (S2b): in places the run splits into two ways ("lanes") with a forested ridge between them: a short, narrow,
 // risky way with rocks and a kicker, and a wider, winding, safe way with gates. They join again further down.
-// Graybox look for now (S3 does the real look): white snow with a faint grid, green cone trees, grey rocks.
+// Look (S3): soft snow, firs with snow on their branches, faceted ochre rocks with snow caps, big cliffs on the
+// valley walls. Colours come from the look preset (applyLook).
 
 export type Obstacle = { x: number; d: number; radius: number; height: number; kind: 'tree' | 'rock' | 'sign'; size: number; turn: number };
 export type Gate = { d: number; x: number; width: number; colour: string; flags: THREE.Group | null };
@@ -52,6 +54,15 @@ export class Course {
   /** Height of the run's middle every metre, from d = -BEFORE_START. */
   private readonly base: Float32Array;
   private readonly chunks: { from: number; group: THREE.Group }[] = [];
+  /** Materials whose colours come from the look preset. */
+  private readonly materials = {
+    snow: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 }),
+    capSnow: new THREE.MeshStandardMaterial({ roughness: 0.95, flatShading: true, side: THREE.DoubleSide }),
+    foliage: new THREE.MeshStandardMaterial({ roughness: 0.9, flatShading: true, side: THREE.DoubleSide }),
+    trunk: new THREE.MeshStandardMaterial({ roughness: 0.9 }),
+    rock: new THREE.MeshStandardMaterial({ roughness: 0.9, flatShading: true }),
+    edge: new THREE.MeshBasicMaterial({ color: '#7fb0ee' }),
+  };
 
   constructor() {
     const c = TUNING.ski.course;
@@ -331,56 +342,69 @@ export class Course {
   /** Builds the run's meshes (in pieces of CHUNK metres, so only the part near the skier is drawn). */
   build(renderer: THREE.WebGLRenderer): THREE.Group {
     const root = new THREE.Group();
-    const texture = gridTexture(renderer);
-    const snow = new THREE.MeshStandardMaterial({ map: texture, vertexColors: true, roughness: 0.92 });
-    const edgeMaterial = new THREE.MeshBasicMaterial({ color: '#7fb0ee' });
-    const foliage = new THREE.MeshStandardMaterial({ color: '#3f7d4f', roughness: 0.85, flatShading: true });
-    const trunkMaterial = new THREE.MeshStandardMaterial({ color: '#6b4a32', roughness: 0.9 });
-    const rockMaterial = new THREE.MeshStandardMaterial({ color: '#8d97a3', roughness: 0.85, flatShading: true });
-    const foliageGeometry = treeGeometry();
+    const m = this.materials;
+    m.snow.map = snowTexture(renderer);
+    m.edge.visible = TUNING.ski.look.edgeLines;
+    const tree = treeGeometry();
     const trunkGeometry = new THREE.CylinderGeometry(0.12, 0.16, 1, 6).translate(0, 0.5, 0);
-    const rockGeometry = rockShape();
+    const rock = rockShape();
+    const rand = random(TUNING.ski.course.seed + 100);
+    const look = TUNING.ski.look;
+    const c = TUNING.ski.course;
+    const matrix = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const up = new THREE.Vector3(0, 1, 0);
 
-    for (let from = -BEFORE_START; from < this.end + 40; from += CHUNK) {
-      const to = Math.min(from + CHUNK, this.end + 40);
-      const group = new THREE.Group();
-      const ground = new THREE.Mesh(this.groundGeometry(from, to), snow);
-      ground.receiveShadow = true;
-      group.add(ground);
-      for (const lane of [0, 1]) for (const s of [-1, 1]) group.add(new THREE.Mesh(this.edgeGeometry(from, to, lane, s), edgeMaterial));
-
-      const inChunk = this.obstacles.filter((o) => o.d >= from && o.d < to);
-      const trees = inChunk.filter((o) => o.kind === 'tree');
-      const rocks = inChunk.filter((o) => o.kind === 'rock');
-      const matrix = new THREE.Matrix4();
-      const q = new THREE.Quaternion();
-      const up = new THREE.Vector3(0, 1, 0);
-      if (trees.length) {
-        const crowns = new THREE.InstancedMesh(foliageGeometry, foliage, trees.length);
-        const trunks = new THREE.InstancedMesh(trunkGeometry, trunkMaterial, trees.length);
-        trees.forEach((t, i) => {
-          const y = this.height(t.x, t.d);
-          q.setFromAxisAngle(up, t.turn);
-          crowns.setMatrixAt(i, matrix.compose(new THREE.Vector3(t.x, y + 0.6 * t.size, -t.d), q, new THREE.Vector3(t.size, t.size, t.size)));
-          trunks.setMatrixAt(i, matrix.compose(new THREE.Vector3(t.x, y - 0.2, -t.d), q, new THREE.Vector3(t.size, t.size * 1.2, t.size)));
-        });
-        for (const mesh of [crowns, trunks]) {
-          mesh.castShadow = true;
-          mesh.computeBoundingSphere();
-          group.add(mesh);
-        }
-      }
-      if (rocks.length) {
-        const mesh = new THREE.InstancedMesh(rockGeometry, rockMaterial, rocks.length);
-        rocks.forEach((r, i) => {
-          q.setFromAxisAngle(up, r.turn);
-          const y = this.height(r.x, r.d);
-          mesh.setMatrixAt(i, matrix.compose(new THREE.Vector3(r.x, y + r.size * 0.25, -r.d), q, new THREE.Vector3(r.size, r.size * 0.9, r.size)));
-        });
+    /** One instanced mesh per material for the same set of placements. */
+    const place = (group: THREE.Group, parts: [THREE.BufferGeometry, THREE.Material][], matrices: THREE.Matrix4[]): void => {
+      if (!matrices.length) return;
+      for (const [geometry, material] of parts) {
+        const mesh = new THREE.InstancedMesh(geometry, material, matrices.length);
+        matrices.forEach((mat, i) => mesh.setMatrixAt(i, mat));
         mesh.castShadow = mesh.receiveShadow = true;
         mesh.computeBoundingSphere();
         group.add(mesh);
       }
+    };
+
+    for (let from = -BEFORE_START; from < this.end + 40; from += CHUNK) {
+      const to = Math.min(from + CHUNK, this.end + 40);
+      const group = new THREE.Group();
+      const ground = new THREE.Mesh(this.groundGeometry(from, to), m.snow);
+      ground.receiveShadow = true;
+      group.add(ground);
+      for (const lane of [0, 1]) for (const s of [-1, 1]) group.add(new THREE.Mesh(this.edgeGeometry(from, to, lane, s), m.edge));
+
+      const inChunk = this.obstacles.filter((o) => o.d >= from && o.d < to);
+      const crowns: THREE.Matrix4[] = [];
+      const trunks: THREE.Matrix4[] = [];
+      const rocks: THREE.Matrix4[] = [];
+      for (const o of inChunk) {
+        const y = this.height(o.x, o.d);
+        q.setFromAxisAngle(up, o.turn);
+        if (o.kind === 'tree') {
+          crowns.push(new THREE.Matrix4().compose(new THREE.Vector3(o.x, y + 0.6 * o.size, -o.d), q, new THREE.Vector3(o.size, o.size, o.size)));
+          trunks.push(new THREE.Matrix4().compose(new THREE.Vector3(o.x, y - 0.2, -o.d), q, new THREE.Vector3(o.size, o.size * 1.2, o.size)));
+        } else if (o.kind === 'rock') {
+          rocks.push(new THREE.Matrix4().compose(new THREE.Vector3(o.x, y + o.size * 0.25, -o.d), q, new THREE.Vector3(o.size, o.size * 0.9, o.size)));
+        }
+      }
+      // Cliffs: big rocks on the valley walls, beyond where a skier can get (only to look at).
+      for (let d = from; d < to; d += look.cliffEvery) {
+        for (const side of [-1, 1]) {
+          if (rand() < 0.45) continue;
+          const at = d + rand() * look.cliffEvery;
+          const { lo, hi } = this.bounds(at);
+          const out = c.edgeLimit + 5 + rand() * 16;
+          const x = side < 0 ? lo - out : hi + out;
+          const size = 3 + rand() * 5;
+          q.setFromAxisAngle(up, rand() * 6.28);
+          rocks.push(matrix.clone().compose(new THREE.Vector3(x, this.height(x, at) + size * 0.2, -at), q, new THREE.Vector3(size, size * (0.8 + rand() * 0.9), size)));
+        }
+      }
+      place(group, [[tree.green, m.foliage], [tree.snow, m.capSnow]], crowns);
+      place(group, [[trunkGeometry, m.trunk]], trunks);
+      place(group, [[rock.rock, m.rock], [rock.snow, m.capSnow]], rocks);
       this.chunks.push({ from, group });
       root.add(group);
     }
@@ -394,6 +418,16 @@ export class Course {
     root.add(this.arch(0, 'START', '#2f6fde'), this.arch(this.length, 'FINISH', '#e5484d'));
     for (const fork of this.forks) root.add(this.forkSign(fork));
     return root;
+  }
+
+  /** Colours from the look preset. */
+  applyLook(look: LookPreset): void {
+    const m = this.materials;
+    m.snow.color.set(look.snow);
+    m.capSnow.color.set(look.snow);
+    m.foliage.color.set(look.foliage);
+    m.trunk.color.set(look.trunk);
+    m.rock.color.set(look.rock);
   }
 
   /** Shows only the pieces near d. */
@@ -415,8 +449,8 @@ export class Course {
     const uvs: number[] = [];
     const indices: number[] = [];
     const runColour = new THREE.Color('#ffffff');
-    const wallColour = new THREE.Color('#e6eef8');
-    const kickerColour = new THREE.Color('#ffb46b');
+    const wallColour = new THREE.Color('#eef3fa');
+    const kickerColour = new THREE.Color('#ffc48a');
     const colour = new THREE.Color();
     for (let r = 0; r <= rows; r++) {
       const d = from + r;
@@ -559,52 +593,107 @@ export class Course {
   }
 }
 
-/** White snow with a faint grid, so speed and turning can be seen. */
-function gridTexture(renderer: THREE.WebGLRenderer): THREE.Texture {
-  const size = 256;
+/** Snow: white with faint soft bluish specks and streaks (repeats every 16 m), so speed and turning can be seen. */
+function snowTexture(renderer: THREE.WebGLRenderer): THREE.Texture {
+  const size = 512;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d')!;
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, size, size);
-  ctx.strokeStyle = '#d3deec';
-  ctx.lineWidth = 4;
-  ctx.strokeRect(0, 0, size, size);
+  const rand = random(5);
+  for (let i = 0; i < 260; i++) {
+    const x = rand() * size;
+    const y = rand() * size;
+    const r = 3 + rand() * 14;
+    // Drawn at the wrapped positions too, so the texture tiles without seams.
+    for (const ox of [-size, 0, size]) for (const oy of [-size, 0, size]) {
+      const g = ctx.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
+      g.addColorStop(0, `rgba(150, 180, 220, ${0.05 + rand() * 0.09})`);
+      g.addColorStop(1, 'rgba(150, 180, 220, 0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(x + ox - r, y + oy - r, r * 2, r * 2);
+    }
+  }
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(0.25, 0.25);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
   return texture;
 }
 
-/** A fir's crown: three stacked cones in one shape (about 4 m tall at size 1, starting 0.6 m above the ground). */
-function treeGeometry(): THREE.BufferGeometry {
-  const points = [
-    [0, 0],
-    [1.3, 0.2],
-    [0.55, 1.2],
-    [1.0, 1.3],
-    [0.4, 2.3],
-    [0.7, 2.4],
-    [0, 3.5],
-  ].map(([x, y]) => new THREE.Vector2(x, y));
-  return new THREE.LatheGeometry(points, 7);
-}
-
-/** A lumpy rock: an icosahedron with its corners pushed in and out (always the same lumps). */
-function rockShape(): THREE.BufferGeometry {
-  const geometry = new THREE.IcosahedronGeometry(1, 0);
-  const position = geometry.getAttribute('position');
-  const rand = random(3);
-  const moved = new Map<string, number>();
-  for (let i = 0; i < position.count; i++) {
-    const key = `${position.getX(i).toFixed(3)},${position.getY(i).toFixed(3)},${position.getZ(i).toFixed(3)}`;
-    if (!moved.has(key)) moved.set(key, 0.75 + rand() * 0.45);
-    const k = moved.get(key)!;
-    position.setXYZ(i, position.getX(i) * k, position.getY(i) * k * 0.8, position.getZ(i) * k);
-  }
+/** A geometry of loose triangles (flat shaded). */
+function triangles(positions: number[]): THREE.BufferGeometry {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.computeVertexNormals();
   return geometry;
+}
+
+/**
+ * A fir's crown: three stacked tiers (about 4 m tall at size 1, starting 0.6 m above the ground), in two shapes:
+ * the green needles, and the snow lying on the upper part of most branches.
+ */
+function treeGeometry(): { green: THREE.BufferGeometry; snow: THREE.BufferGeometry } {
+  // Each tier: underside, outer rim of the branches (always green), upper part (snow on most sides).
+  const profile: [number, number, number, number, 'green' | 'top' | 'tip'][] = [
+    [0, 0, 1.3, 0.2, 'green'],
+    [1.3, 0.2, 1.0, 0.6, 'green'],
+    [1.0, 0.6, 0.55, 1.2, 'top'],
+    [0.55, 1.2, 1.0, 1.3, 'green'],
+    [1.0, 1.3, 0.78, 1.67, 'green'],
+    [0.78, 1.67, 0.4, 2.3, 'top'],
+    [0.4, 2.3, 0.7, 2.4, 'green'],
+    [0.7, 2.4, 0.45, 2.8, 'green'],
+    [0.45, 2.8, 0, 3.5, 'tip'],
+  ];
+  const sides = 7;
+  const rand = random(9);
+  const green: number[] = [];
+  const snow: number[] = [];
+  for (const [r0, y0, r1, y1, kind] of profile) {
+    for (let k = 0; k < sides; k++) {
+      const a0 = (k / sides) * Math.PI * 2;
+      const a1 = ((k + 1) / sides) * Math.PI * 2;
+      const into = kind === 'tip' || (kind === 'top' && rand() < 0.7) ? snow : green;
+      const A = [r0 * Math.cos(a0), y0, r0 * Math.sin(a0)];
+      const B = [r0 * Math.cos(a1), y0, r0 * Math.sin(a1)];
+      const C = [r1 * Math.cos(a0), y1, r1 * Math.sin(a0)];
+      const D = [r1 * Math.cos(a1), y1, r1 * Math.sin(a1)];
+      into.push(...A, ...C, ...B, ...B, ...C, ...D);
+    }
+  }
+  return { green: triangles(green), snow: triangles(snow) };
+}
+
+/**
+ * A lumpy rock: an icosahedron with its corners pushed in and out (always the same lumps), in two shapes:
+ * the rock's sides, and the snow on the faces that look up.
+ */
+function rockShape(): { rock: THREE.BufferGeometry; snow: THREE.BufferGeometry } {
+  const source = new THREE.IcosahedronGeometry(1, 1).toNonIndexed();
+  const position = source.getAttribute('position');
+  const rand = random(3);
+  const moved = new Map<string, number>();
+  const points: THREE.Vector3[] = [];
+  for (let i = 0; i < position.count; i++) {
+    const key = `${position.getX(i).toFixed(3)},${position.getY(i).toFixed(3)},${position.getZ(i).toFixed(3)}`;
+    if (!moved.has(key)) moved.set(key, 0.72 + rand() * 0.5);
+    const k = moved.get(key)!;
+    points.push(new THREE.Vector3(position.getX(i) * k, position.getY(i) * k * 0.8, position.getZ(i) * k));
+  }
+  source.dispose();
+  const rock: number[] = [];
+  const snow: number[] = [];
+  const normal = new THREE.Vector3();
+  const edge = new THREE.Vector3();
+  for (let i = 0; i < points.length; i += 3) {
+    normal.subVectors(points[i + 1], points[i]).cross(edge.subVectors(points[i + 2], points[i])).normalize();
+    const into = normal.y > 0.6 ? snow : rock;
+    for (let k = 0; k < 3; k++) into.push(points[i + k].x, points[i + k].y, points[i + k].z);
+  }
+  return { rock: triangles(rock), snow: triangles(snow) };
 }
 
 /** A gate: two thin poles with flags, `width` apart (the skier rides between them). */
