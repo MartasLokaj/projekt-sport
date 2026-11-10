@@ -1134,6 +1134,49 @@ export const TUNING = {
     teamColours: ['#e84a4a', '#f5c518'],
   },
 
+  // Skiing (SKI.md, phase S1): the phone is held sideways like a steering wheel; tilting it steers the skier.
+  ski: {
+    steer: {
+      /** Tilts smaller than this (degrees from the neutral position) do nothing, so shaky hands go straight. */
+      deadZoneDeg: 3,
+      /** This much tilt (degrees) is a full turn at 100 % sensitivity; a higher sensitivity needs less tilt. */
+      maxRollDeg: 40,
+      /** Response curve: 1 = straight line, higher = gentler near the middle and sharper at the end. */
+      curveExponent: 1.5,
+      /** How quickly the measured tilt follows the phone (milliseconds); higher = calmer but later. */
+      smoothingMs: 70,
+      /** The phone sends its steering this often (milliseconds; 33 = 30 times a second). */
+      sendIntervalMs: 33,
+      /** Lying flatter than this (share of gravity left in the screen's plane) the tilt cannot be read. */
+      minUpright: 0.35,
+      /** The server saves a steering sample to logs/ski-steer.jsonl this often per phone (milliseconds). */
+      logEveryMs: 100,
+    },
+    /** Constant speed down the slope (m/s) and how steep the slope is (degrees). */
+    speed: 14,
+    slopeDegrees: 14,
+    /** Full steering points the skis this far off the straight line down (degrees). */
+    maxHeadingDeg: 50,
+    /** How fast the skis follow the steering (higher = snappier), and how fast the big screen follows the phone. */
+    headingResponse: 7,
+    steerFollow: 18,
+    /** The skier leans into a turn by up to this much (degrees). */
+    leanDeg: 22,
+    /** Half of the slope's width (m); the skier cannot leave it. */
+    halfWidth: 13,
+    /** Grey boxes: a row every rowSpacing metres, the first one this far from the start, rows drawn ahead. */
+    rowSpacing: 16,
+    firstRow: 30,
+    rowsAhead: 12,
+    boxSize: 1.4,
+    /** Mac keyboard: ← → reach full steering in this many seconds. */
+    keySeconds: 0.25,
+    /** A phone that sent nothing for this long (milliseconds) lets another phone take over the steering. */
+    silentMs: 1000,
+    /** Chase camera: how far behind and above the skier, how far ahead it looks, how snappy, how wide. */
+    camera: { back: 6.5, height: 3.2, lookAhead: 9, follow: 6, fov: 62 },
+  },
+
   // Swing Lab on the big screen: a shuttle drops to the hit line, the player swings when it gets there.
   badmintonLab: {
     /** Time from the shuttle appearing to reaching the hit line, and the pause before the next one (milliseconds). */

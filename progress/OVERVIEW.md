@@ -1,4 +1,4 @@
-# Projekt-sport — celkový přehled (stav k 9. 11. 2026)
+# Projekt-sport — celkový přehled (stav k 10. 11. 2026)
 
 Jeden soubor, kde je všechno pohromadě: kolik je hotovo, co jsme udělali, co chybí a nápady na zlepšení.
 Podrobný deník pro Clauda zůstává v `progress/STATUS.md`, zadání v `SPEC.md`.
@@ -22,6 +22,7 @@ v minigolfu, obrazovky s výsledky, dotažení editoru postavičky, nastavení a
 | Kostka (lobby) | **85 %** | Vzhled, zvuky, hudba, přechod do hry a stupně vítězů hotové. Chybí úvod zápasu a lobby na telefonu. |
 | Editor postavičky na telefonu (fáze 5) | **60 %** | Kroky 1–2 fungují (živé úpravy, ukládání). Chybí kroky 3–4. |
 | Doladění (fáze 6: nastavení, návod, test s přáteli) | **10 %** | Titulní menu, návod a ztlumení (M) jsou, zbytek ne. |
+| Lyžování (nová hra, SKI.md) | **10 %** | Fáze S1 (prototyp řízení náklonem mobilu jako volantem) postavena, čeká na test z telefonu. Závod, vzhled a efekty zatím ne. |
 | Ověření 60 snímků/s na MacBooku Air | **0 %** | Nikdy neměřeno na skutečném MacBooku Air. |
 
 ---

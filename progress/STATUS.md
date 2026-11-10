@@ -1,6 +1,6 @@
 # Project status — read this first in a new chat
 
-Last updated: 2026-11-03. Read `CLAUDE.md` and `SPEC.md` too (SPEC is the source of truth; this file is the
+Last updated: 2026-11-10. Read `CLAUDE.md` and `SPEC.md` too (SPEC is the source of truth; this file is the
 running log of where we are, what the user decided, and what comes next).
 Short overview for the user (in Czech: % done, what is missing, optimisation ideas): `progress/OVERVIEW.md` — keep it
 up to date too.
@@ -661,6 +661,35 @@ body, round mitten hands, sturdier legs, chunky shoes).
   reach, calmer runs) and the gentle return to the cube are approved.** "We'll work a lot on the graphics later."
 - User: "golf se mi taky hraje dobře", then "jamky jsou top!" — **Minigolf J3 (holes 8 Bridge, 9 Finale) approved;
   all 9 holes approved.**
+
+### Skiing (SPEC §15, brief `SKI.md`) — started 2026-11-10 on the user's request
+- The user added `SKI.md` + SPEC §15: downhill ski race, phone held sideways like a steering wheel. Phases S1–S5.
+  The reference screenshots did **not** arrive with the message (text only): ask for them again before S3 (look).
+- **S1 tilt steering prototype — built (user: "Ano, postav S1"), waiting for the user's phone test.**
+  - Cube: the side that was `mystery-2` is now `ski` ("Skiing · Prototype"; its little world is still the building
+    site until S5; icon still the mystery one). Play/Enter → server `ski_mode` → `ski_state` to everyone. Lab, curling,
+    skiing and a minigolf match shut each other out (`server/lobby.ts`; the only touch on curling/badminton code paths).
+  - Phone: `controller/ski/screen.ts` (`#screen-ski`): "Hold the phone sideways… press Ready" → Ready sets neutral
+    (on iPhone the same tap asks for the motion permission), the button then says Re-centre; meter + degrees; sends
+    `ski_steer {steer, roll, ready}` every 33 ms. With the rotation lock on (page stays upright) the content turns
+    90° to stay readable (direction from gravity; uses the same iPhone/Android sign rule as the badminton lab).
+  - Maths: `controller/ski/steer.ts` `WheelSteer`: roll = turn of gravity inside the screen's plane since Ready, so
+    it is the same for both landscape ways and for either gravity sign (checked in a script: 4 combinations give
+    identical numbers). Dead zone 3°, full at 40° ÷ sensitivity, curve exponent 1.5, smoothing 70 ms, "too flat"
+    guard. ±1.5° hand tremor → steering 0.
+  - Big screen: `host/ski/Ski.ts`: white slope with a grid (14°), blue edge lines, rows of grey boxes (same places
+    every run), chibi on skis at constant 14 m/s; steering = direction (full = skis 50° off the fall line, neutral =
+    straight down), leans into turns; a touched box turns red and is counted (no crash yet); level chase camera;
+    readout: phone tilt, steering %, skis °, boxes hit, frame ms. One phone steers at a time (the first heard, until it
+    is silent 1 s). Mac ← → steer, Esc back. No jump / tuck yet (S2).
+  - Log: `logs/ski-steer.jsonl`, one sample per phone every 100 ms (t, player, sensitivity, roll, steer).
+  - Checked: type check; steer script; test server on 8444 with a `ws` client (routing, clamping, mutual exclusion,
+    log); dev browser with a fake socket (cube card, dive in, phone steering both ways, keys, red box, Esc back; phone
+    page in landscape and in upright-page mode). ~1.5 ms work per frame in the dev browser.
+  - **Not verified on real phones:** whether right tilt = right turn (if mirrored: flip the sign in `WheelSteer.roll`),
+    the feel (dead zone / 40° / curve / `headingResponse`), the turned text direction with the rotation lock on, iPhone
+    permission from the Ready tap. Real fps on the MacBook Air not measured.
+  - Next: user's phone test → tune `TUNING.ski` from their words and the log → their OK → push → plan S2 (race).
 
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.

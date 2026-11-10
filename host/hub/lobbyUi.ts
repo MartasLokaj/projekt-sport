@@ -267,6 +267,10 @@ export class LobbyUi {
       // Works without phones too: the Mac keyboard can throw (hold Space).
       return { enabled: true, label: 'Play', note: phones === 0 ? 'No phone yet: hold Space to throw on the Mac' : '', warn: false };
     }
+    if (face.id === 'ski') {
+      // Works without phones too: the Mac keyboard can steer (← →).
+      return { enabled: true, label: 'Play', note: phones === 0 ? 'No phone yet: ← → steer on the Mac' : '', warn: false };
+    }
     if (face.id === 'badminton') {
       // Works without phones too: the Mac keyboard can swing (Space, ↑).
       const note = phones === 0 ? 'No phone yet: Space swings on the Mac' : phones > 2 ? 'The first two play' : '';

@@ -236,5 +236,13 @@ stone that slides and curls like the ball, scores, characters). Open questions a
 - C3: rules: ends, scoring, two teams, turns, vs CPU, 1 v 1, 2 v 2, match lengths, scoreboard and podium.
 - C4: art and juice (the frozen pond, characters with brooms, sounds) and the Curling side of the cube.
 
+## 15. Skiing — DRAFT, requested by the user 2026-11-10
+
+Downhill ski race for 1–4 players: hold the phone sideways like a **steering wheel**, tilt left/right to steer.
+Stylised snowy mountain look (warm sun, cool blue shadows, faceted rocks, snowy firs), all built in code, with snow
+effects (ski tracks, spray, speed lines). One shared camera, no split screen. Full brief and phases S1–S5: **SKI.md**.
+Start with S1 (tilt steering prototype on real phones) when the user asks for it; it lives in its own files and must
+not change Minigolf, Badminton or Curling.
+
 ## Ideas for later (user, 2026-11-02)
 - **Boxing, two phones against the CPU** (punch with the phone). Not now; after Curling.

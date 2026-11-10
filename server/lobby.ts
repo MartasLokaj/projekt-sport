@@ -73,6 +73,12 @@ export class Lobby {
   private lab = false;
   /** Whether Curling is open (phones then show the swing screen instead of "waiting for the game"). */
   private curling = false;
+  /** Whether Skiing is open (phones then show the steering-wheel screen). */
+  private ski = false;
+  /** When each player's steering was last saved to the log (server clock). */
+  private skiLoggedAt = new Map<string, number>();
+  /** Called with a steering sample now and then, so the server can save it for tuning. */
+  onSkiSteer: ((entry: object) => void) | null = null;
   /** Called for every badminton swing, so the server can save it for tuning. */
   onBadmintonSwing: ((entry: object) => void) | null = null;
   /** Called with how the host judged each badminton swing (saved to the outcome log). */
@@ -101,12 +107,14 @@ export class Lobby {
     this.match.end();
     this.lab = false;
     this.curling = false;
+    this.ski = false;
     this.room = room;
     this.setHostInfo(info);
     this.broadcastLobby();
     this.broadcastGame();
     for (const ws of this.hosts) send(ws, { type: 'lab_state', on: false });
     for (const ws of this.hosts) send(ws, { type: 'curling_state', on: false });
+    for (const ws of this.hosts) send(ws, { type: 'ski_state', on: false });
   }
 
   handle(ws: WebSocket, msg: ClientMessage): void {
@@ -118,6 +126,7 @@ export class Lobby {
         send(ws, this.gameState());
         send(ws, { type: 'lab_state', on: this.lab });
         send(ws, { type: 'curling_state', on: this.curling });
+        send(ws, { type: 'ski_state', on: this.ski });
         return;
       case 'rejoin':
         if (!this.checkRoom(ws, msg.room)) return;
@@ -189,7 +198,7 @@ export class Lobby {
       case 'start_game': {
         const fromLeader = this.seatOf(ws)?.id === this.leaderId();
         if (!this.hosts.has(ws) && !fromLeader) return;
-        if (!this.match.canStart || this.curling) return;
+        if (!this.match.canStart || this.curling || this.ski) return;
         const players = [...this.seats.values()].filter((s) => s.socket).map((s) => s.id);
         if (players.length === 0) return;
         // The course chosen on the big screen; a start from the leader's phone (no course) plays the last one again.
@@ -218,15 +227,34 @@ export class Lobby {
         this.broadcastGame();
         return;
       case 'curling_mode':
-        if (!this.hosts.has(ws) || this.match.playing || this.lab) return;
+        if (!this.hosts.has(ws) || this.match.playing || this.lab || this.ski) return;
         this.curling = msg.on === true;
         for (const socket of [...this.hosts, ...this.phones]) send(socket, { type: 'curling_state', on: this.curling });
         return;
       case 'lab_mode':
-        if (!this.hosts.has(ws) || this.match.playing || this.curling) return;
+        if (!this.hosts.has(ws) || this.match.playing || this.curling || this.ski) return;
         this.lab = msg.on === true;
         for (const socket of [...this.hosts, ...this.phones]) send(socket, { type: 'lab_state', on: this.lab });
         return;
+      case 'ski_mode':
+        if (!this.hosts.has(ws) || this.match.playing || this.lab || this.curling) return;
+        this.ski = msg.on === true;
+        for (const socket of [...this.hosts, ...this.phones]) send(socket, { type: 'ski_state', on: this.ski });
+        return;
+      case 'ski_steer': {
+        const seat = this.seatOf(ws);
+        if (!seat || !this.ski || !Number.isFinite(msg.steer) || !Number.isFinite(msg.roll)) return;
+        const steer = clamp(msg.steer, -1, 1);
+        const roll = clamp(msg.roll, -180, 180);
+        const ready = msg.ready === true;
+        this.sendToHosts({ type: 'player_ski_steer', playerId: seat.id, steer, roll, ready });
+        const now = Date.now();
+        if (ready && now - (this.skiLoggedAt.get(seat.id) ?? 0) >= TUNING.ski.steer.logEveryMs) {
+          this.skiLoggedAt.set(seat.id, now);
+          this.onSkiSteer?.({ t: now, player: seat.name, sensitivity: seat.sensitivity, roll: Math.round(roll * 10) / 10, steer: Math.round(steer * 1000) / 1000 });
+        }
+        return;
+      }
       case 'clock_ping':
         if (Number.isFinite(msg.t)) send(ws, { type: 'clock_pong', t: msg.t, server: Date.now() });
         return;
@@ -370,6 +398,7 @@ export class Lobby {
     send(ws, { type: 'joined', player: toInfo(seat) });
     send(ws, { type: 'lab_state', on: this.lab });
     send(ws, { type: 'curling_state', on: this.curling });
+    send(ws, { type: 'ski_state', on: this.ski });
     this.broadcastLobby();
     this.broadcastGame(); // the leader may have changed
   }

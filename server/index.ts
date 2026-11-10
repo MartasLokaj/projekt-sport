@@ -96,6 +96,13 @@ lobby.onBadmintonOutcome = (entry) => {
     .then(() => appendFile(OUTCOME_LOG, JSON.stringify(entry) + '\n'))
     .catch((err) => console.error('Could not save the outcome log:', err));
 };
+// Skiing: steering samples (tilt and the steering it gave, a few per second) for tuning the feel.
+const SKI_LOG = 'logs/ski-steer.jsonl';
+lobby.onSkiSteer = (entry) => {
+  void mkdir('logs', { recursive: true })
+    .then(() => appendFile(SKI_LOG, JSON.stringify(entry) + '\n'))
+    .catch((err) => console.error('Could not save the ski log:', err));
+};
 
 // WebSocket hub. Vite has its own WebSocket for reloading, so only take ours.
 const wss = new WebSocketServer({ noServer: true });

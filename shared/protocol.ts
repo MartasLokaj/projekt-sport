@@ -185,6 +185,9 @@ export type ClientMessage =
   | { type: 'lab_mode'; on: boolean }
   /** From the host: open or close Curling (phones then show the swing screen, and any phone may throw). */
   | { type: 'curling_mode'; on: boolean }
+  /** From the host: open or close Skiing (phones then show the steering-wheel screen). */
+  | { type: 'ski_mode'; on: boolean }
+  | ({ type: 'ski_steer' } & SkiSteer)
   /** From a phone: what time is it on the server? t = the phone's clock when sent. */
   | { type: 'clock_ping'; t: number }
   | ({ type: 'badminton_swing' } & BadmintonSwing)
@@ -192,6 +195,14 @@ export type ClientMessage =
   | { type: 'badminton_cue'; playerId: string; cue: BadmintonCue }
   /** From the host: how a badminton swing was judged (timing, the coach's corrections), saved for tuning. */
   | { type: 'badminton_outcome'; outcome: Record<string, unknown> };
+
+/**
+ * Skiing: the phone held sideways like a steering wheel, sent about 30 times a second.
+ * steer: -1 (full left) .. 1 (full right), after the dead zone, curve and sensitivity.
+ * roll: the tilt in degrees from the neutral position (+ = right), for the debug readout and the log.
+ * ready: the player pressed Ready (the neutral position is set); before that steer is 0.
+ */
+export type SkiSteer = { steer: number; roll: number; ready: boolean };
 
 /** Sent by the server. */
 export type ServerMessage =
@@ -213,6 +224,10 @@ export type ServerMessage =
   | { type: 'lab_state'; on: boolean }
   /** To everyone: whether Curling is open. */
   | { type: 'curling_state'; on: boolean }
+  /** To everyone: whether Skiing is open. */
+  | { type: 'ski_state'; on: boolean }
+  /** Forwarded to the host page. */
+  | ({ type: 'player_ski_steer'; playerId: string } & SkiSteer)
   /** Answer to clock_ping: t = the phone's time it sent, server = the server's clock. */
   | { type: 'clock_pong'; t: number; server: number }
   /** Forwarded to the host page. receivedAt = server clock when it arrived (to show the delay). */

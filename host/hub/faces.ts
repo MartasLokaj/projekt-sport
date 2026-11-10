@@ -105,7 +105,21 @@ export const FACES: readonly FaceInfo[] = [
     normal: [0, 1, 0],
     forward: [0, 0, 1],
   },
-  { id: 'mystery-2', ...MYSTERY, normal: [-1, 0, 0], forward: [0, 0, 1] },
+  {
+    // (Its little world is still a building site: the snowy slope comes in phase S5.)
+    id: 'ski',
+    title: 'Skiing',
+    description: 'Race down a snowy mountain. Steering test for now.',
+    status: 'prototype',
+    accent: '#7fb4ff',
+    icon: 'mystery',
+    minPlayers: 1,
+    maxPlayers: 4,
+    controls: 'Hold the phone sideways like a steering wheel',
+    modes: [{ label: 'Steering test', detail: 'One phone steers the skier', players: [0, 4] }],
+    normal: [-1, 0, 0],
+    forward: [0, 0, 1],
+  },
   { id: 'mystery-3', ...MYSTERY, normal: [0, 0, -1], forward: [0, 1, 0] },
   { id: 'mystery-4', ...MYSTERY, normal: [0, -1, 0], forward: [0, 0, -1] },
 ];

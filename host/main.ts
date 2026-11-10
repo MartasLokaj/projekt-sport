@@ -5,6 +5,7 @@ import { Hub } from './hub/Hub.ts';
 import { LobbyUi } from './hub/lobbyUi.ts';
 import { Badminton } from './badminton/Badminton.ts';
 import { Curling } from './curling/Curling.ts';
+import { Ski } from './ski/Ski.ts';
 import { Lab } from './lab/Lab.ts';
 import { Flash } from './ui/transition.ts';
 import { sound, type MusicName } from './audio/sound.ts';
@@ -96,7 +97,7 @@ function enterGame(id: string, show: () => void | Promise<void>): void {
   transition(async () => {
     hub?.select(id);
     sound.play('ui-play');
-    sound.playMusic(id === 'curling' ? 'lobby' : (id as MusicName)); // (no curling music yet)
+    sound.playMusic(id === 'curling' || id === 'ski' ? 'lobby' : (id as MusicName)); // (no curling or ski music yet)
     lobbyScreen.classList.add('diving');
     const dive = hub?.diveIn();
     // The flash starts while the camera is still flying, so the dive ends in white without stopping.
@@ -309,6 +310,36 @@ function showCurling(on: boolean): void {
   }
 }
 
+// Skiing (SKI.md, phase S1): the Skiing side of the cube → Enter. Phones become steering wheels (the server's
+// ski mode); Esc goes back to the cube.
+const skiScreen = document.getElementById('ski-screen')!;
+let ski: Ski | null = null;
+let skiOpen = false;
+
+function showSki(on: boolean): void {
+  if (on === skiOpen) return;
+  skiOpen = on;
+  if (on) {
+    enterGame('ski', () => {
+      lobbyScreen.hidden = true;
+      skiScreen.hidden = false;
+      ski ??= new Ski(document.getElementById('ski-canvas')!, {
+        info: document.getElementById('ski-info')!,
+        debug: document.getElementById('ski-debug')!,
+      });
+      if (import.meta.env.DEV) Object.assign(window, { ski }); // for debugging in the browser console
+      ski.setPlayers(players);
+      ski.start();
+      ski.swoopIn();
+    });
+  } else {
+    leaveGame('ski', () => {
+      ski?.stop();
+      skiScreen.hidden = true;
+    });
+  }
+}
+
 function showHostInfo(msg: Extract<ServerMessage, { type: 'host_info' }>): void {
   lobbyUi.setRoom(msg.room, msg.qrDataUrl, msg.joinUrl);
   document.getElementById('lab-room')!.textContent = msg.room;
@@ -330,6 +361,10 @@ function startSelected(): void {
   }
   if (hub?.selected?.id === 'curling') {
     send({ type: 'curling_mode', on: true });
+    return;
+  }
+  if (hub?.selected?.id === 'ski') {
+    send({ type: 'ski_mode', on: true });
     return;
   }
   send({ type: 'start_game', firstHole: firstHoleForTesting(), course: lobbyUi.course });
@@ -364,6 +399,7 @@ function connect(): void {
       lobbyUi.setPlayers(players);
       game?.setPlayers(players);
       lab.setPlayers(players);
+      ski?.setPlayers(players);
       if (!badmintonScreen.hidden) badminton?.setPlayers(badmintonPlayers());
       labEmpty.hidden = players.length > 0;
     } else if (msg.type === 'game_state') void onGameState(msg);
@@ -381,6 +417,10 @@ function connect(): void {
       if (playing) game?.onPhoneSwingProgress(msg);
     } else if (msg.type === 'lab_state') showLab(msg.on);
     else if (msg.type === 'curling_state') showCurling(msg.on);
+    else if (msg.type === 'ski_state') showSki(msg.on);
+    else if (msg.type === 'player_ski_steer') {
+      if (skiOpen) ski?.onPhoneSteer(msg.playerId, msg.steer, msg.roll, msg.ready);
+    }
     else if (msg.type === 'player_badminton_swing') {
       if (!badmintonScreen.hidden) {
         const seat = badmintonIds.indexOf(msg.playerId);
@@ -540,6 +580,11 @@ window.addEventListener('keydown', (e) => {
   if (curlingOpen) {
     // The other keys (aim, throw, curl) belong to the curling game itself.
     if (e.key === 'Escape') send({ type: 'curling_mode', on: false });
+    return;
+  }
+  if (skiOpen) {
+    // The steering keys belong to the ski game itself.
+    if (e.key === 'Escape') send({ type: 'ski_mode', on: false });
     return;
   }
   if (onTitle && !playing && !labOpen) {

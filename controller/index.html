@@ -202,6 +202,28 @@
       #lab-short small { display: block; font-size: 17px; font-weight: 800; opacity: 0.8; }
       #lab-short.left-handed { left: auto; right: 16px; }
       #lab-short.held { background: #1971c2; color: #ffffff; border-style: solid; transform: scale(0.98); }
+      /* Skiing: the phone is held sideways like a steering wheel. */
+      #screen-ski { background: linear-gradient(#cfe6ff, #f4f9ff); padding: 0; height: 100%; overflow: hidden; }
+      #ski-inner {
+        box-sizing: border-box; width: 100%; height: 100%; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 8px;
+        padding: max(12px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+      }
+      /* Rotation lock on: the page stays upright, so the content turns to be readable sideways. */
+      #ski-inner.turn-right, #ski-inner.turn-left {
+        position: fixed; top: 50%; left: 50%; width: 100vh; height: 100vw; width: 100dvh; height: 100dvw; padding: 12px 24px;
+      }
+      #ski-inner.turn-right { transform: translate(-50%, -50%) rotate(90deg); }
+      #ski-inner.turn-left { transform: translate(-50%, -50%) rotate(-90deg); }
+      #ski-inner h1 { font-size: 28px; margin: 0; }
+      #ski-inner p { font-size: 17px; margin: 0; max-width: 460px; }
+      #ski-meter { position: relative; width: 100%; max-width: 420px; height: 26px; border-radius: 13px; background: rgba(255, 255, 255, 0.9); margin-top: 6px; }
+      #ski-meter::before { content: ''; position: absolute; left: 50%; top: 3px; bottom: 3px; width: 2px; background: #b8c8da; }
+      #ski-knob { position: absolute; top: 50%; left: 50%; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; background: #1971c2; border: 3px solid #ffffff; box-sizing: border-box; }
+      #ski-value { font-size: 20px; font-weight: 900; min-height: 1.2em; }
+      #ski-ready { margin-top: 6px; padding: 16px 0; max-width: 360px; background: #1971c2; box-shadow: 0 8px 0 #12508a; }
+      #ski-ready:active { box-shadow: 0 2px 0 #12508a; }
+      #ski-note { min-height: 1.3em; color: #d93a3f; font-weight: 700; font-size: 15px; }
     </style>
   </head>
   <body>
@@ -314,6 +336,17 @@
         <button class="big" id="lab-motion-enable" type="button">Enable motion</button>
       </div>
       <button id="lab-short" type="button"><span id="lab-short-label">SHORT</span><small>hold while you swing</small></button>
+    </section>
+
+    <section id="screen-ski" hidden>
+      <div id="ski-inner">
+        <h1>Skiing</h1>
+        <p id="ski-text"></p>
+        <div id="ski-meter"><div id="ski-knob"></div></div>
+        <div id="ski-value"></div>
+        <button class="big" id="ski-ready" type="button">Ready</button>
+        <p id="ski-note"></p>
+      </div>
     </section>
 
     <script type="module" src="/controller/main.ts"></script>

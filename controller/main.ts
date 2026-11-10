@@ -20,6 +20,7 @@ import { initEditor, type EditorState } from './avatar/editor.ts';
 import { createAvatarPreview } from './avatar/preview.ts';
 import { initLabScreen } from './badminton/lab.ts';
 import { initPlayScreen } from './play.ts';
+import { initSkiScreen } from './ski/screen.ts';
 
 // The phone controller: join the game (room code from the QR code link, or typed in),
 // stay joined through screen locks and Wi-Fi blips, then aim and hit on the play screen.
@@ -46,6 +47,7 @@ const screens = {
   join: document.getElementById('screen-join')!,
   play: document.getElementById('screen-play')!,
   lab: document.getElementById('screen-lab')!,
+  ski: document.getElementById('screen-ski')!,
   editor: document.getElementById('screen-editor')!,
 };
 const messageTitle = document.getElementById('message-title')!;
@@ -80,6 +82,8 @@ let lastTurn = -1;
 let labOpen = false;
 /** Whether Curling is open on the big screen (the controls then stay open in the lobby). */
 let curlingOpen = false;
+/** Whether Skiing is open on the big screen (the phone is then a steering wheel). */
+let skiOpen = false;
 
 // ---------- Screens ----------
 
@@ -97,6 +101,7 @@ function showMessage(title: string, text = '', button = false): void {
 function showRoomForm(error = ''): void {
   joined = false;
   lab.setOpen(false);
+  ski.setOpen(false);
   roomError.textContent = error;
   show('room');
 }
@@ -105,6 +110,7 @@ function showJoinForm(error = ''): void {
   joined = false;
   editorAfterJoin = false;
   lab.setOpen(false);
+  ski.setOpen(false);
   if (!nameInput.value) nameInput.value = profile.name;
   sensitivityInput.value = String(profile.sensitivity);
   renderSettings();
@@ -120,8 +126,9 @@ function showJoined(): void {
   meDot.style.background = profile.colour;
   meName.textContent = profile.name;
   wakeTip.hidden = 'wakeLock' in navigator;
-  show(labOpen ? 'lab' : 'play');
+  show(labOpen ? 'lab' : skiOpen ? 'ski' : 'play');
   lab.setOpen(labOpen);
+  ski.setOpen(skiOpen);
   play.onJoined();
   renderTurn();
 }
@@ -134,6 +141,16 @@ function renderLab(): void {
     play.cancel();
     show('lab');
   } else if (!screens.lab.hidden) show('play'); // (the character editor stays open if it is)
+}
+
+/** While joined, the steering wheel replaces the play screen while Skiing is open. */
+function renderSki(): void {
+  ski.setOpen(joined && skiOpen);
+  if (!joined) return;
+  if (skiOpen) {
+    play.cancel();
+    show('ski');
+  } else if (!screens.ski.hidden) show('play'); // (the character editor stays open if it is)
 }
 
 // ---------- Whose turn ----------
@@ -346,6 +363,7 @@ function send(msg: ClientMessage): void {
 
 const play = initPlayScreen(send);
 const lab = initLabScreen(send);
+const ski = initSkiScreen(send);
 
 function connect(): void {
   clearTimeout(reconnectTimer);
@@ -368,6 +386,7 @@ function connect(): void {
         saveProfile(profile);
         play.setSensitivity(profile.sensitivity);
         lab.setSensitivity(profile.sensitivity);
+        ski.setSensitivity(profile.sensitivity);
         lab.setHandedness(profile.handedness);
         preview.setLook(characterLook());
         if (editorAfterJoin) {
@@ -408,6 +427,10 @@ function connect(): void {
       case 'curling_state':
         curlingOpen = msg.on;
         renderTurn();
+        break;
+      case 'ski_state':
+        skiOpen = msg.on;
+        renderSki();
         break;
       case 'clock_pong':
         lab.onClockPong(msg.t, msg.server);
