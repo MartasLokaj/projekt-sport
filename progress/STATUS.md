@@ -697,7 +697,35 @@ body, round mitten hands, sturdier legs, chunky shoes).
     tree shadows across the run; two deep ski grooves + a pale spray trail; short white speed streaks on the snow;
     floating sparkles; strong low sun glare/bloom when facing the sun; skiers crouched with poles out, chunky
     proportions, bright outfits (helmet or beanie, goggles); edge motion blur at speed.
-  - Next: plan S2 (race), wait for the user's OK.
+  - **S2 plan (user OK'd, "ano chci S2a"):** S2a = one racer on a real run; S2b = 1–4 phones + CPU (levels in the
+    lobby), shared pack camera, catch-up / respawn near the pack, finish order + snowy podium. Tuck is a button for
+    now (tilting the phone towards you maybe later).
+  - **S2a — built 2026-11-10, waiting for the user's phone test.**
+    - Run (`host/ski/course.ts`, `TUNING.ski.course`, seed 7): 1050 m start→finish + 90 m run-out; bends up to ~30°
+      (`centre(d)` = two sine waves, straight first 60 m and last 70 m); steepness 12–22° (`slopeDeg` 17 ±5); width
+      20–40 m; valley walls rise 9 m over 16 m outside the edges; 3 roller sections; 3 kickers (1.6 m, coloured orange
+      so they can be seen); 10 gates (red/blue flag pairs, +2.5 m/s and a flash when ridden through); forest of ~1800
+      firs on the walls (instanced, per 100 m piece, only pieces near the skier drawn), tree islands and rocks in the run;
+      START / FINISH arches.
+    - Physics (`RacerPhysics` in `host/ski/racer.ts`, `TUNING.ski.physics`): gravity along the skis' direction,
+      friction 0.04, drag 0.005 (tuck ×0.6, turns ×0.6), carving brake by turn rate, min 3 m/s; the skier takes off
+      when the ground falls away faster than gravity (roller crests, kicker lips); JUMP hold = crouch (up to 0.5 s),
+      release = 4.2 m/s up from the slope (~0.9 m, ~0.9 s); crash on a tree/rock faster than 6 m/s: 1.5 s tumble + puff,
+      then on at 6 m/s. Steering: same approved S1 maths; "straight" = half the run's bend (`alignToCourse` 0.5).
+    - Simulated in Node (scripted skier): 62–88 s per run, top speed ~70–87 km/h, ~6–8 s in the air per run.
+    - Race (`Ski.ts`): waits at the gate until the steering phone pressed Ready (or a Mac key), 3-2-1-GO, timer,
+      finish → "Finished! 1:12.4" / "New best!" (best per player name while the page is open), braking in the run-out,
+      Race again (phone button or Enter), R restarts. Chase camera low behind, between the run's direction and the
+      skis', further back and wider at speed. Readout: speed, tilt, steering, tuck/jump, gates, crashes, frame ms.
+    - Phone: TUCK (left) and JUMP (right) big thumb pads appear after Ready; button changes are sent at once;
+      cues `ski_cue` go / crash / land / land_big / gate / carve / finish (Android vibration; status line "GO!",
+      "Finished! 1:12.4" + Race again button).
+    - Checked: type check; Node simulation; test server on 8444 (tuck/jump forwarding, again, cue validation, phones
+      cannot send cues); dev browser with a fake socket (countdown, racing, kicker flight 1.9 m, jump 0.9 m, crash into
+      a tree with a puff, finish + cue + race again, phone pads in landscape). ~2 ms of work per frame in the dev browser.
+    - **Not verified on real phones:** whether the speed, bends and the 50/50 "straight" feel right, whether the thumb
+      pads are reachable while holding the phone like a wheel, vibration on Android. Server code changed → restart.
+  - Next: user's phone test of S2a → tune → their OK → push → S2b.
 
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.

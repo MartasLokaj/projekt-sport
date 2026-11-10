@@ -432,6 +432,9 @@ function connect(): void {
         skiOpen = msg.on;
         renderSki();
         break;
+      case 'ski_cue':
+        ski.onCue(msg.cue, msg.time);
+        break;
       case 'clock_pong':
         lab.onClockPong(msg.t, msg.server);
         break;

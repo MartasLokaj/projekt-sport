@@ -205,8 +205,8 @@
       /* Skiing: the phone is held sideways like a steering wheel. */
       #screen-ski { background: linear-gradient(#cfe6ff, #f4f9ff); padding: 0; height: 100%; overflow: hidden; }
       #ski-inner {
-        box-sizing: border-box; width: 100%; height: 100%; display: flex; flex-direction: column;
-        align-items: center; justify-content: center; gap: 8px;
+        box-sizing: border-box; width: 100%; height: 100%; display: flex; flex-direction: row;
+        align-items: center; justify-content: center; gap: 14px;
         padding: max(12px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
       }
       /* Rotation lock on: the page stays upright, so the content turns to be readable sideways. */
@@ -215,13 +215,29 @@
       }
       #ski-inner.turn-right { transform: translate(-50%, -50%) rotate(90deg); }
       #ski-inner.turn-left { transform: translate(-50%, -50%) rotate(-90deg); }
+      #ski-middle { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
       #ski-inner h1 { font-size: 28px; margin: 0; }
-      #ski-inner p { font-size: 17px; margin: 0; max-width: 460px; }
+      #ski-inner.ready h1 { display: none; }
+      #ski-inner p { font-size: 16px; margin: 0; max-width: 460px; }
+      #ski-status { font-size: 26px; font-weight: 900; color: var(--ink); min-height: 1.2em; }
+      /* TUCK and JUMP: big, at the sides under the thumbs, only once the wheel is set (Ready). */
+      .ski-pad {
+        display: none; flex: 0 0 27%; align-self: stretch; margin: 4px 0; border-radius: 28px; border: 5px solid #1971c2;
+        background: rgba(255, 255, 255, 0.9); color: #1971c2; font: inherit; font-size: 30px; font-weight: 900; line-height: 1.1;
+        touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
+      }
+      .ski-pad small { display: block; font-size: 14px; font-weight: 800; opacity: 0.75; }
+      #ski-inner.ready .ski-pad { display: block; }
+      .ski-pad.held { background: #1971c2; color: #ffffff; transform: scale(0.97); }
+      #ski-jump { border-color: #e8590c; color: #e8590c; }
+      #ski-jump.held { background: #e8590c; color: #ffffff; }
+      #ski-again { margin-top: 4px; padding: 12px 0; max-width: 300px; font-size: 24px; }
       #ski-meter { position: relative; width: 100%; max-width: 420px; height: 26px; border-radius: 13px; background: rgba(255, 255, 255, 0.9); margin-top: 6px; }
       #ski-meter::before { content: ''; position: absolute; left: 50%; top: 3px; bottom: 3px; width: 2px; background: #b8c8da; }
       #ski-knob { position: absolute; top: 50%; left: 50%; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; background: #1971c2; border: 3px solid #ffffff; box-sizing: border-box; }
       #ski-value { font-size: 20px; font-weight: 900; min-height: 1.2em; }
       #ski-ready { margin-top: 6px; padding: 16px 0; max-width: 360px; background: #1971c2; box-shadow: 0 8px 0 #12508a; }
+      #ski-inner.ready #ski-ready { padding: 8px 0; font-size: 18px; max-width: 200px; box-shadow: 0 4px 0 #12508a; margin-top: 2px; }
       #ski-ready:active { box-shadow: 0 2px 0 #12508a; }
       #ski-note { min-height: 1.3em; color: #d93a3f; font-weight: 700; font-size: 15px; }
     </style>
@@ -340,12 +356,18 @@
 
     <section id="screen-ski" hidden>
       <div id="ski-inner">
-        <h1>Skiing</h1>
-        <p id="ski-text"></p>
-        <div id="ski-meter"><div id="ski-knob"></div></div>
-        <div id="ski-value"></div>
-        <button class="big" id="ski-ready" type="button">Ready</button>
-        <p id="ski-note"></p>
+        <button class="ski-pad" id="ski-tuck" type="button">TUCK<small>hold = faster</small></button>
+        <div id="ski-middle">
+          <h1>Skiing</h1>
+          <p id="ski-text"></p>
+          <div id="ski-meter"><div id="ski-knob"></div></div>
+          <div id="ski-value"></div>
+          <div id="ski-status"></div>
+          <button class="big" id="ski-again" type="button" hidden>Race again</button>
+          <button class="big" id="ski-ready" type="button">Ready</button>
+          <p id="ski-note"></p>
+        </div>
+        <button class="ski-pad" id="ski-jump" type="button">JUMP<small>hold, let go</small></button>
       </div>
     </section>
 

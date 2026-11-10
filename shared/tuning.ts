@@ -1152,29 +1152,119 @@ export const TUNING = {
       /** The server saves a steering sample to logs/ski-steer.jsonl this often per phone (milliseconds). */
       logEveryMs: 100,
     },
-    /** Constant speed down the slope (m/s) and how steep the slope is (degrees). */
-    speed: 14,
-    slopeDegrees: 14,
-    /** Full steering points the skis this far off the straight line down (degrees). */
-    maxHeadingDeg: 50,
-    /** How fast the skis follow the steering (higher = snappier), and how fast the big screen follows the phone. */
-    headingResponse: 7,
+    /** Steering on the big screen: how fast it follows the phone, and how fast the skis follow the steering. */
     steerFollow: 18,
+    headingResponse: 7,
+    /** Full steering points the skis this far off the run's direction (degrees). */
+    maxHeadingDeg: 50,
+    /**
+     * Where "straight" points: 0 = straight down the mountain, 1 = along the run's bends. In between, a bend needs a
+     * little steering but less than its full angle.
+     */
+    alignToCourse: 0.5,
     /** The skier leans into a turn by up to this much (degrees). */
     leanDeg: 22,
-    /** Half of the slope's width (m); the skier cannot leave it. */
-    halfWidth: 13,
-    /** Grey boxes: a row every rowSpacing metres, the first one this far from the start, rows drawn ahead. */
-    rowSpacing: 16,
-    firstRow: 30,
-    rowsAhead: 12,
-    boxSize: 1.4,
+
+    /** The run (phase S2a). All lengths in metres along the run; the same run every time for the same seed. */
+    course: {
+      seed: 7,
+      /** From the start gate to the finish line, then a flat run-out to stop in. */
+      length: 1050,
+      runOut: 90,
+      /** The first metres are straight and gentle, so the start is easy. */
+      startStraight: 60,
+      /** Half of the run's width, and how much it widens/narrows along the way. */
+      halfWidth: 15,
+      widthChange: 5,
+      /** Bends: two waves side to side (amplitude m, wavelength-ish m). */
+      bendSize: 34,
+      bendLength: 95,
+      wiggleSize: 8,
+      wiggleLength: 37,
+      /** Steepness (degrees): the average, how much it changes, and the run-out after the finish (negative = uphill). */
+      slopeDeg: 17,
+      slopeChange: 5,
+      runOutSlopeDeg: -3,
+      /** Outside the run the ground rises into valley walls: this high over this distance (then keeps rising). */
+      wallHeight: 9,
+      wallWidth: 16,
+      /** The skier cannot get further than this past the run's edge. */
+      edgeLimit: 10,
+      /** Rollers (bumps across the run): sections of this length, every rollerEvery metres, this high and long. */
+      rollerEvery: 330,
+      rollerSection: 90,
+      rollerHeight: 0.3,
+      rollerLength: 16,
+      /** Kickers (jumps): every kickerEvery metres; height, run-up length and width. */
+      kickerEvery: 230,
+      kickerFirst: 260,
+      kickerHeight: 1.6,
+      kickerLength: 10,
+      kickerWidth: 9,
+      /** Gates (pairs of flags): every gateEvery metres, gateWidth wide, this far off the middle (share of half width). */
+      gateEvery: 85,
+      gateFirst: 140,
+      gateWidth: 6,
+      gateOffset: 0.4,
+      /** Forest along the edges: tree spacing, how deep the forest goes, how many places get a tree. */
+      treeSpacing: 5.5,
+      forestDepth: 26,
+      forestDensity: 0.8,
+      /** Tree islands inside the run (every islandEvery m, 3–6 trees) and lone rocks (every rockEvery m). */
+      islandEvery: 110,
+      rockEvery: 45,
+      /** Only the part of the run this close to the skier is drawn (m). */
+      drawAhead: 380,
+      drawBehind: 60,
+    },
+
+    /** Speed physics. Speeds in m/s; 18 m/s is about 65 km/h. */
+    physics: {
+      gravity: 9.8,
+      /** Snow friction (share of gravity) and air drag (per m/s squared); tucked the drag is multiplied by tuckDrag. */
+      friction: 0.04,
+      drag: 0.005,
+      tuckDrag: 0.6,
+      /** Tucked the skis turn this much less. */
+      tuckTurn: 0.6,
+      /** Turning hard brakes: at 60°/s of turning the skier loses this share of the speed per second. */
+      carveBrake: 0.35,
+      /** The skier never stands still on the run (pushing with the poles), except after the finish. */
+      minSpeed: 3,
+      /** In the air the skis turn this much slower. */
+      airTurn: 0.3,
+      /** Jump: holding JUMP crouches (full after crouchSeconds); letting go pops up at jumpSpeed (60–100 % by crouch). */
+      jumpSpeed: 4.2,
+      crouchSeconds: 0.5,
+      /** Landing keeps this share of the speed; flights longer than bigAirSeconds count as a big landing. */
+      landKeep: 0.97,
+      bigAirSeconds: 0.7,
+      /** Hitting a tree or rock faster than crashSpeed is a crash: tumble for crashSeconds, then on at getUpSpeed. */
+      crashSpeed: 6,
+      crashSeconds: 1.5,
+      getUpSpeed: 6,
+      /** How wide the skier is for hitting things (m). */
+      skierRadius: 0.45,
+      /** Riding between a gate's flags adds this speed. */
+      gateBoost: 2.5,
+      /** After the finish line the skier brakes this hard (m/s²). */
+      finishBrake: 6,
+    },
+
+    /** A start countdown of this many seconds (3, 2, 1, GO). */
+    countdownSeconds: 3,
+    /** The phone buzzes on a carve at most this often (ms), when the skis turn faster than carveCueRate (°/s). */
+    carveCueMs: 600,
+    carveCueRate: 70,
     /** Mac keyboard: ← → reach full steering in this many seconds. */
     keySeconds: 0.25,
     /** A phone that sent nothing for this long (milliseconds) lets another phone take over the steering. */
     silentMs: 1000,
-    /** Chase camera: how far behind and above the skier, how far ahead it looks, how snappy, how wide. */
-    camera: { back: 6.5, height: 3.2, lookAhead: 9, follow: 6, fov: 62 },
+    /**
+     * Chase camera: distance behind and height above the skier (more at speed: per m/s), how far ahead it looks,
+     * how snappy it turns, how wide it sees (wider at speed), and how much it follows the skis vs the run (0..1).
+     */
+    camera: { back: 6, backPerSpeed: 0.08, height: 2.6, lookAhead: 10, follow: 4, fov: 60, fovPerSpeed: 0.5, followSkis: 0.5 },
   },
 
   // Swing Lab on the big screen: a shuttle drops to the hit line, the player swings when it gets there.

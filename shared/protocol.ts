@@ -188,6 +188,10 @@ export type ClientMessage =
   /** From the host: open or close Skiing (phones then show the steering-wheel screen). */
   | { type: 'ski_mode'; on: boolean }
   | ({ type: 'ski_steer' } & SkiSteer)
+  /** From a phone, after its racer finished: race again. */
+  | { type: 'ski_again' }
+  /** From the host: tell one player's phone something about the race (it vibrates on Android; time in ms). */
+  | { type: 'ski_cue'; playerId: string; cue: SkiCue; time?: number }
   /** From a phone: what time is it on the server? t = the phone's clock when sent. */
   | { type: 'clock_ping'; t: number }
   | ({ type: 'badminton_swing' } & BadmintonSwing)
@@ -201,8 +205,13 @@ export type ClientMessage =
  * steer: -1 (full left) .. 1 (full right), after the dead zone, curve and sensitivity.
  * roll: the tilt in degrees from the neutral position (+ = right), for the debug readout and the log.
  * ready: the player pressed Ready (the neutral position is set); before that steer is 0.
+ * tuck, jump: whether the TUCK and JUMP buttons are held (letting go of JUMP is the jump).
  */
-export type SkiSteer = { steer: number; roll: number; ready: boolean };
+export type SkiSteer = { steer: number; roll: number; ready: boolean; tuck: boolean; jump: boolean };
+
+/** Race moments the phone shows or feels: GO, a crash, a landing, a gate, a hard carve, the finish (with the time). */
+export const SKI_CUES = ['go', 'crash', 'land', 'land_big', 'gate', 'carve', 'finish'] as const;
+export type SkiCue = (typeof SKI_CUES)[number];
 
 /** Sent by the server. */
 export type ServerMessage =
@@ -228,6 +237,10 @@ export type ServerMessage =
   | { type: 'ski_state'; on: boolean }
   /** Forwarded to the host page. */
   | ({ type: 'player_ski_steer'; playerId: string } & SkiSteer)
+  /** Forwarded to the host page: this phone's player wants to race again. */
+  | { type: 'player_ski_again'; playerId: string }
+  /** To one phone, from the host. */
+  | { type: 'ski_cue'; cue: SkiCue; time?: number }
   /** Answer to clock_ping: t = the phone's time it sent, server = the server's clock. */
   | { type: 'clock_pong'; t: number; server: number }
   /** Forwarded to the host page. receivedAt = server clock when it arrived (to show the delay). */

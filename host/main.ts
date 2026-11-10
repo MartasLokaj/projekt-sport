@@ -326,7 +326,10 @@ function showSki(on: boolean): void {
       ski ??= new Ski(document.getElementById('ski-canvas')!, {
         info: document.getElementById('ski-info')!,
         debug: document.getElementById('ski-debug')!,
+        timer: document.getElementById('ski-timer')!,
+        big: document.getElementById('ski-big')!,
       });
+      ski.onCue = (playerId, cue, time) => send({ type: 'ski_cue', playerId, cue, time });
       if (import.meta.env.DEV) Object.assign(window, { ski }); // for debugging in the browser console
       ski.setPlayers(players);
       ski.start();
@@ -419,7 +422,9 @@ function connect(): void {
     else if (msg.type === 'curling_state') showCurling(msg.on);
     else if (msg.type === 'ski_state') showSki(msg.on);
     else if (msg.type === 'player_ski_steer') {
-      if (skiOpen) ski?.onPhoneSteer(msg.playerId, msg.steer, msg.roll, msg.ready);
+      if (skiOpen) ski?.onPhoneSteer(msg.playerId, msg.steer, msg.roll, msg.ready, msg.tuck, msg.jump);
+    } else if (msg.type === 'player_ski_again') {
+      if (skiOpen) ski?.again(msg.playerId);
     }
     else if (msg.type === 'player_badminton_swing') {
       if (!badmintonScreen.hidden) {

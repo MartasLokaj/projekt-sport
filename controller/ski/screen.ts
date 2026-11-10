@@ -1,11 +1,12 @@
-import type { ClientMessage } from '../../shared/protocol.ts';
+import type { ClientMessage, SkiCue } from '../../shared/protocol.ts';
 import { TUNING } from '../../shared/tuning.ts';
 import { WheelSteer } from './steer.ts';
 
-// The phone's Skiing screen (SKI.md, phase S1). Shown while the big screen has Skiing open.
+// The phone's Skiing screen (SKI.md, phases S1–S2a). Shown while the big screen has Skiing open.
 // The player holds the phone sideways like a steering wheel and presses Ready: that position is
-// "straight ahead". From then on the phone sends its steering about 30 times a second.
-// The same button re-centres at any time.
+// "straight ahead". From then on the phone sends its steering about 30 times a second, plus the two thumb
+// buttons: TUCK (hold = faster, wider turns) and JUMP (hold to crouch, let go to jump). A button change is sent
+// at once, so a quick tap is never lost between two regular messages. The Ready button re-centres at any time.
 
 type MotionPermissionApi = { requestPermission?: () => Promise<'granted' | 'denied'> };
 
@@ -13,14 +14,64 @@ export type SkiScreen = {
   setOpen: (open: boolean) => void;
   /** The player's sensitivity in percent (100 = normal). */
   setSensitivity: (percent: number) => void;
+  /** Something happened in the race (vibration on Android; iPhone cannot vibrate). time = finish time in ms. */
+  onCue: (cue: SkiCue, time?: number) => void;
 };
+
+/** 72400 ms → "1:12.4". */
+function formatTime(ms: number): string {
+  const tenths = Math.floor(ms / 100);
+  const rest = (tenths % 600) / 10;
+  return `${Math.floor(tenths / 600)}:${rest < 10 ? '0' : ''}${rest.toFixed(1)}`;
+}
+
+function buzz(pattern: number | number[]): void {
+  if ('vibrate' in navigator) navigator.vibrate(pattern); // not supported on iPhone
+}
+
+/** A button that counts as held while any finger is on it (even if the finger slides off). */
+function holdButton(button: HTMLElement, onChange: (held: boolean) => void): { held: () => boolean; clear: () => void } {
+  const pointers = new Set<number>();
+  const render = (): void => {
+    button.classList.toggle('held', pointers.size > 0);
+  };
+  button.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    try {
+      button.setPointerCapture(e.pointerId);
+    } catch {
+      // Not a real pointer (or already gone): still count the press.
+    }
+    const was = pointers.size > 0;
+    pointers.add(e.pointerId);
+    render();
+    if (!was) onChange(true);
+  });
+  const release = (e: PointerEvent): void => {
+    if (!pointers.delete(e.pointerId)) return;
+    render();
+    if (pointers.size === 0) onChange(false);
+  };
+  button.addEventListener('pointerup', release);
+  button.addEventListener('pointercancel', release);
+  button.addEventListener('contextmenu', (e) => e.preventDefault());
+  return {
+    held: () => pointers.size > 0,
+    clear: () => {
+      pointers.clear();
+      render();
+    },
+  };
+}
 
 export function initSkiScreen(send: (msg: ClientMessage) => void): SkiScreen {
   const inner = document.getElementById('ski-inner')!;
   const textEl = document.getElementById('ski-text')!;
   const knob = document.getElementById('ski-knob')!;
   const valueEl = document.getElementById('ski-value')!;
+  const statusEl = document.getElementById('ski-status')!;
   const button = document.getElementById('ski-ready') as HTMLButtonElement;
+  const againButton = document.getElementById('ski-again') as HTMLButtonElement;
   const noteEl = document.getElementById('ski-note')!;
   const cfg = TUNING.ski.steer;
 
@@ -33,11 +84,26 @@ export function initSkiScreen(send: (msg: ClientMessage) => void): SkiScreen {
   let lastSent = 0;
   let lastDrawn = 0;
 
+  function sendSteer(): void {
+    lastSent = performance.now();
+    send({ type: 'ski_steer', steer: wheel.ready ? wheel.steer : 0, roll: wheel.roll, ready: wheel.ready, tuck: tuck.held(), jump: jump.held() });
+  }
+
+  const tuck = holdButton(document.getElementById('ski-tuck')!, (held) => {
+    if (held) buzz(10);
+    sendSteer();
+  });
+  const jump = holdButton(document.getElementById('ski-jump')!, (held) => {
+    if (held) buzz(10);
+    sendSteer();
+  });
+
   function render(): void {
     const ready = wheel.ready;
+    inner.classList.toggle('ready', ready);
     button.textContent = ready ? 'Re-centre' : 'Ready';
     textEl.textContent = ready
-      ? 'Tilt the phone left and right to steer. Watch the big screen.'
+      ? 'Tilt to steer. Hold TUCK to go faster. Hold JUMP, let go to jump.'
       : 'Hold the phone sideways with both hands, like a steering wheel. Then press Ready.';
   }
 
@@ -71,10 +137,7 @@ export function initSkiScreen(send: (msg: ClientMessage) => void): SkiScreen {
     const now = performance.now();
     wheel.sample(x, y, z, now);
 
-    if (now - lastSent >= cfg.sendIntervalMs) {
-      lastSent = now;
-      send({ type: 'ski_steer', steer: wheel.ready ? wheel.steer : 0, roll: wheel.roll, ready: wheel.ready });
-    }
+    if (now - lastSent >= cfg.sendIntervalMs) sendSteer();
     if (now - lastDrawn >= 50) {
       lastDrawn = now;
       const length = Math.hypot(x, y, z) || 1;
@@ -107,8 +170,15 @@ export function initSkiScreen(send: (msg: ClientMessage) => void): SkiScreen {
       noteEl.textContent = 'Hold the phone more upright, screen towards you, and press again.';
       return;
     }
-    if ('vibrate' in navigator) navigator.vibrate(20); // not supported on iPhone
+    buzz(20);
     render();
+    sendSteer();
+  });
+
+  againButton.addEventListener('click', () => {
+    againButton.hidden = true;
+    statusEl.textContent = '';
+    send({ type: 'ski_again' });
   });
 
   render();
@@ -116,9 +186,12 @@ export function initSkiScreen(send: (msg: ClientMessage) => void): SkiScreen {
     setOpen(next) {
       if (next === open) return;
       open = next;
+      tuck.clear();
+      jump.clear();
       if (open) {
         wheel.reset();
-        noteEl.textContent = '';
+        noteEl.textContent = statusEl.textContent = '';
+        againButton.hidden = true;
         knob.style.left = '50%';
         valueEl.textContent = '';
         render();
@@ -126,6 +199,38 @@ export function initSkiScreen(send: (msg: ClientMessage) => void): SkiScreen {
     },
     setSensitivity(percent) {
       wheel.playerSensitivity = percent / 100;
+    },
+    onCue(cue, time) {
+      switch (cue) {
+        case 'go':
+          statusEl.textContent = 'GO!';
+          againButton.hidden = true;
+          buzz(120);
+          setTimeout(() => {
+            if (statusEl.textContent === 'GO!') statusEl.textContent = '';
+          }, 1200);
+          break;
+        case 'crash':
+          buzz([60, 40, 140]);
+          break;
+        case 'land':
+          buzz(25);
+          break;
+        case 'land_big':
+          buzz(70);
+          break;
+        case 'gate':
+          buzz(15);
+          break;
+        case 'carve':
+          buzz(8);
+          break;
+        case 'finish':
+          statusEl.textContent = time === undefined ? 'Finished!' : `Finished! ${formatTime(time)}`;
+          againButton.hidden = false;
+          buzz([80, 60, 220]);
+          break;
+      }
     },
   };
 }

@@ -17,6 +17,7 @@ import {
   type PlayerInfo,
   type ServerMessage,
   type Stroke,
+  SKI_CUES,
 } from '../shared/protocol.ts';
 import { DEFAULT_LOOK, sanitizeLook, type AvatarLook } from '../shared/avatar.ts';
 import { TUNING } from '../shared/tuning.ts';
@@ -247,12 +248,26 @@ export class Lobby {
         const steer = clamp(msg.steer, -1, 1);
         const roll = clamp(msg.roll, -180, 180);
         const ready = msg.ready === true;
-        this.sendToHosts({ type: 'player_ski_steer', playerId: seat.id, steer, roll, ready });
+        const tuck = msg.tuck === true;
+        const jump = msg.jump === true;
+        this.sendToHosts({ type: 'player_ski_steer', playerId: seat.id, steer, roll, ready, tuck, jump });
         const now = Date.now();
         if (ready && now - (this.skiLoggedAt.get(seat.id) ?? 0) >= TUNING.ski.steer.logEveryMs) {
           this.skiLoggedAt.set(seat.id, now);
-          this.onSkiSteer?.({ t: now, player: seat.name, sensitivity: seat.sensitivity, roll: Math.round(roll * 10) / 10, steer: Math.round(steer * 1000) / 1000 });
+          this.onSkiSteer?.({ t: now, player: seat.name, sensitivity: seat.sensitivity, roll: Math.round(roll * 10) / 10, steer: Math.round(steer * 1000) / 1000, tuck, jump });
         }
+        return;
+      }
+      case 'ski_again': {
+        const seat = this.seatOf(ws);
+        if (seat && this.ski) this.sendToHosts({ type: 'player_ski_again', playerId: seat.id });
+        return;
+      }
+      case 'ski_cue': {
+        if (!this.hosts.has(ws) || !(SKI_CUES as readonly string[]).includes(msg.cue)) return;
+        const socket = this.seats.get(msg.playerId)?.socket;
+        const time = Number.isFinite(msg.time) ? Math.round(clamp(msg.time!, 0, 3_600_000)) : undefined;
+        if (socket) send(socket, { type: 'ski_cue', cue: msg.cue, time });
         return;
       }
       case 'clock_ping':
