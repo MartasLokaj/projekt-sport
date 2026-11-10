@@ -544,47 +544,60 @@ function badmintonWorld(kit: FaceKit, size: number): THREE.Group {
 }
 
 /**
- * The skiing side: a little snowy mountain with orange rock faces in the evening sun, firs, a slalom of flags
- * and two tiny skiers carving down their tracks to the finish arch again and again.
+ * The skiing side: a snowy peak in the middle of the side, so it looks whole from every direction. Three runs wind
+ * down from the summit with tiny skiers carving their tracks; a chairlift and a gondola carry people back up; firs,
+ * orange rock faces in the evening sun, lift huts and a little chalet round the foot of the mountain.
  */
 function skiWorld(size: number): THREE.Group {
   const g = new THREE.Group();
   const half = size / 2 - 0.4;
+  const reach = half * 0.94; // the mountain's foot, from the middle
   const base = new THREE.Mesh(new RoundedBoxGeometry(size - 0.6, 0.2, size - 0.6, 4, 0.1), mat('#fff2e6', 0.95));
   base.receiveShadow = true;
   g.add(base);
+  const random = seededRandom(21);
 
-  const smooth = (a: number, b: number, x: number): number => {
-    const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
-    return t * t * (3 - 2 * t);
-  };
-  /** The run's middle (x) at z: an S down the mountain, from the back (−z) to the front (+z). */
-  const runX = (z: number): number => Math.sin((z / half) * 3.3 + 0.6) * half * 0.3;
-  /** Height of the mountain: a peak at the back, a valley along the run, down to the base at the edges. */
+  /** Height of the ground: a pointed peak in the middle with ridges and gullies, flat snow round its foot. */
   const height = (x: number, z: number): number => {
-    const up = (half - z) / (2 * half); // 0 at the front, 1 at the back
-    const peak = 2.1 * up ** 1.5 * (1 - 0.3 * (x / half) ** 2);
-    const crags = 0.28 * up * Math.sin(x * 3.1 + 1) * Math.sin(z * 2.7 + 0.4);
-    const off = Math.abs(x - runX(z));
-    const banks = 0.38 * up * smooth(0.25, 0.9, off);
-    const edge = smooth(0, 0.45, half - Math.abs(x)) * smooth(0, 0.3, half + z) * smooth(0, 0.25, half - z);
-    return 0.1 + Math.max(0, peak + crags + banks) * edge;
+    const r = Math.hypot(x, z);
+    const a = Math.atan2(z, x);
+    const ridge = 1 + 0.16 * Math.sin(a * 3 + 0.5) + 0.08 * Math.sin(a * 7 + 1.3);
+    const t = Math.min(1, Math.max(0, 1 - r / (reach * ridge)));
+    const crags = 0.5 * t * (1 - t) * Math.sin(x * 5.1 + 0.7) * Math.sin(z * 4.3 + 0.2);
+    return 0.1 + 2.0 * t ** 1.12 + Math.max(-0.05, crags) * 0.6;
   };
+  const on = (x: number, z: number, lift = 0): THREE.Vector3 => new THREE.Vector3(x, height(x, z) + lift, z);
 
-  // The mountain: flat faces; steep ones are orange rock, the rest snow (a touch blue in the valley's shade).
-  const plane = new THREE.PlaneGeometry(half * 2, half * 2, 26, 26).rotateX(-Math.PI / 2).toNonIndexed();
+  // The runs: from just under the summit down to the foot, each winding in S-bends round its own side.
+  const runs = [0.5, 2.6, 4.6].map((angle, k) => (s: number): THREE.Vector3 => {
+    const r = THREE.MathUtils.lerp(0.14, reach * 1.02, s);
+    const a = angle + 0.5 * Math.sin(s * Math.PI * 2.3 + k * 1.7) * (0.35 + 0.65 * s) + s * 0.35;
+    return on(Math.cos(a) * r, Math.sin(a) * r);
+  });
+  // The lifts go straight up between the runs: [angle, how high the cable hangs].
+  const liftLine = (angle: number) => (s: number): THREE.Vector3 => {
+    const r = THREE.MathUtils.lerp(reach * 1.05, 0.34, s);
+    return on(Math.cos(angle) * r, Math.sin(angle) * r);
+  };
+  const chairLine = liftLine(1.55);
+  const gondolaLine = liftLine(3.65);
+  const taken: THREE.Vector3[] = [];
+  for (const line of [...runs, chairLine, gondolaLine]) for (let i = 0; i <= 40; i++) taken.push(line(i / 40));
+  const clear = (x: number, z: number, gap: number): boolean => taken.every((p) => Math.hypot(p.x - x, p.z - z) > gap);
+
+  // The mountain: flat faces; steep ones are orange rock (not where a run goes), the rest snow.
+  const plane = new THREE.PlaneGeometry(half * 2, half * 2, 34, 34).rotateX(-Math.PI / 2).toNonIndexed();
   const position = plane.getAttribute('position');
   for (let i = 0; i < position.count; i++) position.setY(i, height(position.getX(i), position.getZ(i)));
   plane.computeVertexNormals();
   const normal = plane.getAttribute('normal');
   const colours = new Float32Array(position.count * 3);
-  const snowColour = new THREE.Color('#fff4ea');
-  const rockColour = new THREE.Color('#e07a3c');
-  const rockDark = new THREE.Color('#b85a30');
-  const random = seededRandom(21);
+  const palette = [new THREE.Color('#fff4ea'), new THREE.Color('#e07a3c'), new THREE.Color('#b85a30'), new THREE.Color('#f1ead9')];
   for (let i = 0; i < position.count; i += 3) {
-    const steep = normal.getY(i) < 0.62 && position.getY(i) > 0.3;
-    const colour = steep ? (random() < 0.5 ? rockColour : rockDark) : snowColour;
+    const x = (position.getX(i) + position.getX(i + 1) + position.getX(i + 2)) / 3;
+    const z = (position.getZ(i) + position.getZ(i + 1) + position.getZ(i + 2)) / 3;
+    const steep = normal.getY(i) < 0.6 && position.getY(i) > 0.35 && clear(x, z, 0.2);
+    const colour = steep ? palette[random() < 0.5 ? 1 : 2] : palette[random() < 0.85 ? 0 : 3];
     for (let k = 0; k < 3; k++) colours.set([colour.r, colour.g, colour.b], (i + k) * 3);
   }
   plane.setAttribute('color', new THREE.BufferAttribute(colours, 3));
@@ -592,142 +605,231 @@ function skiWorld(size: number): THREE.Group {
   mountain.castShadow = mountain.receiveShadow = true;
   g.add(mountain);
 
-  // Snowy firs beside the run (three tiers each).
+  // Snowy firs on the lower slopes and round the foot (three tiers each), away from the runs and lifts.
   const needles = mat('#2b5e48', 0.85);
   const white = mat('#ffffff', 0.9);
-  const trunkWood = mat('#6b4a32', 0.9);
-  for (let k = 0; k < 26; k++) {
-    const z = -half + 0.5 + random() * (half * 2 - 0.9);
-    const side = random() < 0.5 ? -1 : 1;
-    const x = runX(z) + side * (0.55 + random() * 0.9);
-    if (Math.abs(x) > half - 0.3) continue;
+  const wood = mat('#6b4a32', 0.9);
+  for (let k = 0; k < 70; k++) {
+    const a = random() * Math.PI * 2;
+    const r = reach * (0.42 + random() * 0.72);
+    const x = Math.cos(a) * r;
+    const z = Math.sin(a) * r;
+    if (Math.abs(x) > half - 0.2 || Math.abs(z) > half - 0.2 || !clear(x, z, 0.24)) continue;
     const tree = new THREE.Group();
-    const h = 0.34 + random() * 0.26;
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.035, 0.1, 6), trunkWood);
+    const h = 0.3 + random() * 0.24;
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.035, 0.1, 6), wood);
     trunk.position.y = 0.04;
     tree.add(trunk);
     for (let tier = 0; tier < 3; tier++) {
-      const r = 0.17 * (1 - tier * 0.25);
-      const cone = new THREE.Mesh(new THREE.ConeGeometry(r, h * 0.5, 7), needles);
+      const radius = 0.16 * (1 - tier * 0.25);
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(radius, h * 0.5, 7), needles);
       cone.position.y = 0.08 + h * (0.25 + tier * 0.27);
-      const cap = new THREE.Mesh(new THREE.ConeGeometry(r * 0.62, h * 0.28, 7), white);
+      const cap = new THREE.Mesh(new THREE.ConeGeometry(radius * 0.62, h * 0.28, 7), white);
       cap.position.y = cone.position.y + h * 0.13;
       tree.add(cone, cap);
     }
-    tree.position.set(x, height(x, z) - 0.03, z);
+    tree.position.copy(on(x, z, -0.03));
     tree.rotation.y = random() * 6.28;
     tree.traverse((o) => (o.castShadow = true));
     g.add(tree);
   }
 
-  // The slalom: red and blue flags in turn, on the outside of each bend.
-  const pole = mat('#f4f4f4', 0.5);
-  for (let k = 0; k < 7; k++) {
-    const z = -half + 0.9 + k * ((half * 2 - 1.7) / 6);
-    const x = runX(z) + (k % 2 ? -0.2 : 0.2);
-    const flag = new THREE.Group();
-    const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.22, 5), pole);
-    stick.position.y = 0.11;
-    const cloth = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.07), new THREE.MeshStandardMaterial({ color: k % 2 ? '#2f6fde' : '#e5484d', side: THREE.DoubleSide }));
-    cloth.position.set(0.05, 0.18, 0);
-    flag.add(stick, cloth);
-    flag.position.set(x, height(x, z), z);
-    flag.scale.setScalar(1.5);
-    g.add(flag);
-  }
+  // A flag on the summit.
+  const summit = new THREE.Group();
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.3, 5), mat('#f4f4f4', 0.5));
+  mast.position.y = 0.15;
+  const pennant = new THREE.Mesh(new THREE.PlaneGeometry(0.14, 0.09), new THREE.MeshStandardMaterial({ color: '#e5484d', side: THREE.DoubleSide }));
+  pennant.position.set(0.07, 0.25, 0);
+  summit.add(mast, pennant);
+  summit.position.copy(on(0, 0, -0.02));
+  g.add(summit);
 
-  // The finish arch at the bottom.
-  const archZ = half - 0.55;
-  const archX = runX(archZ);
-  for (const side of [-1, 1]) {
-    const post = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.5, 0.05), mat('#e5484d', 0.6));
-    post.position.set(archX + side * 0.42, height(archX + side * 0.42, archZ) + 0.25, archZ);
-    post.castShadow = true;
-    g.add(post);
-  }
-  const banner = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.12, 0.03), mat('#ffffff', 0.6));
-  banner.position.set(archX, height(archX, archZ) + 0.5, archZ);
-  g.add(banner);
-  for (let k = 0; k < 6; k++) {
-    const check = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.06, 0.034), mat('#1f3247', 0.6));
-    check.position.set(archX - 0.4125 + k * 0.15 + (k % 2 ? 0 : 0.075), banner.position.y + (k % 2 ? 0.03 : -0.03), archZ);
-    g.add(check);
-  }
-
-  // Two tiny skiers on their own lines, each leaving a pair of blue tracks.
-  const startZ = -half + 0.75;
-  const endZ = half - 0.35;
-  const lineOf = (shift: number) => (t: number): THREE.Vector3 => {
-    const z = THREE.MathUtils.lerp(startZ, endZ, t);
-    const x = runX(z) + shift * Math.cos((z / half) * 3.3 + 0.6);
-    return new THREE.Vector3(x, height(x, z), z);
+  /** A little hut with a snowy roof (lift stations, the chalet). */
+  const hut = (at: THREE.Vector3, turn: number, w: number, h: number, colour: string, window = false): void => {
+    const house = new THREE.Group();
+    const walls = new THREE.Mesh(new THREE.BoxGeometry(w, h, w * 0.8), mat(colour, 0.85));
+    walls.position.y = h / 2;
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(w * 0.82, h * 0.6, 4), white);
+    roof.position.y = h + h * 0.28;
+    roof.rotation.y = Math.PI / 4;
+    roof.scale.z = 0.85;
+    house.add(walls, roof);
+    if (window) {
+      const glow = new THREE.MeshStandardMaterial({ color: '#ffd27a', emissive: '#ffb347', emissiveIntensity: 1.6 });
+      for (const side of [-1, 1]) {
+        const pane = new THREE.Mesh(new THREE.BoxGeometry(w * 0.2, h * 0.3, 0.01), glow);
+        pane.position.set(side * w * 0.22, h * 0.55, w * 0.405);
+        house.add(pane);
+      }
+    }
+    house.position.copy(at);
+    house.rotation.y = turn;
+    house.traverse((o) => (o.castShadow = true));
+    g.add(house);
   };
-  const trackMaterial = new THREE.MeshBasicMaterial({ color: '#6d8fe6', transparent: true, opacity: 0.75, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
-  const skier = (colour: string, shift: number): { figure: THREE.Group; at: (t: number) => THREE.Vector3 } => {
-    const at = lineOf(shift);
-    // The tracks: two thin ribbons along the whole line.
+  const chaletAngle = 5.6;
+  hut(on(Math.cos(chaletAngle) * reach * 1.02, Math.sin(chaletAngle) * reach * 1.02, -0.02), -chaletAngle + Math.PI / 2, 0.34, 0.2, '#8a5a3a', true);
+
+  // The runs' tracks and their skiers.
+  const trackMaterial = new THREE.MeshBasicMaterial({
+    color: '#6d8fe6', transparent: true, opacity: 0.75, depthWrite: false, side: THREE.DoubleSide,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+  });
+  const movers: { figure: THREE.Group; line: (s: number) => THREE.Vector3; period: number; offset: number }[] = [];
+  runs.forEach((line, k) => {
     const points: number[] = [];
     const index: number[] = [];
-    const steps = 90;
+    const steps = 80;
     for (let i = 0; i <= steps; i++) {
-      const p = at(i / steps);
-      const q = at(Math.min(1, (i + 1) / steps));
-      const along = (i < steps ? q.clone().sub(p) : p.clone().sub(at((i - 1) / steps))).setY(0).normalize();
-      const across = new THREE.Vector3(along.z, 0, -along.x);
+      const p = line(i / steps);
+      const q = i < steps ? line((i + 1) / steps) : line((i - 1) / steps);
+      const along = (i < steps ? q.clone().sub(p) : p.clone().sub(q)).setY(0).normalize();
       for (const o of [-0.045, -0.02, 0.02, 0.045]) {
-        const x = p.x + across.x * o;
-        const z = p.z + across.z * o;
-        points.push(x, height(x, z) + 0.012, z);
+        const x = p.x + along.z * o;
+        const z = p.z - along.x * o;
+        points.push(x, height(x, z) + 0.014, z);
       }
-      if (i < steps) for (const k of [0, 2]) index.push(i * 4 + k, i * 4 + k + 1, i * 4 + k + 4, i * 4 + k + 1, i * 4 + k + 5, i * 4 + k + 4);
+      if (i < steps) for (const j of [0, 2]) index.push(i * 4 + j, i * 4 + j + 1, i * 4 + j + 4, i * 4 + j + 1, i * 4 + j + 5, i * 4 + j + 4);
     }
     const ribbon = new THREE.BufferGeometry();
     ribbon.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
     ribbon.setIndex(index);
-    const tracks = new THREE.Mesh(ribbon, trackMaterial);
-    tracks.material.side = THREE.DoubleSide;
-    g.add(tracks);
+    g.add(new THREE.Mesh(ribbon, trackMaterial));
 
-    const figure = new THREE.Group();
-    const lean = new THREE.Group();
-    const jacket = mat(colour, 0.7);
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.045, 0.06, 4, 8), jacket);
-    body.position.y = 0.11;
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 10), mat('#f3c79a', 0.7));
-    head.position.y = 0.21;
-    const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.055, 12, 8, 0, Math.PI * 2, 0, 1.5), jacket);
-    helmet.position.y = 0.215;
-    lean.add(body, head, helmet);
-    for (const side of [-1, 1]) {
-      const ski = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.008, 0.2), mat('#2b3a55', 0.5));
-      ski.position.set(side * 0.03, 0.012, 0);
-      lean.add(ski);
+    for (let n = 0; n < 2; n++) {
+      const figure = new THREE.Group();
+      const lean = new THREE.Group();
+      const jacket = mat(['#e5484d', '#00a6ed', '#ffb400', '#3ec300', '#9b5cff', '#ff7ac6'][k * 2 + n], 0.7);
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.045, 0.06, 4, 8), jacket);
+      body.position.y = 0.11;
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 10), mat('#f3c79a', 0.7));
+      head.position.y = 0.21;
+      const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.055, 12, 8, 0, Math.PI * 2, 0, 1.5), jacket);
+      helmet.position.y = 0.215;
+      lean.add(body, head, helmet);
+      for (const side of [-1, 1]) {
+        const ski = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.008, 0.2), mat('#2b3a55', 0.5));
+        ski.position.set(side * 0.03, 0.012, 0);
+        lean.add(ski);
+      }
+      lean.rotation.x = 0.25; // crouched forwards
+      figure.add(lean);
+      figure.traverse((o) => (o.castShadow = true));
+      g.add(figure);
+      movers.push({ figure, line, period: 6.5 + k * 0.8, offset: n * 0.5 + k * 0.17 });
     }
-    lean.rotation.x = 0.25; // crouched forwards
-    figure.add(lean);
-    figure.traverse((o) => (o.castShadow = true));
-    g.add(figure);
-    return { figure, at };
-  };
-  const racers = [
-    { ...skier('#e5484d', 0.1), offset: 0 },
-    { ...skier('#00a6ed', -0.1), offset: 0.55 },
-  ];
+  });
 
-  const tick: Tick = (time) => {
-    for (const racer of racers) {
-      const lap = (time / 6 + racer.offset) % 1;
-      const t = Math.min(1, lap / 0.85); // down the run, then a short wait under the arch
-      const here = racer.at(t);
-      const ahead = racer.at(Math.min(1, t + 0.02));
-      racer.figure.position.copy(here);
+  /**
+   * A lift from the foot to near the summit: stations, pylons, two cables, and cars that ride up on one cable and
+   * down on the other. Returns the per-frame update.
+   */
+  const lift = (line: (s: number) => THREE.Vector3, hang: number, pylons: number, cars: number, period: number, colour: string, car: (rider: boolean) => THREE.Group): Tick => {
+    const steel = mat('#8b97a8', 0.5);
+    const from = line(0);
+    const to = line(1);
+    const turn = Math.atan2(to.x - from.x, to.z - from.z);
+    const tops: THREE.Vector3[] = [];
+    for (let i = 0; i <= pylons + 1; i++) {
+      const foot = line(i / (pylons + 1));
+      tops.push(foot.clone().setY(foot.y + hang));
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.02, hang, 6), steel);
+      post.position.copy(foot).setY(foot.y + hang / 2);
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.014, 0.014), steel);
+      arm.position.copy(tops[i]);
+      arm.rotation.y = turn;
+      post.castShadow = true;
+      g.add(post, arm);
+    }
+    hut(from.clone().setY(from.y - 0.02), turn, 0.24, 0.16, colour);
+    hut(to.clone().setY(to.y - 0.04), turn, 0.2, 0.13, colour);
+    // Across the line (to the right when going up): the up cable is on the right, the down cable on the left.
+    const across = new THREE.Vector3(Math.cos(turn), 0, -Math.sin(turn)).multiplyScalar(0.07);
+    for (const side of [-1, 1]) {
+      const curve = new THREE.CatmullRomCurve3(tops.map((p) => p.clone().addScaledVector(across, side)), false, 'catmullrom', 0);
+      g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 0.005, 4), mat('#3a4250', 0.4)));
+    }
+    const along = (s: number): THREE.Vector3 => {
+      const f = Math.min(0.9999, Math.max(0, s)) * (tops.length - 1);
+      const i = Math.floor(f);
+      return tops[i].clone().lerp(tops[i + 1], f - i);
+    };
+    const riding = Array.from({ length: cars }, (_, i) => ({ group: car(i % 3 !== 2), phase: i / cars }));
+    for (const r of riding) {
+      r.group.rotation.y = turn;
+      r.group.traverse((o) => (o.castShadow = true));
+      g.add(r.group);
+    }
+    return (time) => {
+      for (const r of riding) {
+        const u = (time / period + r.phase) % 1;
+        const up = u < 0.5;
+        r.group.position.copy(along(up ? u * 2 : (1 - u) * 2)).addScaledVector(across, up ? 1 : -1);
+        r.group.rotation.y = up ? turn : turn + Math.PI;
+        r.group.userData.rider.visible = up && r.group.userData.hasRider;
+        r.group.rotation.z = Math.sin(time * 2 + r.phase * 20) * 0.06; // a gentle swing
+      }
+    };
+  };
+
+  const chair = (rider: boolean): THREE.Group => {
+    const c = new THREE.Group();
+    const steel = mat('#3a4250', 0.4);
+    const hanger = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.11, 4), steel);
+    hanger.position.y = -0.055;
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.012, 0.04), mat('#2f6fde', 0.6));
+    seat.position.y = -0.115;
+    const back = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.045, 0.01), mat('#2f6fde', 0.6));
+    back.position.set(0, -0.09, -0.02);
+    const person = new THREE.Group();
+    for (const [x, colour] of [[-0.028, '#ffb400'], [0.028, '#ff7ac6']] as const) {
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.018, 0.02, 3, 6), mat(colour, 0.7));
+      body.position.set(x, -0.085, 0.005);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 6), mat('#f3c79a', 0.7));
+      head.position.set(x, -0.045, 0.005);
+      person.add(body, head);
+    }
+    c.add(hanger, seat, back, person);
+    c.userData.rider = person;
+    c.userData.hasRider = rider;
+    return c;
+  };
+  const cabin = (): THREE.Group => {
+    const c = new THREE.Group();
+    const hanger = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.07, 4), mat('#3a4250', 0.4));
+    hanger.position.y = -0.035;
+    const body = new THREE.Mesh(new RoundedBoxGeometry(0.11, 0.1, 0.09, 2, 0.02), mat('#e5484d', 0.5));
+    body.position.y = -0.12;
+    const glass = new THREE.Mesh(new THREE.BoxGeometry(0.114, 0.04, 0.094), new THREE.MeshStandardMaterial({ color: '#bfe6ff', roughness: 0.15, metalness: 0.3 }));
+    glass.position.y = -0.105;
+    c.add(hanger, body, glass);
+    c.userData.rider = new THREE.Group(); // (people are inside)
+    c.userData.hasRider = false;
+    return c;
+  };
+  const chairlift = lift(chairLine, 0.26, 3, 7, 16, '#2f6fde', chair);
+  const gondola = lift(gondolaLine, 0.38, 2, 3, 20, '#e5484d', cabin);
+
+  const tick: Tick = (time, dt) => {
+    chairlift(time, dt);
+    gondola(time, dt);
+    for (const m of movers) {
+      const lap = (time / m.period + m.offset) % 1;
+      const s = Math.min(1, lap / 0.9); // down the run, then a short stop at the foot
+      const here = m.line(s);
+      const ahead = m.line(Math.min(1, s + 0.02));
+      m.figure.position.copy(here);
       const dx = ahead.x - here.x;
       const dz = ahead.z - here.z;
-      if (t < 1) racer.figure.rotation.y = Math.atan2(dx, dz);
-      // Lean into the bend, and sit on the slope.
-      racer.figure.rotation.z = THREE.MathUtils.clamp(-dx * 9, -0.5, 0.5) * (t < 1 ? 1 : 0);
+      if (s < 1) {
+        m.figure.rotation.y = Math.atan2(dx, dz);
+        // Lean into the bend: by how much the direction changes just ahead.
+        const next = m.line(Math.min(1, s + 0.04));
+        const bend = Math.atan2(next.x - ahead.x, next.z - ahead.z) - m.figure.rotation.y;
+        m.figure.rotation.z = THREE.MathUtils.clamp(-Math.atan2(Math.sin(bend), Math.cos(bend)) * 2.5, -0.5, 0.5);
+      }
       // (Drawn bigger than life, so they can be seen from the lobby's distance; they pop in and out at the ends.)
-      racer.figure.scale.setScalar(1.7 * (lap > 0.96 ? Math.max(0.001, (1 - lap) / 0.04) : Math.min(1, lap / 0.03 + 0.001)));
+      m.figure.scale.setScalar(1.5 * (lap > 0.96 ? Math.max(0.001, (1 - lap) / 0.04) : Math.min(1, lap / 0.03 + 0.001)));
     }
   };
   g.userData.tick = tick;

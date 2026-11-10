@@ -803,8 +803,12 @@ body, round mitten hands, sturdier legs, chunky shoes).
     - **Skiing side of the cube (S5 diorama)** `skiWorld` in `host/hub/faces.ts`: low-poly snowy mountain (peak at
       the back, orange rock on steep faces), S-shaped run with banks, ~25 snowy firs, 7 red/blue slalom flags, a
       chequered finish arch, two tiny skiers (red, blue) carving down their blue tracks every 6 s. New `ski` icon on
-      the lobby card (`ICONS` in `lobbyUi.ts`). Screenshot `logs/ski-cube-side.jpg`. Still to do for S5: match length
-      choice is not needed (one run); maybe a name sign check.
+      the lobby card (`ICONS` in `lobbyUi.ts`).
+    - **Redone on the user's request ("put the mountain in the middle so the cut-off does not show; skiers and
+      lifts riding there"):** the peak now stands in the middle of the side (radial height with ridges, flat snow
+      round its foot), three winding runs with blue tracks and 6 tiny skiers, a chairlift (3 pylons, 7 swinging chairs,
+      riders going up, empty coming down) and a gondola (3 red cabins), lift huts, a chalet with lit windows, a summit
+      flag, ~50 firs kept off the runs and lift lines. Screenshot `logs/ski-cube-side.jpg`.
   - Next: user's look at S3 → fixes → S4 juice (ski tracks, spray, speed lines, sparkles, sun glare, camera shake,
     sounds/music — ask before any download). Still open: 2+ phones test, friends' feedback on the run.
 
