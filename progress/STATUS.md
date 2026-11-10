@@ -788,7 +788,14 @@ body, round mitten hands, sturdier legs, chunky shoes).
     The podium still shows the players in their normal clothes.
   - User (2026-11-10): "tune Late sun too" → preset C retuned the same way (sun `#ffc890` × 4.2 at 14° from
     ahead-right, blue-violet sky light 1.95, exposure 0.85): peach-gold sunlit snow, deep blue shadows, orange horizon.
-    Default stays A (`look.preset`); if the user prefers C, change that one value.
+    **User (2026-11-10): "make Late sun the default"** → `look.preset: 'sunset'` (A and B stay, L cycles).
+  - **S4 started — ski tracks (user, with a reference frame: "the skis are properly dug in, let's make a nice
+    trail"). Built, waiting for the user's look.** `host/ski/tracks.ts` `SkiTrack` per racer, `TUNING.ski.tracks`:
+    a ribbon on the ground, 260 points every 0.5 m (130 m), two grooves (0.2 m, shadow-tinted) with lips whose
+    normals are tipped towards the groove (one lip catches the sun, the other is dark → reads as a deep trench), a
+    wide soft wake (1.7 m), grooves up to 2.3× wider when carving hard, no trail in the air / while tumbling, breaks
+    on respawn, old end fades. Lambert material, receives shadows. Screenshot `logs/ski-tracks.jpg`. ~3 ms work/frame
+    with 4 racers in the dev browser.
   - Next: user's look at S3 → fixes → S4 juice (ski tracks, spray, speed lines, sparkles, sun glare, camera shake,
     sounds/music — ask before any download). Still open: 2+ phones test, friends' feedback on the run.
 

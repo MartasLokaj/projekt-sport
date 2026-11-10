@@ -1298,6 +1298,18 @@ export const TUNING = {
     cpuSkins: ['#f3c79a', '#dba571', '#ffe0c7', '#b67b4c'],
 
     /**
+     * The trail behind each skier (host/ski/tracks.ts): how many points it keeps and how far apart (m) — together its
+     * length; the groove of one ski (width m, see-through 0..1), how far apart the skis are, how much hard carving
+     * widens the grooves (×), the bright/dark lips beside each groove (width, soft outer edge, strength, how far their
+     * light is tipped towards the groove), the wide soft wake around both (width m, strength), and how high above the
+     * snow it is drawn (m).
+     */
+    tracks: {
+      samples: 260, spacing: 0.5, grooveWidth: 0.2, grooveAlpha: 0.85, skiApart: 0.38, carveWiden: 1.3,
+      lipWidth: 0.07, lipFade: 0.16, lipAlpha: 0.9, lipTilt: 1.1, wakeWidth: 1.7, wakeAlpha: 0.3, lift: 0.035,
+    },
+
+    /**
      * Ski clothes: jacket in the player's colour, trousers = that colour mixed this much (0..1) towards trousersBase,
      * gloves, boots, helmet with goggles; poles this long (m, at the character's own 0.9 size) and this colour.
      */
@@ -1311,7 +1323,7 @@ export const TUNING = {
      * Colours: sky (top, horizon), fog/haze, snow, rocks, fir needles, trunks, far mountains.
      */
     look: {
-      preset: 'golden' as 'golden' | 'crisp' | 'sunset',
+      preset: 'sunset' as 'golden' | 'crisp' | 'sunset',
       edgeLines: false,
       presets: {
         golden: {

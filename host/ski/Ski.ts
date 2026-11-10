@@ -8,6 +8,7 @@ import { Backdrop } from './backdrop.ts';
 import { Course } from './course.ts';
 import { CpuDriver } from './cpu.ts';
 import { Racer, type RacerEvent, type RacerInput } from './racer.ts';
+import { SkiTrack } from './tracks.ts';
 
 // Skiing race (SKI.md, phases S2a–S2b). Up to 4 racers: every connected phone (in join order) steers one, the
 // computer fills the rest (level from the lobby card). Phones are steering wheels (S1) with TUCK and JUMP.
@@ -43,6 +44,8 @@ type Entry = {
   lostFor: number;
   lastCarveCue: number;
   tag: HTMLElement;
+  /** The trail this racer leaves in the snow. */
+  track: SkiTrack;
 };
 
 const STEP = 1 / 120;
@@ -190,6 +193,7 @@ export class Ski {
     this.scene.background = new THREE.Color(look.skyHorizon);
     this.renderer.toneMappingExposure = look.exposure;
     this.course.applyLook(look);
+    for (const e of this.entries) e.track.applyLook(look);
     this.backdrop.applyLook(look, this.sunDirection);
   }
 
@@ -260,7 +264,8 @@ export class Ski {
 
   private setup(players: PlayerInfo[]): void {
     for (const entry of this.entries) {
-      this.scene.remove(entry.racer.group);
+      this.scene.remove(entry.racer.group, entry.track.mesh);
+      entry.track.dispose();
       entry.tag.remove();
     }
     this.entries = [];
@@ -276,7 +281,10 @@ export class Ski {
       tag.textContent = name;
       tag.style.borderColor = look.shirt;
       this.hud.tags.append(tag);
-      this.entries.push({ racer, playerId, name, look, cpu, lostFor: 0, lastCarveCue: 0, tag });
+      const track = new SkiTrack(this.course);
+      track.applyLook(TUNING.ski.look.presets[this.lookName]);
+      this.scene.add(track.mesh);
+      this.entries.push({ racer, playerId, name, look, cpu, lostFor: 0, lastCarveCue: 0, tag, track });
     };
     for (const player of players) make(player.id, player.name, lookOf(player), null);
     // With no phone the Mac keyboard steers racer 1.
@@ -295,6 +303,7 @@ export class Ski {
       const x = this.course.centre(START_D) + (i - (n - 1) / 2) * c.startSpacing;
       e.racer.body.reset(this.course, START_D, x);
       e.lostFor = 0;
+      e.track.clear();
       if (e.cpu) e.cpu = new CpuDriver(this.level);
       e.racer.update(0, this.course);
     });
@@ -402,7 +411,10 @@ export class Ski {
       if (this.overIn <= 0) this.endRace();
     }
 
-    for (const e of this.entries) e.racer.update(dt, this.course);
+    for (const e of this.entries) {
+      e.racer.update(dt, this.course);
+      e.track.update(e.racer.body);
+    }
     this.course.showAround(this.focus?.racer.body.d ?? 0);
     this.puffs.update(dt);
     this.fadeGates(dt);
