@@ -737,7 +737,11 @@ body, round mitten hands, sturdier legs, chunky shoes).
     Scripted "decent player" (looks ~1 s ahead, takes the free line, goes for gates): 75–92 s, average 60–77 km/h,
     top ~115–127 km/h, 1–8 crashes. Checked in the dev browser: valley look, gates, rocks, ~1–3 ms work per frame.
   - **Idea for later (user): mystery boxes on the run that give a mega speed boost etc.** (fits SKI.md "items").
-  - Next: user's phone test of the faster run → tune → their OK → push → S2b.
+  - **Faster run approved by the user on the phone (2026-11-10): "je to mega dobré".** S2a done. The user will ask
+    friends tomorrow about small details; told them run/gameplay values stay easy to change after the look (S3)
+    because the look is built on the same generator and `TUNING.ski`; only big structural ideas (forks, tunnels,
+    hand-placed spots) are best decided before S3.
+  - Next: S2b (1–4 phones + CPU, pack camera, catch-up, podium) — plan first, wait for OK.
 
 ## How the user likes to work
 - Talk in **Czech, plain words**, explain technical terms in one sentence. All code/comments/commits/in-game text in English.
