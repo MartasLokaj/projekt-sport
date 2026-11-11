@@ -867,6 +867,12 @@ body, round mitten hands, sturdier legs, chunky shoes).
   `host/ski/Ski.ts` (`makeViews`, `layoutViews`, `renderViews`, per-view `placeCamera` / `placeTags`),
   `Course.showAround` takes every viewed racer, tuning `TUNING.ski.split` (`on`, `narrowFovBoost`, `divider`,
   `shadows` — turn shadows off if four views are too slow on the MacBook Air). Frame time not measured yet.
+- Checked 2026-11-11 in Chrome with fake phones (a Node `ws` script that joins 2 or 4 players, sends `ski_mode` as a
+  helper host and steers with `ski_steer`): 2 halves and 4 quarters work (start gate, countdown, own camera each).
+  Fixed after that check: name tags are clipped to their own view (`.ski-view { overflow: hidden }`), and in split
+  screen the standings table is hidden — each view's label shows the place instead ("2nd · Ben", plus the time
+  after the finish). Still open: 3 players (columns) not looked at, frame time not measured, no real phones yet;
+  the timer still sits over the top-right view's corner.
 
 ## Known open points
 - Verify 60 fps on the MacBook Air; quality knobs are in `TUNING.scenery` (`maxPixelRatio`, bloom, `seaDetail`).

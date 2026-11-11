@@ -789,8 +789,20 @@ export class Ski {
             ? `${through}/${this.humans().length} player${this.humans().length === 1 ? '' : 's'} through`
             : 'Results coming… (Enter)';
 
+    const ranking = this.ranking();
+    // Split screen: no standings table over the top-right view; every view's label shows its player's place instead.
+    if (this.views.length > 1) {
+      const placed = this.phase === 'racing' || this.phase === 'finished';
+      for (const view of this.views) {
+        const e = view.entry;
+        if (!e) continue;
+        const time = e.racer.body.finished ? ` · ${formatTime(this.timeOf(e))}` : '';
+        const text = placed ? `${PLACE_TEXT[ranking.indexOf(e)]} · ${e.name}${time}` : e.name;
+        if (view.label.textContent !== text) view.label.textContent = text;
+      }
+    }
     this.hud.standings.replaceChildren(
-      ...this.ranking().map((e, i) => {
+      ...ranking.map((e, i) => {
         const row = document.createElement('div');
         row.className = 'ski-row';
         if (e === focus) row.classList.add('focus');
