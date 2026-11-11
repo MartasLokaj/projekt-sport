@@ -209,7 +209,7 @@
         align-items: center; justify-content: center; gap: 14px;
         padding: max(12px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
       }
-      /* Rotation lock on: the page stays upright, so the content turns to be readable sideways. */
+      /* The page is upright (rotation lock, or the phone turned it): the content is turned so the layout stays sideways. */
       #ski-inner.turn-right, #ski-inner.turn-left {
         position: fixed; top: 50%; left: 50%; width: 100vh; height: 100vw; width: 100dvh; height: 100dvw; padding: 12px 24px;
       }

@@ -874,6 +874,18 @@ body, round mitten hands, sturdier legs, chunky shoes).
   after the finish). Still open: 3 players (columns) not looked at, frame time not measured, no real phones yet;
   the timer still sits over the top-right view's corner.
 
+### Skiing: stuck rescue + phone screen always sideways — built 2026-11-11, waiting for the user's test
+- User's request (2026-11-11): never stay stuck at the edge / in the trees. `Ski.rescueStuck` puts a racer back in the
+  middle of the nearest way when it is off the run for 3 s or hardly gets further down for 4 s (tuning
+  `TUNING.ski.rescue`); phone shows the usual "Back with the pack!" cue. `RacerPhysics.settle` stops the hop a
+  respawned racer made (also used by the keep-together respawn). Checked with a fake phone steering full right:
+  it came back about every 3–4 s, no hop.
+- User's request (2026-11-11): the phone's ski screen (TUCK / JUMP) turned upright by itself during races. Now the
+  layout is always sideways (`controller/ski/screen.ts`: `applyTurn`, side only flips when the phone is clearly held
+  the other way, `TUNING.ski.steer.sideSure`); on Android, Ready also goes full screen and locks the page sideways
+  (`lockLandscape`, tuning `TUNING.ski.steer.lockLandscape`), released when Skiing closes. NOT tested on a real
+  phone (no phone, and the phone page could not be opened in a test browser) — only the type check.
+
 ## Known open points
 - Verify 60 fps on the MacBook Air; quality knobs are in `TUNING.scenery` (`maxPixelRatio`, bloom, `seaDetail`).
 - On real phones, maybe tune: `curveSign` (curve direction), `minArmRadius` (wrist check), swing power curve.

@@ -108,20 +108,49 @@ export function initSkiScreen(send: (msg: ClientMessage) => void): SkiScreen {
   }
 
   /**
-   * A phone with the rotation lock on keeps the page upright while it is held sideways: turn the
-   * content so it can still be read. up = the direction of "up" in the phone's own axes.
+   * This screen is always laid out sideways (TUCK left, JUMP right) and stays that way. When the phone's own page
+   * is upright (rotation lock on, or the phone turned the page while the player was steering), the content is
+   * turned a quarter instead. Which quarter = which edge of the phone is up; it only changes when the phone is
+   * clearly held the other way round, never from a steering tilt.
    */
-  function turnContent(upX: number, upY: number): void {
-    const sideways = portraitPage.matches && Math.abs(upX) > 0.75;
-    const upright = !portraitPage.matches || Math.abs(upY) > 0.75;
-    if (sideways) {
-      inner.classList.toggle('turn-right', upX > 0);
-      inner.classList.toggle('turn-left', upX < 0);
-    } else if (upright) inner.classList.remove('turn-right', 'turn-left');
+  let side: 1 | -1 = 1;
+  function applyTurn(): void {
+    inner.classList.toggle('turn-right', portraitPage.matches && side > 0);
+    inner.classList.toggle('turn-left', portraitPage.matches && side < 0);
   }
-  portraitPage.addEventListener('change', () => {
-    if (!portraitPage.matches) inner.classList.remove('turn-right', 'turn-left');
-  });
+  /** upX = how much the phone's right edge points up (-1..1). */
+  function turnContent(upX: number): void {
+    if (Math.abs(upX) > cfg.sideSure) side = upX > 0 ? 1 : -1;
+    applyTurn();
+  }
+  portraitPage.addEventListener('change', applyTurn);
+
+  /**
+   * Android: full screen + the system's own lock, so the phone does not turn the page at all while steering
+   * (that also dropped held buttons). iPhone has no such lock; the turned content above covers it.
+   */
+  type OrientationLock = { lock?: (orientation: string) => Promise<void>; unlock?: () => void };
+  let lockedByUs = false;
+  function lockLandscape(): void {
+    if (!cfg.lockLandscape || isIos || lockedByUs || !document.documentElement.requestFullscreen) return;
+    lockedByUs = true;
+    document.documentElement
+      .requestFullscreen()
+      .then(() => (screen.orientation as unknown as OrientationLock).lock?.('landscape'))
+      .catch(() => {
+        // Not allowed or not supported: the turned content still keeps the layout sideways.
+      });
+  }
+  function unlockLandscape(): void {
+    if (!lockedByUs) return;
+    lockedByUs = false;
+    try {
+      (screen.orientation as unknown as OrientationLock).unlock?.();
+    } catch {
+      // Nothing was locked.
+    }
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  }
 
   window.addEventListener('devicemotion', (e) => {
     const g = e.accelerationIncludingGravity;
@@ -143,7 +172,7 @@ export function initSkiScreen(send: (msg: ClientMessage) => void): SkiScreen {
       const length = Math.hypot(x, y, z) || 1;
       // Android reports the upward push, iPhone the downward pull.
       const sign = isIos ? -1 : 1;
-      turnContent((sign * x) / length, (sign * y) / length);
+      turnContent((sign * x) / length);
       knob.style.left = `${50 + wheel.steer * 50}%`;
       valueEl.textContent = wheel.ready ? `${Math.round(wheel.roll)}°` : '';
       noteEl.textContent = wheel.flat ? 'Hold the phone more upright, screen towards you.' : '';
@@ -152,6 +181,7 @@ export function initSkiScreen(send: (msg: ClientMessage) => void): SkiScreen {
 
   // Ready / Re-centre. On an iPhone the first tap also asks for permission to use the motion sensor.
   button.addEventListener('click', async () => {
+    lockLandscape(); // first thing in the tap: the phone only allows it straight from a touch
     if (!sensorSeen && isIos) {
       try {
         await motionApi!.requestPermission!();
@@ -188,7 +218,9 @@ export function initSkiScreen(send: (msg: ClientMessage) => void): SkiScreen {
       open = next;
       tuck.clear();
       jump.clear();
+      if (!open) unlockLandscape();
       if (open) {
+        applyTurn();
         wheel.reset();
         noteEl.textContent = statusEl.textContent = '';
         againButton.hidden = true;

@@ -45,6 +45,10 @@ type Entry = {
   cpu: CpuDriver | null;
   /** Seconds this racer has been far behind (for putting it back). */
   lostFor: number;
+  /** Seconds this racer has been off the run / hardly moving down it (for the rescue), and its d last frame. */
+  offFor: number;
+  slowFor: number;
+  lastD: number;
   lastCarveCue: number;
   /** The trail this racer leaves in the snow. */
   track: SkiTrack;
@@ -314,7 +318,7 @@ export class Ski {
       track.applyLook(TUNING.ski.look.presets[this.lookName]);
       track.mesh.visible = this.showTracks;
       this.scene.add(track.mesh);
-      this.entries.push({ racer, playerId, name, look, cpu, lostFor: 0, lastCarveCue: 0, track });
+      this.entries.push({ racer, playerId, name, look, cpu, lostFor: 0, offFor: 0, slowFor: 0, lastD: START_D, lastCarveCue: 0, track });
     };
     for (const player of players) make(player.id, player.name, lookOf(player), null);
     // With no phone the Mac keyboard steers racer 1.
@@ -403,7 +407,8 @@ export class Ski {
     this.entries.forEach((e, i) => {
       const x = this.course.centre(START_D) + (i - (n - 1) / 2) * c.startSpacing;
       e.racer.body.reset(this.course, START_D, x);
-      e.lostFor = 0;
+      e.lostFor = e.offFor = e.slowFor = 0;
+      e.lastD = START_D;
       e.track.clear();
       if (e.cpu) e.cpu = new CpuDriver(this.level);
       e.racer.update(0, this.course);
@@ -483,7 +488,9 @@ export class Ski {
     if (this.phase === 'racing' || this.phase === 'finished' || this.phase === 'over') {
       this.accumulator += dt;
       const inputs = this.entries.map((e, i) => (e.cpu ? null : this.input(e, i)));
+      let stepped = 0;
       while (this.accumulator >= STEP) {
+        stepped += STEP;
         this.focus = this.pickFocus();
         this.entries.forEach((e, i) => {
           const input = e.cpu ? e.cpu.input(e.racer.body, this.course, STEP) : { ...inputs[i]! };
@@ -495,6 +502,7 @@ export class Ski {
         this.accumulator -= STEP;
       }
       this.keepTogether(dt);
+      this.rescueStuck(stepped);
     } else {
       // Waiting at the gate: the skis still turn with the steering, so each player sees it works.
       this.entries.forEach((e, i) => {
@@ -574,8 +582,45 @@ export class Ski {
       const speed = lead.speed * 0.9;
       b.reset(this.course, d, lane.c + (Math.random() * 2 - 1) * lane.hw * 0.5);
       b.speed = speed;
+      b.settle(this.course);
       b.ghostLeft = 1.5;
-      e.lostFor = 0;
+      e.lostFor = e.offFor = e.slowFor = 0;
+      e.lastD = d;
+      e.racer.update(0, this.course);
+      this.puffs.burst(e.racer.group.position, 10, 1.2, 2.5);
+      this.cue(e, 'respawn');
+    }
+  }
+
+  /**
+   * Nobody stays stuck: a racer that is off the run for a while (in the trees by the wall), or hardly gets any
+   * further down it (caught on a tree or a rock), is put back in the middle of the nearest way, moving again.
+   */
+  private rescueStuck(dt: number): void {
+    const r = TUNING.ski.rescue;
+    if (this.phase !== 'racing' || dt <= 0) return;
+    for (const e of this.entries) {
+      const b = e.racer.body;
+      const progress = (b.d - e.lastD) / dt;
+      e.lastD = b.d;
+      if (b.finished) {
+        e.offFor = e.slowFor = 0;
+        continue;
+      }
+      e.offFor = this.course.outside(b.x, b.d) > r.offRunMargin ? e.offFor + dt : 0;
+      e.slowFor = progress < r.slowSpeed ? e.slowFor + dt : Math.max(0, e.slowFor - 2 * dt);
+      if (e.offFor < r.offRunSeconds && e.slowFor < r.slowSeconds) continue;
+      const d = Math.min(this.course.length, b.d + r.ahead);
+      const lanes = this.course.lanes(d);
+      const lane = lanes[this.course.laneIndex(b.x, d)] ?? lanes[0];
+      const gates = b.gatesPassed;
+      b.reset(this.course, d, lane.c);
+      b.gatesPassed = gates;
+      b.speed = r.speed;
+      b.settle(this.course);
+      b.ghostLeft = r.ghostSeconds;
+      e.offFor = e.slowFor = e.lostFor = 0;
+      e.lastD = d;
       e.racer.update(0, this.course);
       this.puffs.burst(e.racer.group.position, 10, 1.2, 2.5);
       this.cue(e, 'respawn');

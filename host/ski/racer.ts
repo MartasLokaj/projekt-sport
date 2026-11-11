@@ -60,6 +60,16 @@ export class RacerPhysics {
     this.lastGround = this.y;
   }
 
+  /**
+   * After being put somewhere already moving (a respawn): take the slope's fall at this speed as known, so the
+   * skier glides on instead of flying off the spot as if the ground had dropped away.
+   */
+  settle(course: Course): void {
+    const h = THREE.MathUtils.degToRad(this.heading);
+    const rise = (course.height(this.x + Math.sin(h) * 0.5, this.d + Math.cos(h) * 0.5) - course.height(this.x, this.d)) / 0.5;
+    this.groundVy = rise * this.speed;
+  }
+
   /** One step of `dt` seconds. time = race clock (seconds since GO), for the finish time. */
   step(dt: number, input: RacerInput, course: Course, time: number, events: RacerEvent[]): void {
     const c = TUNING.ski;

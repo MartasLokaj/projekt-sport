@@ -1151,6 +1151,13 @@ export const TUNING = {
       minUpright: 0.35,
       /** The server saves a steering sample to logs/ski-steer.jsonl this often per phone (milliseconds). */
       logEveryMs: 100,
+      /**
+       * The phone's ski screen always stays sideways. lockLandscape: on Android, Ready also goes full screen and
+       * locks the page sideways. sideSure: the content is only flipped to the other side when that edge of the
+       * phone clearly points up (share of gravity, 0..1) — a steering tilt never reaches it.
+       */
+      lockLandscape: true,
+      sideSure: 0.75,
     },
     /** Steering on the big screen: how fast it follows the phone, and how fast the skis follow the steering. */
     steerFollow: 18,
@@ -1282,6 +1289,12 @@ export const TUNING = {
     respawnSeconds: 3,
     cpuLeadMax: 30,
     cpuHoldBack: 2.5,
+    /**
+     * Nobody stays stuck: a racer more than offRunMargin m outside the run for offRunSeconds, or getting down the
+     * run slower than slowSpeed m/s for slowSeconds (caught on a tree; one crash alone is shorter), is put back in
+     * the middle of the nearest way, `ahead` m further on, at `speed` m/s, passing through obstacles for ghostSeconds.
+     */
+    rescue: { offRunMargin: 1, offRunSeconds: 3, slowSpeed: 2, slowSeconds: 4, ahead: 4, speed: 10, ghostSeconds: 1.5 },
     /** Racers bump each other apart (no crash) when closer than this (m). */
     bumpDistance: 0.9,
     /**
