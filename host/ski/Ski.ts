@@ -13,9 +13,11 @@ import { SkiTrack } from './tracks.ts';
 // Skiing race (SKI.md, phases S2a–S2b). Up to 4 racers: every connected phone (in join order) steers one, the
 // computer fills the rest (level from the lobby card). Phones are steering wheels (S1) with TUCK and JUMP.
 // The race starts when every phone has pressed Ready (or a Mac key is pressed): 3-2-1-GO, then down the run
-// with its forks, gates, kickers and obstacles. One shared camera follows the leading player; whoever falls far
+// with its forks, gates, kickers and obstacles. With one player one camera follows them; whoever falls far
 // behind gets a push, and much further back (or out of sight too long) is put back just behind the leader, so
 // nobody is out of the race for long. Computer racers far ahead of the players are held back a little.
+// Split screen (TUNING.ski.split): with 2–4 phones every player gets their own view of their own skier
+// (2 = left/right halves, 3 = three columns, 4 = four quarters) with their name at the bottom of it.
 // When every player has crossed the line the results come, then the podium (host/main.ts).
 // Graybox look until S3. Mac keyboard for testing (steers racer 1): ← → steer, ↓ tuck, hold Space and let go to
 // jump, Enter shows the results after the finish, R restarts, D shows/hides the readout, L next lighting preset,
@@ -44,9 +46,31 @@ type Entry = {
   /** Seconds this racer has been far behind (for putting it back). */
   lostFor: number;
   lastCarveCue: number;
-  tag: HTMLElement;
   /** The trail this racer leaves in the snow. */
   track: SkiTrack;
+};
+
+/** A part of the screen (CSS pixels from the top left). */
+type Rect = { x: number; y: number; w: number; h: number };
+
+/**
+ * One picture on the big screen: a chase camera behind one player. One player (or split screen off) = one view
+ * on the leading player; with 2–4 players on phones every player gets their own view (TUNING.ski.split).
+ */
+type View = {
+  /** The racer this view follows, or null = the leading player (one shared view). */
+  entry: Entry | null;
+  camera: THREE.PerspectiveCamera;
+  /** Smoothed direction (degrees), height, and how far it has pulled back to show players behind (0..1). */
+  yaw: number;
+  y: number;
+  wide: number;
+  look: THREE.Vector3;
+  rect: Rect;
+  /** The view's frame (its edge line and the player's name in the corner) holding its name tags. */
+  frame: HTMLElement;
+  label: HTMLElement;
+  tags: Map<Entry, HTMLElement>;
 };
 
 const STEP = 1 / 120;
@@ -105,7 +129,8 @@ class Puffs {
 export class Ski {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
-  private readonly camera: THREE.PerspectiveCamera;
+  /** The pictures on the big screen (one, or one per player in split screen). */
+  private views: View[] = [];
   private readonly clock = new THREE.Clock();
   private readonly sun = new THREE.DirectionalLight('#fff4e0', 2.4);
   private readonly skyLight = new THREE.HemisphereLight('#ffffff', '#9db8dd', 1.5);
@@ -131,11 +156,6 @@ export class Ski {
   private readonly wheels = new Map<string, Wheel>();
   private level: CpuLevel = 'normal';
   private readonly keys = new Set<string>();
-  /** Camera: smoothed direction (degrees), height, and how far it has pulled back to show players behind (0..1). */
-  private cameraYaw = 0;
-  private cameraY = 0;
-  private cameraWide = 0;
-  private readonly cameraLook = new THREE.Vector3();
   private introLeft = 0;
   private running = false;
   private showDebug = true;
@@ -157,8 +177,6 @@ export class Ski {
     private readonly container: HTMLElement,
     private readonly hud: SkiHud,
   ) {
-    const c = TUNING.ski;
-    this.camera = new THREE.PerspectiveCamera(c.camera.fov, 1, 0.1, 2500);
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, TUNING.scenery.maxPixelRatio));
     this.renderer.shadowMap.enabled = true;
@@ -235,7 +253,7 @@ export class Ski {
     window.removeEventListener('resize', this.onResize);
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
-    for (const entry of this.entries) entry.tag.hidden = true;
+    for (const view of this.views) view.frame.hidden = true;
   }
 
   /** New names or looks (a player edited their character): the racers follow. */
@@ -243,9 +261,18 @@ export class Ski {
     for (const entry of this.entries) {
       const player = players.find((p) => p.id === entry.playerId);
       if (!player) continue;
-      entry.name = entry.tag.textContent = player.name;
+      entry.name = player.name;
       entry.look = lookOf(player);
       entry.racer.setLook(entry.look);
+      for (const view of this.views) {
+        const tag = view.tags.get(entry);
+        if (tag) tag.textContent = player.name;
+        if (tag) tag.style.borderColor = entry.look.shirt;
+        if (view.entry === entry) {
+          view.label.textContent = player.name;
+          view.label.style.borderColor = entry.look.shirt;
+        }
+      }
     }
   }
 
@@ -272,8 +299,9 @@ export class Ski {
     for (const entry of this.entries) {
       this.scene.remove(entry.racer.group, entry.track.mesh);
       entry.track.dispose();
-      entry.tag.remove();
     }
+    for (const view of this.views) view.frame.remove();
+    this.views = [];
     this.entries = [];
     const taken = new Set(players.map((p) => p.colour));
     const free = SHIRT_COLOURS.filter((colour) => !taken.has(colour));
@@ -282,16 +310,11 @@ export class Ski {
       const racer = new Racer();
       racer.setLook(look);
       this.scene.add(racer.group);
-      const tag = document.createElement('div');
-      tag.className = 'ski-tag';
-      tag.textContent = name;
-      tag.style.borderColor = look.shirt;
-      this.hud.tags.append(tag);
       const track = new SkiTrack(this.course);
       track.applyLook(TUNING.ski.look.presets[this.lookName]);
       track.mesh.visible = this.showTracks;
       this.scene.add(track.mesh);
-      this.entries.push({ racer, playerId, name, look, cpu, lostFor: 0, lastCarveCue: 0, tag, track });
+      this.entries.push({ racer, playerId, name, look, cpu, lostFor: 0, lastCarveCue: 0, track });
     };
     for (const player of players) make(player.id, player.name, lookOf(player), null);
     // With no phone the Mac keyboard steers racer 1.
@@ -300,6 +323,77 @@ export class Ski {
       const look = { shirt: free.shift() ?? '#8d97a3', skin: skins[n % skins.length], handedness: 'right' as const };
       make(null, `CPU ${n}`, look, new CpuDriver(this.level));
     }
+    this.makeViews();
+  }
+
+  /** One shared view, or (2+ players on phones and TUNING.ski.split.on) one view per player. */
+  private makeViews(): void {
+    const humans = this.entries.filter((e) => e.playerId);
+    const followed: (Entry | null)[] = TUNING.ski.split.on && humans.length >= 2 ? humans.slice(0, 4) : [null];
+    const solo = followed.length === 1;
+    // Split screen: no keyboard help line and no readout over the first player's view (D still shows it).
+    this.container.parentElement?.classList.toggle('split', !solo);
+    if (!solo) this.showDebug = false;
+    for (const owner of followed) {
+      const frame = document.createElement('div');
+      frame.className = 'ski-view';
+      const label = document.createElement('div');
+      label.className = 'ski-view-label';
+      label.hidden = solo;
+      if (owner) {
+        label.textContent = owner.name;
+        label.style.borderColor = owner.look.shirt;
+      }
+      frame.append(label);
+      const tags = new Map<Entry, HTMLElement>();
+      for (const e of this.entries) {
+        const tag = document.createElement('div');
+        tag.className = 'ski-tag';
+        tag.textContent = e.name;
+        tag.style.borderColor = e.look.shirt;
+        frame.append(tag);
+        tags.set(e, tag);
+      }
+      this.hud.tags.append(frame);
+      const camera = new THREE.PerspectiveCamera(TUNING.ski.camera.fov, 1, 0.1, 2500);
+      this.views.push({ entry: owner, camera, yaw: 0, y: 0, wide: 0, look: new THREE.Vector3(), rect: { x: 0, y: 0, w: 1, h: 1 }, frame, label, tags });
+    }
+    this.layoutViews();
+  }
+
+  /** Where each view sits: whole screen, two halves, three columns or four quarters. */
+  private layoutViews(): void {
+    const width = this.container.clientWidth || window.innerWidth;
+    const height = this.container.clientHeight || window.innerHeight;
+    const n = this.views.length;
+    const columns = n === 4 ? 2 : n;
+    const rows = n === 4 ? 2 : 1;
+    const line = n > 1 ? TUNING.ski.split.divider : 0;
+    this.views.forEach((view, i) => {
+      const col = i % columns;
+      const row = Math.floor(i / columns);
+      const x = Math.round((col * width) / columns);
+      const y = Math.round((row * height) / rows);
+      view.rect = { x, y, w: Math.round(((col + 1) * width) / columns) - x, h: Math.round(((row + 1) * height) / rows) - y };
+      Object.assign(view.frame.style, {
+        left: `${view.rect.x}px`,
+        top: `${view.rect.y}px`,
+        width: `${view.rect.w}px`,
+        height: `${view.rect.h}px`,
+        borderLeftWidth: col > 0 ? `${line / 2}px` : '0',
+        borderRightWidth: col < columns - 1 ? `${line / 2}px` : '0',
+        borderTopWidth: row > 0 ? `${line / 2}px` : '0',
+        borderBottomWidth: row < rows - 1 ? `${line / 2}px` : '0',
+      });
+      view.frame.hidden = false;
+      view.camera.aspect = view.rect.w / view.rect.h;
+      view.camera.updateProjectionMatrix();
+    });
+  }
+
+  /** The racer a view follows (its player, or the leading player). */
+  private viewed(view: View): Entry | null {
+    return view.entry ?? this.focus;
   }
 
   /** Everyone back at the start gate, side by side. */
@@ -322,10 +416,12 @@ export class Ski {
     this.hud.big.hidden = true;
     for (const gate of this.course.gates) if (gate.flags) (gate.flags.userData.flag as THREE.MeshStandardMaterial).emissiveIntensity = 0;
     this.focus = this.entries[0] ?? null;
-    this.cameraYaw = this.course.direction(START_D);
-    this.cameraY = (this.focus?.racer.body.y ?? 0) + c.camera.height;
-    this.cameraWide = 0;
-    this.placeCamera(true, 0);
+    for (const view of this.views) {
+      view.yaw = this.course.direction(START_D);
+      view.y = (this.viewed(view)?.racer.body.y ?? 0) + c.camera.height;
+      view.wide = 0;
+      this.placeCamera(view, true, 0);
+    }
   }
 
   private startCountdown(): void {
@@ -423,14 +519,11 @@ export class Ski {
       e.racer.update(dt, this.course);
       e.track.update(e.racer.body);
     }
-    this.course.showAround(this.focus?.racer.body.d ?? 0);
+    this.course.showAround(this.views.map((v) => this.viewed(v)?.racer.body.d ?? 0));
     this.puffs.update(dt);
     this.fadeGates(dt);
-    this.placeSun();
-    this.placeCamera(false, dt);
-    this.backdrop.follow(this.camera);
-    this.renderer.render(this.scene, this.camera);
-    this.placeTags();
+    if (this.introLeft > 0) this.introLeft = Math.max(0, this.introLeft - dt);
+    this.renderViews(dt);
     this.workMs += (performance.now() - started - this.workMs) * 0.05;
     this.renderHud();
   }
@@ -570,39 +663,60 @@ export class Ski {
     }
   }
 
-  /** The sun (and its shadow box) follows the camera's racer. */
-  private placeSun(): void {
-    const at = this.focus?.racer.group.position ?? new THREE.Vector3();
+  /** The sun (and its shadow box) follows a racer. */
+  private placeSun(at: THREE.Vector3): void {
     this.sun.target.position.copy(at);
     this.sun.position.copy(at).addScaledVector(this.sunDirection, 90);
   }
 
+  /** Every view: its camera, the sun's shadows round its racer, its part of the screen, its name tags. */
+  private renderViews(dt: number): void {
+    const height = this.container.clientHeight || window.innerHeight;
+    const split = this.views.length > 1;
+    this.sun.castShadow = !split || TUNING.ski.split.shadows;
+    this.renderer.setScissorTest(split);
+    for (const view of this.views) {
+      const entry = this.viewed(view);
+      this.placeCamera(view, false, dt);
+      this.placeSun(entry?.racer.group.position ?? new THREE.Vector3());
+      this.backdrop.follow(view.camera);
+      // WebGL counts from the bottom left, the page from the top left.
+      const { x, y, w, h } = view.rect;
+      this.renderer.setViewport(x, height - y - h, w, h);
+      if (split) this.renderer.setScissor(x, height - y - h, w, h);
+      this.renderer.render(this.scene, view.camera);
+      this.placeTags(view);
+    }
+    this.renderer.setScissorTest(false);
+  }
+
   /**
-   * Low behind the leading player, turning between the run's direction and the skis'; further back and wider at
-   * speed, and further back and higher while another player is a little behind (so both are in the picture).
+   * Low behind the view's racer, turning between the run's direction and the skis'; further back and wider at
+   * speed. In the one shared view also further back and higher while another player is a little behind.
    */
-  private placeCamera(snap: boolean, dt: number): void {
+  private placeCamera(view: View, snap: boolean, dt: number): void {
     const cam = TUNING.ski.camera;
-    const focus = this.focus;
+    const focus = this.viewed(view);
     if (!focus) return;
     const b = focus.racer.body;
     const run = this.course.direction(b.d, b.x);
     const yaw = run + (b.heading - run) * cam.followSkis;
     const blend = snap ? 1 : 1 - Math.exp(-cam.follow * dt);
-    this.cameraYaw += (yaw - this.cameraYaw) * blend;
+    view.yaw += (yaw - view.yaw) * blend;
     let behind = 0;
-    for (const e of this.humans()) {
-      const gap = b.d - e.racer.body.d;
-      if (e !== focus && !e.racer.body.finished && gap > 0 && gap < 40) behind = Math.max(behind, gap);
+    if (!view.entry) {
+      for (const e of this.humans()) {
+        const gap = b.d - e.racer.body.d;
+        if (e !== focus && !e.racer.body.finished && gap > 0 && gap < 40) behind = Math.max(behind, gap);
+      }
     }
-    this.cameraWide += (Math.min(1, behind / 25) - this.cameraWide) * (snap ? 1 : 1 - Math.exp(-2 * dt));
-    const a = THREE.MathUtils.degToRad(this.cameraYaw);
-    const back = cam.back + cam.backPerSpeed * b.speed + this.cameraWide * 7;
+    view.wide += (Math.min(1, behind / 25) - view.wide) * (snap ? 1 : 1 - Math.exp(-2 * dt));
+    const a = THREE.MathUtils.degToRad(view.yaw);
+    const back = cam.back + cam.backPerSpeed * b.speed + view.wide * 7;
     let x = b.x - Math.sin(a) * back;
     let d = b.d - Math.cos(a) * back;
-    let height = cam.height + this.cameraWide * 3.5;
+    let height = cam.height + view.wide * 3.5;
     if (this.introLeft > 0) {
-      this.introLeft = Math.max(0, this.introLeft - dt);
       const k = this.introLeft / TUNING.transition.swoopSeconds;
       const ease = k * k * (3 - 2 * k);
       height += TUNING.transition.swoopHeight * ease;
@@ -611,35 +725,39 @@ export class Ski {
     }
     // Follow the skier's height smoothly (not every bump), never below the ground.
     const yTarget = b.y + height;
-    this.cameraY = snap ? yTarget : this.cameraY + (yTarget - this.cameraY) * (1 - Math.exp(-6 * dt));
-    const y = Math.max(this.cameraY, this.course.height(x, d) + 1.2);
-    this.camera.position.set(x, y, -d);
+    view.y = snap ? yTarget : view.y + (yTarget - view.y) * (1 - Math.exp(-6 * dt));
+    const y = Math.max(view.y, this.course.height(x, d) + 1.2);
+    view.camera.position.set(x, y, -d);
     const lx = b.x + Math.sin(a) * cam.lookAhead;
     const ld = b.d + Math.cos(a) * cam.lookAhead;
-    this.cameraLook.set(lx, Math.min(b.y, this.course.height(lx, ld)) + 0.8, -ld);
-    this.camera.lookAt(this.cameraLook);
-    const fov = cam.fov + cam.fovPerSpeed * b.speed + this.cameraWide * 6;
-    if (Math.abs(fov - this.camera.fov) > 0.05) {
-      this.camera.fov = fov;
-      this.camera.updateProjectionMatrix();
+    view.look.set(lx, Math.min(b.y, this.course.height(lx, ld)) + 0.8, -ld);
+    view.camera.lookAt(view.look);
+    // A view taller than wide (three columns) sees a little wider.
+    const narrow = view.camera.aspect < 1 ? TUNING.ski.split.narrowFovBoost : 0;
+    const fov = cam.fov + cam.fovPerSpeed * b.speed + view.wide * 6 + narrow;
+    if (Math.abs(fov - view.camera.fov) > 0.05) {
+      view.camera.fov = fov;
+      view.camera.updateProjectionMatrix();
     }
   }
 
-  /** Name tags above the racers (hidden when behind the camera or far away). */
-  private placeTags(): void {
-    const width = this.container.clientWidth || window.innerWidth;
-    const height = this.container.clientHeight || window.innerHeight;
+  /** Name tags above the racers in one view (hidden when behind its camera, far away or outside the view). */
+  private placeTags(view: View): void {
+    const { w: width, h: height } = view.rect;
+    const edge = this.views.length > 1 ? 1 : 1.1;
     const point = new THREE.Vector3();
     for (const e of this.entries) {
+      const tag = view.tags.get(e);
+      if (!tag) continue;
       point.copy(e.racer.group.position);
       point.y += 2.4;
-      const distance = point.distanceTo(this.camera.position);
-      point.project(this.camera);
-      const shown = point.z < 1 && distance < 120 && Math.abs(point.x) < 1.1 && Math.abs(point.y) < 1.1;
-      e.tag.hidden = !shown;
+      const distance = point.distanceTo(view.camera.position);
+      point.project(view.camera);
+      const shown = point.z < 1 && distance < 120 && Math.abs(point.x) < edge && Math.abs(point.y) < edge;
+      tag.hidden = !shown;
       if (!shown) continue;
       const scale = Math.max(0.6, Math.min(1, 30 / distance));
-      e.tag.style.transform = `translate(${((point.x + 1) / 2) * width}px, ${((1 - point.y) / 2) * height}px) translate(-50%, -100%) scale(${scale})`;
+      tag.style.transform = `translate(${((point.x + 1) / 2) * width}px, ${((1 - point.y) / 2) * height}px) translate(-50%, -100%) scale(${scale})`;
     }
   }
 
@@ -733,8 +851,7 @@ export class Ski {
     const width = this.container.clientWidth || window.innerWidth;
     const height = this.container.clientHeight || window.innerHeight;
     this.renderer.setSize(width, height);
-    this.camera.aspect = width / height;
-    this.camera.updateProjectionMatrix();
+    this.layoutViews();
   };
 }
 

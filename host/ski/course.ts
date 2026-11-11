@@ -430,10 +430,10 @@ export class Course {
     m.rock.color.set(look.rock);
   }
 
-  /** Shows only the pieces near d. */
-  showAround(d: number): void {
+  /** Shows only the pieces near any of these places down the run (one per view in split screen). */
+  showAround(ds: number[]): void {
     const c = TUNING.ski.course;
-    for (const chunk of this.chunks) chunk.group.visible = chunk.from + CHUNK > d - c.drawBehind && chunk.from < d + c.drawAhead;
+    for (const chunk of this.chunks) chunk.group.visible = ds.some((d) => chunk.from + CHUNK > d - c.drawBehind && chunk.from < d + c.drawAhead);
   }
 
   /**

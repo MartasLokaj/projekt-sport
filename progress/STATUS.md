@@ -859,6 +859,15 @@ body, round mitten hands, sturdier legs, chunky shoes).
   `node_modules/@dimforge/rapier3d-compat/dist/rapier.mjs`).
 - Real server tests: `PORT=8444 npx tsx server/index.ts` + a Node `ws` client (`rejectUnauthorized: false`).
 
+### Skiing split screen — built 2026-11-11, waiting for the user's test
+- On the user's request (2026-11-11): with 2–4 phones every player sees their own skier in their own part of the
+  screen (2 = left/right halves, 3 = three columns, 4 = four quarters), name at the bottom of each view, white
+  divider lines. One phone (or the Mac keyboard alone) = one full-screen view as before. This replaces the shared
+  pack camera from SKI.md for 2+ players; catch-up push / respawn near the leader stay. Code: views in
+  `host/ski/Ski.ts` (`makeViews`, `layoutViews`, `renderViews`, per-view `placeCamera` / `placeTags`),
+  `Course.showAround` takes every viewed racer, tuning `TUNING.ski.split` (`on`, `narrowFovBoost`, `divider`,
+  `shadows` — turn shadows off if four views are too slow on the MacBook Air). Frame time not measured yet.
+
 ## Known open points
 - Verify 60 fps on the MacBook Air; quality knobs are in `TUNING.scenery` (`maxPixelRatio`, bloom, `seaDetail`).
 - On real phones, maybe tune: `curveSign` (curve direction), `minArmRadius` (wrist check), swing power curve.

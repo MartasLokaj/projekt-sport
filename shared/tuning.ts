@@ -1360,6 +1360,13 @@ export const TUNING = {
      * how snappy it turns, how wide it sees (wider at speed), and how much it follows the skis vs the run (0..1).
      */
     camera: { back: 6, backPerSpeed: 0.08, height: 2.6, lookAhead: 10, follow: 4, fov: 60, fovPerSpeed: 0.5, followSkis: 0.5 },
+    /**
+     * Split screen: with 2+ players on phones every player gets their own view (2 = left/right halves,
+     * 3 = three columns, 4 = four quarters). `on: false` goes back to one shared camera on the leader.
+     * Views taller than wide (three columns) see this many degrees wider. `divider` = line between views (px).
+     * `shadows: false` skips the sun's shadows in split screen if the Mac gets slow.
+     */
+    split: { on: true, narrowFovBoost: 14, divider: 4, shadows: true },
   },
 
   // Swing Lab on the big screen: a shuttle drops to the hit line, the player swings when it gets there.
