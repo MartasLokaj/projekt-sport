@@ -886,6 +886,21 @@ body, round mitten hands, sturdier legs, chunky shoes).
   (`lockLandscape`, tuning `TUNING.ski.steer.lockLandscape`), released when Skiing closes. NOT tested on a real
   phone (no phone, and the phone page could not be opened in a test browser) — only the type check.
 
+### Skiing: rescue helicopter — built 2026-11-11, waiting for the user's test
+- User's idea (2026-11-11): a clean rescue animation — a mini helicopter flies in fast, grabs the skier and puts
+  them back on the run. Decided with the user: about 2.5 s in all, no sound yet, hook on a rope (my pick, the user
+  had no preference). It comes ONLY when a racer is stuck off the run at the edge for a while
+  (`TUNING.ski.rescue.offRunSeconds` = 4 s, more than `offRunMargin` 1.5 m out) or REALLY far behind
+  (`respawnGap` raised 90 → 140 m; the "out of sight for 3 s" rule now only with one shared view). A normal crash
+  into a tree or rock is NOT a rescue (the earlier "hardly moving for 4 s" trigger was removed on the user's word).
+- Code: `host/ski/heli.ts` (`RescueHeli`: model, rotors, rope + hook), `host/ski/Ski.ts` (`startRescue`,
+  `updateRescues`: swoop in → hook and lift → carry → let go → fly off; the camera pulls back over the run and
+  looks at the skier and helicopter while carried), `host/ski/racer.ts` (`RacerPhysics.carried` / `drop`, hanging
+  pose `Racer.hang`). All times, heights, colours and camera values in `TUNING.ski.rescue`.
+- Checked in Chrome with a fake phone steering into the edge: the helicopter arrives, the skier hangs on the hook
+  and is carried, then skis on. Not judged: how smooth the motion looks (only still screenshots), the far-behind
+  ("pack") flight, three/four views, real phones.
+
 ## Known open points
 - Verify 60 fps on the MacBook Air; quality knobs are in `TUNING.scenery` (`maxPixelRatio`, bloom, `seaDetail`).
 - On real phones, maybe tune: `curveSign` (curve direction), `minArmRadius` (wrist check), swing power curve.

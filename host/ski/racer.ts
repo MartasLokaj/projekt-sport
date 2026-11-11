@@ -38,6 +38,8 @@ export class RacerPhysics {
   crashLeft = 0;
   ghostLeft = 0;
   finished = false;
+  /** Hanging under the rescue helicopter: the physics waits, host/ski/Ski.ts moves the skier. */
+  carried = false;
   /** Seconds since the start, at the finish line. */
   finishTime: number | null = null;
   gatesPassed = 0;
@@ -53,21 +55,22 @@ export class RacerPhysics {
     this.y = course.height(x, d);
     this.heading = course.direction(d, x) * TUNING.ski.alignToCourse;
     this.speed = this.vy = this.airTime = this.steer = this.turnRate = this.crouch = this.crashLeft = this.ghostLeft = 0;
-    this.air = this.tuck = this.finished = this.jumpHeld = false;
+    this.air = this.tuck = this.finished = this.jumpHeld = this.carried = false;
     this.finishTime = null;
     this.gatesPassed = 0;
     this.groundVy = 0;
     this.lastGround = this.y;
   }
 
-  /**
-   * After being put somewhere already moving (a respawn): take the slope's fall at this speed as known, so the
-   * skier glides on instead of flying off the spot as if the ground had dropped away.
-   */
-  settle(course: Course): void {
-    const h = THREE.MathUtils.degToRad(this.heading);
-    const rise = (course.height(this.x + Math.sin(h) * 0.5, this.d + Math.cos(h) * 0.5) - course.height(this.x, this.d)) / 0.5;
-    this.groundVy = rise * this.speed;
+  /** Let go by the rescue helicopter `lift` m above the run at d, x: falls, lands and skis on at `speed`. */
+  drop(course: Course, d: number, x: number, lift: number, speed: number, ghost: number): void {
+    const gates = this.gatesPassed;
+    this.reset(course, d, x);
+    this.gatesPassed = gates;
+    this.y += lift;
+    this.air = true;
+    this.speed = speed;
+    this.ghostLeft = ghost;
   }
 
   /** One step of `dt` seconds. time = race clock (seconds since GO), for the finish time. */
@@ -76,7 +79,11 @@ export class RacerPhysics {
     const p = c.physics;
     const g = p.gravity;
     this.steer += (input.steer - this.steer) * (1 - Math.exp(-c.steerFollow * dt));
-    this.tuck = input.tuck && !this.finished && this.crashLeft <= 0;
+    this.tuck = input.tuck && !this.finished && this.crashLeft <= 0 && !this.carried;
+    if (this.carried) {
+      this.jumpHeld = input.jump;
+      return;
+    }
 
     if (this.crashLeft > 0) {
       // Tumbling: slide to a stop, then get up facing down the run.
@@ -234,6 +241,9 @@ export class Racer {
   private lookKey = '';
   private pitch = 0;
   private spin = new THREE.Vector3();
+  /** Hooked under the rescue helicopter: 0 = not yet, 1 = hanging (arms up, legs kicking, swinging). */
+  hang = 0;
+  private hangTime = 0;
 
   constructor() {
     this.group.rotation.order = 'YXZ';
@@ -305,6 +315,18 @@ export class Racer {
     // Arms: out and forwards with the poles; tucked = hands together in front, poles under the arms.
     this.character.armPose = b.tuck ? { x: -1.5, z: 0.1 } : b.air ? { x: -0.3, z: -0.9 } : { x: -0.55, z: -0.4 };
     this.character.freeArmPose = b.tuck ? { x: -1.5, z: -0.1 } : b.air ? { x: -0.3, z: 0.9 } : { x: -0.55, z: 0.4 };
+
+    // Hanging on the rescue helicopter's hook: upright, arms up to the rope, legs kicking, swinging a little.
+    if (b.carried && this.hang > 0) {
+      this.hangTime += dt;
+      const swing = Math.sin(this.hangTime * 6);
+      this.group.rotation.x = this.pitch = this.pitch * Math.exp(-10 * dt);
+      this.leaner.rotation.z = 0.22 * swing * this.hang;
+      this.posture.rotation.x *= Math.exp(-10 * dt);
+      this.character.armPose = { x: -2.9, z: -0.12 };
+      this.character.freeArmPose = { x: -2.9, z: 0.12 };
+      this.character.legPose = { left: -0.3 + 0.45 * swing * this.hang, right: -0.3 - 0.45 * swing * this.hang };
+    } else this.hangTime = 0;
 
     // Crash: tumble round, then stand up again.
     if (b.crashLeft > 0) {

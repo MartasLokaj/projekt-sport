@@ -8,6 +8,7 @@ import { Backdrop } from './backdrop.ts';
 import { Course } from './course.ts';
 import { CpuDriver } from './cpu.ts';
 import { Racer, type RacerEvent, type RacerInput } from './racer.ts';
+import { RescueHeli } from './heli.ts';
 import { SkiTrack } from './tracks.ts';
 
 // Skiing race (SKI.md, phases S2a–S2b). Up to 4 racers: every connected phone (in join order) steers one, the
@@ -33,6 +34,25 @@ export type SkiHud = {
 };
 
 /** The last steering a phone sent. */
+/** One flight of the rescue helicopter: where it picks the racer up and where it lets go (t = seconds so far). */
+type Rescue = {
+  t: number;
+  /** stuck = off the run for too long; pack = far behind, dropped just behind the leading player. */
+  kind: 'stuck' | 'pack';
+  fromX: number;
+  fromD: number;
+  toX: number;
+  toD: number;
+  /** The racer's speed when let go (m/s). */
+  speed: number;
+  /** Where across the leader's way a far-behind racer is dropped (-0.5..0.5 of its half width). */
+  offset: number;
+  /** The side the helicopter swoops in from (-1 left, 1 right). */
+  side: number;
+  released: boolean;
+  leaveFrom: THREE.Vector3;
+};
+
 type Wheel = { steer: number; roll: number; ready: boolean; tuck: boolean; jump: boolean; at: number };
 type Phase = 'waiting' | 'countdown' | 'racing' | 'finished' | 'over';
 
@@ -45,10 +65,11 @@ type Entry = {
   cpu: CpuDriver | null;
   /** Seconds this racer has been far behind (for putting it back). */
   lostFor: number;
-  /** Seconds this racer has been off the run / hardly moving down it (for the rescue), and its d last frame. */
+  /** Seconds this racer has been off the run (for the rescue). */
   offFor: number;
-  slowFor: number;
-  lastD: number;
+  /** The rescue helicopter's flight with this racer (null = none), and the helicopter once it was needed. */
+  rescue: Rescue | null;
+  heli: RescueHeli | null;
   lastCarveCue: number;
   /** The trail this racer leaves in the snow. */
   track: SkiTrack;
@@ -69,6 +90,10 @@ type View = {
   yaw: number;
   y: number;
   wide: number;
+  /** 0..1: how far the camera has pulled back and looked up to show the rescue helicopter. */
+  rescue: number;
+  /** Across the run, where the rescue camera stands (the middle of the way the skier is dropped on). */
+  rescueX: number;
   look: THREE.Vector3;
   rect: Rect;
   /** The view's frame (its edge line and the player's name in the corner) holding its name tags. */
@@ -318,7 +343,7 @@ export class Ski {
       track.applyLook(TUNING.ski.look.presets[this.lookName]);
       track.mesh.visible = this.showTracks;
       this.scene.add(track.mesh);
-      this.entries.push({ racer, playerId, name, look, cpu, lostFor: 0, offFor: 0, slowFor: 0, lastD: START_D, lastCarveCue: 0, track });
+      this.entries.push({ racer, playerId, name, look, cpu, lostFor: 0, offFor: 0, rescue: null, heli: null, lastCarveCue: 0, track });
     };
     for (const player of players) make(player.id, player.name, lookOf(player), null);
     // With no phone the Mac keyboard steers racer 1.
@@ -360,7 +385,7 @@ export class Ski {
       }
       this.hud.tags.append(frame);
       const camera = new THREE.PerspectiveCamera(TUNING.ski.camera.fov, 1, 0.1, 2500);
-      this.views.push({ entry: owner, camera, yaw: 0, y: 0, wide: 0, look: new THREE.Vector3(), rect: { x: 0, y: 0, w: 1, h: 1 }, frame, label, tags });
+      this.views.push({ entry: owner, camera, yaw: 0, y: 0, wide: 0, rescue: 0, rescueX: 0, look: new THREE.Vector3(), rect: { x: 0, y: 0, w: 1, h: 1 }, frame, label, tags });
     }
     this.layoutViews();
   }
@@ -407,8 +432,10 @@ export class Ski {
     this.entries.forEach((e, i) => {
       const x = this.course.centre(START_D) + (i - (n - 1) / 2) * c.startSpacing;
       e.racer.body.reset(this.course, START_D, x);
-      e.lostFor = e.offFor = e.slowFor = 0;
-      e.lastD = START_D;
+      e.lostFor = e.offFor = 0;
+      e.rescue = null;
+      e.racer.hang = 0;
+      if (e.heli) e.heli.group.visible = false;
       e.track.clear();
       if (e.cpu) e.cpu = new CpuDriver(this.level);
       e.racer.update(0, this.course);
@@ -488,9 +515,7 @@ export class Ski {
     if (this.phase === 'racing' || this.phase === 'finished' || this.phase === 'over') {
       this.accumulator += dt;
       const inputs = this.entries.map((e, i) => (e.cpu ? null : this.input(e, i)));
-      let stepped = 0;
       while (this.accumulator >= STEP) {
-        stepped += STEP;
         this.focus = this.pickFocus();
         this.entries.forEach((e, i) => {
           const input = e.cpu ? e.cpu.input(e.racer.body, this.course, STEP) : { ...inputs[i]! };
@@ -502,13 +527,14 @@ export class Ski {
         this.accumulator -= STEP;
       }
       this.keepTogether(dt);
-      this.rescueStuck(stepped);
+      this.rescueStuck(dt);
     } else {
       // Waiting at the gate: the skis still turn with the steering, so each player sees it works.
       this.entries.forEach((e, i) => {
         if (!e.cpu) e.racer.body.steer = this.input(e, i).steer;
       });
     }
+    this.updateRescues(dt);
     for (const [e, list] of events) this.handleEvents(e, list);
     this.goShownFor = Math.max(0, this.goShownFor - dt);
     this.noteFor = Math.max(0, this.noteFor - dt);
@@ -561,7 +587,10 @@ export class Ski {
     return 0;
   }
 
-  /** Racers far behind (or a while out of sight behind) are put back just behind the leader, on the leader's way. */
+  /**
+   * A racer really far behind the leading player is fetched by the rescue helicopter and dropped just behind the
+   * leader. With one shared view also a racer that has been out of sight behind for a while.
+   */
   private keepTogether(dt: number): void {
     const c = TUNING.ski;
     const focus = this.focus;
@@ -569,61 +598,124 @@ export class Ski {
     const lead = focus.racer.body;
     for (const e of this.entries) {
       const b = e.racer.body;
-      if (e === focus || b.finished || b.crashLeft > 0) {
+      if (e === focus || b.finished || b.crashLeft > 0 || e.rescue) {
         e.lostFor = 0;
         continue;
       }
       const gap = lead.d - b.d;
-      e.lostFor = gap > c.respawnGap * 0.5 ? e.lostFor + dt : 0;
+      e.lostFor = this.views.length === 1 && gap > c.respawnGap * 0.5 ? e.lostFor + dt : 0;
       if (gap <= c.respawnGap && e.lostFor < c.respawnSeconds) continue;
-      const d = Math.max(0, lead.d - c.respawnBehind);
-      const lanes = this.course.lanes(d);
-      const lane = lanes[this.course.laneIndex(lead.x, d)] ?? lanes[0];
-      const speed = lead.speed * 0.9;
-      b.reset(this.course, d, lane.c + (Math.random() * 2 - 1) * lane.hw * 0.5);
-      b.speed = speed;
-      b.settle(this.course);
-      b.ghostLeft = 1.5;
-      e.lostFor = e.offFor = e.slowFor = 0;
-      e.lastD = d;
-      e.racer.update(0, this.course);
-      this.puffs.burst(e.racer.group.position, 10, 1.2, 2.5);
-      this.cue(e, 'respawn');
+      this.startRescue(e, 'pack');
     }
   }
 
   /**
-   * Nobody stays stuck: a racer that is off the run for a while (in the trees by the wall), or hardly gets any
-   * further down it (caught on a tree or a rock), is put back in the middle of the nearest way, moving again.
+   * Nobody stays stuck at the edge: a racer that is off the run for a while (in the trees by the wall) is fetched
+   * by the rescue helicopter and dropped in the middle of the nearest way. (A crash into a tree or a rock on the
+   * run is not a rescue: the skier tumbles and gets up as always.)
    */
   private rescueStuck(dt: number): void {
     const r = TUNING.ski.rescue;
-    if (this.phase !== 'racing' || dt <= 0) return;
+    if (this.phase !== 'racing') return;
     for (const e of this.entries) {
       const b = e.racer.body;
-      const progress = (b.d - e.lastD) / dt;
-      e.lastD = b.d;
-      if (b.finished) {
-        e.offFor = e.slowFor = 0;
+      if (b.finished || e.rescue) {
+        e.offFor = 0;
         continue;
       }
       e.offFor = this.course.outside(b.x, b.d) > r.offRunMargin ? e.offFor + dt : 0;
-      e.slowFor = progress < r.slowSpeed ? e.slowFor + dt : Math.max(0, e.slowFor - 2 * dt);
-      if (e.offFor < r.offRunSeconds && e.slowFor < r.slowSeconds) continue;
-      const d = Math.min(this.course.length, b.d + r.ahead);
-      const lanes = this.course.lanes(d);
-      const lane = lanes[this.course.laneIndex(b.x, d)] ?? lanes[0];
-      const gates = b.gatesPassed;
-      b.reset(this.course, d, lane.c);
-      b.gatesPassed = gates;
-      b.speed = r.speed;
-      b.settle(this.course);
-      b.ghostLeft = r.ghostSeconds;
-      e.offFor = e.slowFor = e.lostFor = 0;
-      e.lastD = d;
-      e.racer.update(0, this.course);
-      this.puffs.burst(e.racer.group.position, 10, 1.2, 2.5);
-      this.cue(e, 'respawn');
+      if (e.offFor >= r.offRunSeconds) this.startRescue(e, 'stuck');
+    }
+  }
+
+  /** The helicopter sets off for this racer: from now until it lets go the racer does not ski. */
+  private startRescue(e: Entry, kind: Rescue['kind']): void {
+    const r = TUNING.ski.rescue;
+    const b = e.racer.body;
+    const gates = b.gatesPassed;
+    b.reset(this.course, b.d, b.x);
+    b.gatesPassed = gates;
+    b.carried = true;
+    b.ghostLeft = 99; // (nobody bumps into a skier on the hook)
+    const toD = Math.min(this.course.length, b.d + r.ahead);
+    const lanes = this.course.lanes(toD);
+    const lane = lanes[this.course.laneIndex(b.x, toD)] ?? lanes[0];
+    e.rescue = { t: 0, kind, fromX: b.x, fromD: b.d, toX: lane.c, toD, speed: r.speed, offset: Math.random() - 0.5, side: Math.random() < 0.5 ? -1 : 1, released: false, leaveFrom: new THREE.Vector3() };
+    e.lostFor = e.offFor = 0;
+    e.racer.hang = 0;
+    if (!e.heli) {
+      e.heli = new RescueHeli();
+      this.scene.add(e.heli.group);
+    }
+    e.heli.group.visible = true;
+    e.heli.setRope(0);
+    this.puffs.burst(e.racer.group.position, 6, 0.9, 2);
+    this.cue(e, 'respawn');
+  }
+
+  /** Flies every rescue: swoop in, hook, lift and carry, let go over the run, fly off. */
+  private updateRescues(dt: number): void {
+    const r = TUNING.ski.rescue;
+    const smooth = (k: number): number => k * k * (3 - 2 * k);
+    const share = (t: number, from: number, length: number): number => Math.min(1, Math.max(0, (t - from) / length));
+    for (const e of this.entries) {
+      const q = e.rescue;
+      const heli = e.heli;
+      if (!q || !heli) continue;
+      q.t += dt;
+      heli.update(dt);
+      const b = e.racer.body;
+      const hooked = r.arrive + r.hook;
+      const letGo = hooked + r.carry;
+      const rope = r.hover - heli.belly - r.hookHeight;
+
+      if (!q.released) {
+        // Far behind: the drop point follows the leading player until the skier is let go.
+        const lead = this.focus?.racer.body;
+        if (q.kind === 'pack' && lead && this.focus !== e) {
+          q.toD = Math.max(q.fromD, lead.d - TUNING.ski.respawnBehind);
+          const lanes = this.course.lanes(q.toD);
+          const lane = lanes[this.course.laneIndex(lead.x, q.toD)] ?? lanes[0];
+          q.toX = lane.c + q.offset * lane.hw;
+          q.speed = Math.max(r.speed, lead.speed * 0.9);
+        }
+        const along = smooth(share(q.t, hooked, r.carry));
+        const lift = r.lift * smooth(share(q.t, r.arrive + r.hook * 0.6, r.hook * 0.4 + r.carry * 0.3));
+        b.x = q.fromX + (q.toX - q.fromX) * along;
+        b.d = q.fromD + (q.toD - q.fromD) * along;
+        b.y = this.course.height(b.x, b.d) + lift;
+        b.air = lift > 0.01;
+        b.heading = this.course.direction(b.d, b.x) * TUNING.ski.alignToCourse;
+        e.racer.hang = share(q.t, r.arrive, r.hook);
+        const hover = new THREE.Vector3(b.x, b.y + r.hover, -b.d);
+        if (q.t < r.arrive) {
+          // Swooping in from behind and above, slowing down over the skier.
+          const left = (1 - q.t / r.arrive) ** 3;
+          heli.group.position.set(hover.x + q.side * r.approach.side * left, hover.y + r.approach.up * left, hover.z + r.approach.back * left);
+          heli.lean(0.4 * left, 0);
+          heli.setRope(0);
+        } else {
+          heli.group.position.copy(hover);
+          heli.lean(0.3 * Math.sin(Math.PI * share(q.t, hooked, r.carry)), 0);
+          heli.setRope(rope * share(q.t, r.arrive, r.hook * 0.6));
+        }
+        if (q.t >= letGo) {
+          b.drop(this.course, q.toD, q.toX, r.lift, q.speed, r.ghostSeconds);
+          e.racer.hang = 0;
+          q.released = true;
+          q.leaveFrom.copy(heli.group.position);
+        }
+      } else {
+        // Let go: up and away down the run, pulling the rope in.
+        const k = share(q.t, letGo, r.leave);
+        heli.group.position.set(q.leaveFrom.x, q.leaveFrom.y + r.approach.up * k * k, q.leaveFrom.z - r.approach.back * k * k);
+        heli.lean(0.4 * k, 0);
+        heli.setRope(rope * Math.max(0, 1 - k * 3));
+        if (k >= 1) {
+          heli.group.visible = false;
+          e.rescue = null;
+        }
+      }
     }
   }
 
@@ -757,9 +849,15 @@ export class Ski {
     }
     view.wide += (Math.min(1, behind / 25) - view.wide) * (snap ? 1 : 1 - Math.exp(-2 * dt));
     const a = THREE.MathUtils.degToRad(view.yaw);
-    const back = cam.back + cam.backPerSpeed * b.speed + view.wide * 7;
+    // While the helicopter has the skier: further back, out over the run (not in the trees at the edge) and
+    // looking at the skier and the helicopter above.
+    const carried = focus.rescue && !focus.rescue.released ? 1 : 0;
+    view.rescue += (carried - view.rescue) * (snap ? 1 : 1 - Math.exp(-TUNING.ski.rescue.camFollow * dt));
+    const back = cam.back + cam.backPerSpeed * b.speed + view.wide * 7 + view.rescue * TUNING.ski.rescue.camBack;
     let x = b.x - Math.sin(a) * back;
     let d = b.d - Math.cos(a) * back;
+    if (focus.rescue) view.rescueX = focus.rescue.toX;
+    x += (view.rescueX - Math.sin(a) * back - x) * view.rescue * TUNING.ski.rescue.camCentre;
     let height = cam.height + view.wide * 3.5;
     if (this.introLeft > 0) {
       const k = this.introLeft / TUNING.transition.swoopSeconds;
@@ -773,9 +871,10 @@ export class Ski {
     view.y = snap ? yTarget : view.y + (yTarget - view.y) * (1 - Math.exp(-6 * dt));
     const y = Math.max(view.y, this.course.height(x, d) + 1.2);
     view.camera.position.set(x, y, -d);
-    const lx = b.x + Math.sin(a) * cam.lookAhead;
-    const ld = b.d + Math.cos(a) * cam.lookAhead;
-    view.look.set(lx, Math.min(b.y, this.course.height(lx, ld)) + 0.8, -ld);
+    const lx = b.x + Math.sin(a) * cam.lookAhead * (1 - view.rescue);
+    const ld = b.d + Math.cos(a) * cam.lookAhead * (1 - view.rescue);
+    const ly = Math.min(b.y, this.course.height(lx, ld)) + 0.8;
+    view.look.set(lx, ly + (b.y + TUNING.ski.rescue.camLookUp - ly) * view.rescue, -ld);
     view.camera.lookAt(view.look);
     // A view taller than wide (three columns) sees a little wider.
     const narrow = view.camera.aspect < 1 ? TUNING.ski.split.narrowFovBoost : 0;

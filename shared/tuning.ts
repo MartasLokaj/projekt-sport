@@ -1277,24 +1277,55 @@ export const TUNING = {
     resultsDelay: 3,
     /**
      * Keeping everyone together (one shared camera): a racer more than catchUpFrom m behind the leading player gets an
-     * extra push, full (catchUpPush m/s²) at catchUpFull m. Further back than respawnGap m (or out of sight for
-     * respawnSeconds) it is put back just behind the leader. Computer racers more than cpuLeadMax m ahead of the
+     * extra push, full (catchUpPush m/s²) at catchUpFull m. Further back than respawnGap m (with one shared view
+     * also: out of sight for respawnSeconds) the rescue helicopter drops it just behind the leader. Computer racers more than cpuLeadMax m ahead of the
      * leading player are held back a little (cpuHoldBack m/s² at most).
      */
     catchUpFrom: 15,
     catchUpFull: 60,
     catchUpPush: 3,
-    respawnGap: 90,
+    respawnGap: 140,
     respawnBehind: 12,
     respawnSeconds: 3,
     cpuLeadMax: 30,
     cpuHoldBack: 2.5,
     /**
-     * Nobody stays stuck: a racer more than offRunMargin m outside the run for offRunSeconds, or getting down the
-     * run slower than slowSpeed m/s for slowSeconds (caught on a tree; one crash alone is shorter), is put back in
-     * the middle of the nearest way, `ahead` m further on, at `speed` m/s, passing through obstacles for ghostSeconds.
+     * The rescue helicopter. It comes for a racer more than offRunMargin m outside the run for offRunSeconds
+     * (stuck in the trees at the edge), and for one really far behind (respawnGap above). A crash into a tree or
+     * rock on the run is NOT a rescue. A stuck racer is dropped in the middle of the nearest way `ahead` m further
+     * on, at `speed` m/s, and passes through obstacles for ghostSeconds after landing.
+     * The flight, in seconds: `arrive` (swoop in), `hook` (rope down, lift), `carry` (over to the drop point),
+     * then the skier falls and skis on while the helicopter takes `leave` to fly off. The skier is out of the race
+     * for arrive + hook + carry, plus the short fall.
+     * hover = helicopter above the skier's feet (m), lift = how high the skier is carried (m), hookHeight = where
+     * the hook holds the skier above their feet (m). approach = where it swoops in from (m: to the side, up, behind).
      */
-    rescue: { offRunMargin: 1, offRunSeconds: 3, slowSpeed: 2, slowSeconds: 4, ahead: 4, speed: 10, ghostSeconds: 1.5 },
+    rescue: {
+      offRunMargin: 1.5,
+      offRunSeconds: 4,
+      ahead: 6,
+      speed: 10,
+      ghostSeconds: 1.5,
+      arrive: 0.5,
+      hook: 0.4,
+      carry: 1.0,
+      leave: 0.7,
+      hover: 4.0,
+      lift: 1.6,
+      hookHeight: 2.1,
+      approach: { side: 8, up: 12, back: 20 },
+      /**
+       * The camera while the skier hangs on the hook: camBack m further back, moved towards the middle of the run
+       * (camCentre 0..1, so it is not inside the trees at the edge), looking at a point camLookUp m above the
+       * skier's feet; camFollow = how quickly it goes there and back.
+       */
+      camBack: 4,
+      camCentre: 0.8,
+      camLookUp: 2.6,
+      camFollow: 6,
+      /** The helicopter itself: size (1 = about 2 m long), colours, how fast the rotor spins (radians a second). */
+      heli: { size: 1.5, colour: '#e03131', trim: '#ffffff', glass: '#22405f', rope: '#3a3a3a', hook: '#f2c94c', rotorSpin: 38 },
+    },
     /** Racers bump each other apart (no crash) when closer than this (m). */
     bumpDistance: 0.9,
     /**
