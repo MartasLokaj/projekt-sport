@@ -244,5 +244,14 @@ effects (ski tracks, spray, speed lines). One shared camera, no split screen. Fu
 Start with S1 (tilt steering prototype on real phones) when the user asks for it; it lives in its own files and must
 not change Minigolf, Badminton or Curling.
 
+## 16. Formula racing — DRAFT, requested by the user 2026-11-11
+
+Open-wheel circuit race ("Grand Prix", no real series/team names) for 1–4 players + CPU to 8 cars: the phone held like a
+**steering wheel** (reuse the ski `WheelSteer`), GAS/BRAKE thumb pads, boost zones, slipstream, 5 start lights,
+optional tyre wear with a shake-to-change pit stop. Toy cars built in code, one shared camera. Full brief and phases
+F1–F6: **F1.md**. Start only when the user asks; it lives in its own files and must not change the other games.
+
 ## Ideas for later (user, 2026-11-02)
 - **Boxing, two phones against the CPU** (punch with the phone). Not now; after Curling.
+- More sports (2026-11-11): ski jump, bobsleigh, biathlon (as events of the Skiing side), bowling, boxing, kayak,
+  penalty shootout and more — short briefs in **SPORTS_IDEAS.md**.
