@@ -75,12 +75,35 @@ Built in code; free CC0 assets only after telling the user file, source and size
 - Do not change Minigolf, Badminton, Curling or Skiing behaviour.
 
 ## Phases (each ends with the user's test on real phones and their OK)
-- **K1 Stroke detection (highest risk, first).** No river yet: the TV shows two big paddles and a timeline; each
-  phone's strokes appear as marks (side, strength), pairs in sync light up green with the time gap in ms.
-  Done when both players say strokes are detected every time, the side is never wrong, and "in sync" feels fair.
-- **K2 Boat on calm water.** Graybox lake with buoys: boat physics, front/back roles, in-sync bonus, turning,
-  partner vibration, sync streak + boost. Done when going straight and turning on purpose feel good together.
-- **K3 River run.** Generated river with current, bends, rocks, gates (incl. upstream), finish, time, medals,
-  team stats, podium. 1 phone + CPU partner.
-- **K4 Look and juice.** Water shader, rapids, drops, splashes, wake, sounds (CC0), music, capsize + roll.
-- **K5 Cube side + 4 players.** Little river diorama on the cube, lobby card, two boats racing in split screen.
+The user (2026-11-13) liked every extra idea and asked for each to be its own phase. One phase at a time.
+
+- **K1 Stroke detection + fair timing (highest risk, first).** No river yet: the TV shows two big paddles and a
+  timeline; each phone's strokes appear as marks (side, strength), pairs in sync light up green with the time gap
+  in ms. Sync judged from the phones' own stroke times via clock sync (see "Fair timing"), each phone's Wi-Fi delay
+  in the readout, strokes logged to `logs/kayak-strokes.jsonl`. Done when both players say strokes are detected
+  every time, the side is never wrong, and "in sync" feels fair.
+- **K2 Boat on calm water.** Graybox lake with buoys: basic boat physics, left stroke turns right and the other
+  way, in-sync strokes go straight and fast, out of sync wobbles and slows. Both seats still equal.
+  Done when going straight and turning on purpose feel good together.
+- **K3 Seat roles.** Front paddler gives more speed and sets the rhythm, back paddler turns more (the steering
+  seat). The lobby/phone shows who sits where; players can swap seats. Done when both feel their seat matters.
+- **K4 Feel your partner.** Each phone gives a short tick when the partner strokes, a stronger buzz on an in-sync
+  pair, a rough buzz on a crash. Done when the players can keep the rhythm without looking at the TV.
+- **K5 Sync streak + boost.** In-sync strokes in a row fill a meter on the TV; full meter = a short boost (spray,
+  speed lines, a sound). Out of sync empties it slowly. Done when the boost feels earned and exciting.
+- **K6 Back stroke.** Push the paddle forward = brake and turn on the spot. First try reading it from the phone's
+  movement; if it cannot be told apart reliably from a normal stroke, a big BRAKE button instead (ask the user).
+- **K7 River run.** Generated river from a seed (100 m pieces like the ski run) with current, bends, rocks, eddies,
+  rapids, small drops, calm pools and slalom gates: green downstream, **red upstream** (turn round and paddle up
+  through it). Missed gate +5 s, rock = bump and slow down. Start, finish, time, bronze/silver/gold medals, podium.
+- **K8 Team stats.** At the end: % strokes in sync, best streak, who was early or late more often and by how much
+  ("Anna is 80 ms ahead on average"), number of crashes and missed gates. Shown before the podium.
+- **K9 Look and juice.** Toy-like look (see "Look"): flowing water shader, foam, white water, banks and trees, two
+  chibis in life jackets, paddle splashes, wake, sounds (CC0), music.
+- **K10 Capsize + kayak roll.** Very out of sync in rapids tips the boat over (camera dips under water); both turn
+  the phone in a full circle together to roll back up. Too long upside down = put back upright with a time loss.
+- **K11 Computer partner (1 phone).** The other seat is the computer: it follows the player's rhythm (a little
+  imperfect at first, better on Pro), so one person can play and learn.
+- **K12 Cube side + 4 players.** A little river diorama on a free cube side (`mystery-3` or `mystery-4`, ask the
+  user), lobby card, and with 4 phones two boats race in split screen (reuse the ski split-screen views).
+  What 3 phones do is decided here with the user (e.g. two boats, one with a computer partner).
