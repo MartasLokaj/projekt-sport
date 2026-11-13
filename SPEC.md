@@ -244,5 +244,14 @@ effects (ski tracks, spray, speed lines). One shared camera, no split screen. Fu
 Start with S1 (tilt steering prototype on real phones) when the user asks for it; it lives in its own files and must
 not change Minigolf, Badminton or Curling.
 
+## 16. Kayak — DRAFT, requested by the user 2026-11-13
+
+Co-op game for two: both players sit in **one tandem kayak** and each phone is a **paddle** (held like the shaft,
+dip one end to stroke left or right). Only **synchronised** strokes make the boat go straight and fast; turning
+needs agreed strokes; the back seat steers more, the front seat gives more speed. Sync is judged fairly from the
+phones' own stroke times (clock sync), not Wi-Fi arrival. River run with gates and medals. Full brief and phases
+K1–K5: **KAYAK.md**. Start with K1 (stroke detection on real phones) when the user OKs the brief; it lives in its
+own files and must not change the other games.
+
 ## Ideas for later (user, 2026-11-02)
 - **Boxing, two phones against the CPU** (punch with the phone). Not now; after Curling.

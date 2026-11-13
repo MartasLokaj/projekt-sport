@@ -859,6 +859,11 @@ body, round mitten hands, sturdier legs, chunky shoes).
   `node_modules/@dimforge/rapier3d-compat/dist/rapier.mjs`).
 - Real server tests: `PORT=8444 npx tsx server/index.ts` + a Node `ws` client (`rejectUnauthorized: false`).
 
+### Kayak (SPEC §16, brief `KAYAK.md`) — brief written 2026-11-13, waiting for the user's OK
+- User's idea: co-op for two in one tandem kayak, phone = paddle, synchronised strokes go straight and fast.
+  Brief proposes front/back seat roles, partner vibration, fair sync from phone stroke times (clock sync), sync
+  streak boost, upstream slalom gates, team stats, capsize + roll later. Next: user OKs the brief → phase K1.
+
 ## Known open points
 - Verify 60 fps on the MacBook Air; quality knobs are in `TUNING.scenery` (`maxPixelRatio`, bloom, `seaDetail`).
 - On real phones, maybe tune: `curveSign` (curve direction), `minArmRadius` (wrist check), swing power curve.
