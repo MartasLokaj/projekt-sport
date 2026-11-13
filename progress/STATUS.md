@@ -863,7 +863,8 @@ body, round mitten hands, sturdier legs, chunky shoes).
 - User's idea: co-op for two in one tandem kayak, phone = paddle, synchronised strokes go straight and fast.
   Brief proposes front/back seat roles, partner vibration, fair sync from phone stroke times (clock sync), sync
   streak boost, upstream slalom gates, team stats, capsize + roll later. User liked all extras (2026-11-13) and asked
-  for each to be its own phase: K1–K12 in `KAYAK.md`. Next: phase K1 (stroke detection + fair timing).
+  for each to be its own phase: K1–K12 in `KAYAK.md`. Then (same day) the user said the controls must be the **real
+  kayak paddling movement**, not ski-like tilting: brief rewritten (catch/pull/exit, sweep, back stroke, rudder). Next: phase K1 (stroke detection + fair timing).
 
 ## Known open points
 - Verify 60 fps on the MacBook Air; quality knobs are in `TUNING.scenery` (`maxPixelRatio`, bloom, `seaDetail`).
